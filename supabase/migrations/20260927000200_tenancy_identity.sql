@@ -198,14 +198,15 @@ as $$
 $$;
 
 -- Memberships of the current actor (auth user and/or PIN-switched staff).
+-- Returns only what authorization needs — never pin_hash or personal fields.
 create or replace function app.actor_memberships()
-returns setof app.memberships
+returns table (id uuid, tenant_id uuid, role_id uuid, all_branches boolean)
 language sql
 stable
 security definer
 set search_path = ''
 as $$
-  select m.*
+  select m.id, m.tenant_id, m.role_id, m.all_branches
   from app.memberships m
   where m.status = 'active'
     and (

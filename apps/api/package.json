@@ -1,0 +1,31 @@
+{
+  "name": "@sabai/api",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Sabai API — modular monolith over Postgres (RLS-enforced), Hono on Node",
+  "scripts": {
+    "dev": "tsx watch src/server.ts",
+    "start": "node dist/server.js",
+    "build": "tsup src/server.ts --format esm --target node22 --clean --noExternal @sabai/domain --noExternal @sabai/contracts",
+    "typecheck": "tsc --noEmit",
+    "lint": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@hono/node-server": "2.1.1",
+    "@sabai/contracts": "workspace:*",
+    "@sabai/domain": "workspace:*",
+    "hono": "4.13.9",
+    "jose": "6.2.12",
+    "postgres": "3.4.9",
+    "zod": "4.6.5"
+  },
+  "devDependencies": {
+    "@types/node": "22.20.4",
+    "tsup": "8.5.1",
+    "tsx": "4.23.15",
+    "typescript": "5.9.3",
+    "vitest": "4.1.11"
+  }
+}

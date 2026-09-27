@@ -1,0 +1,20 @@
+{
+  "name": "@sabai/contracts",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "API request/response schemas (zod) shared by the API and every client",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "lint": "tsc --noEmit"
+  },
+  "dependencies": {
+    "zod": "4.6.5"
+  },
+  "devDependencies": {
+    "typescript": "5.9.3"
+  }
+}

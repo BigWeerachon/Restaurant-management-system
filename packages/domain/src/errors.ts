@@ -66,6 +66,7 @@ export const ERROR_CATALOG = {
   APPROVAL_INVALID: c("การอนุมัติหมดอายุ", "การอนุมัติใช้ได้ครั้งเดียวภายใน 5 นาที ขออนุมัติใหม่อีกครั้ง", "Approval expired", "Approvals are single-use and last 5 minutes. Please request again.", "request_approval", "ขออนุมัติใหม่"),
   APPROVAL_PIN_INVALID: c("PIN ไม่ถูกต้อง", "ลองใส่ PIN ของผู้จัดการอีกครั้ง", "Wrong PIN", "Please try the manager PIN again.", "fix_input", "ลองอีกครั้ง"),
   APPROVER_NOT_ALLOWED: c("PIN นี้อนุมัติไม่ได้", "เจ้าของ PIN นี้ไม่มีสิทธิ์อนุมัติเรื่องนี้ ให้ผู้จัดการหรือเจ้าของร้านใส่แทน", "This person can't approve", "Ask a manager or the owner to approve instead.", "request_approval", "ใช้ PIN อื่น"),
+  PIN_INVALID: c("PIN ไม่ถูกต้อง", "ลองใส่อีกครั้ง ถ้าลืม PIN ให้ผู้จัดการตั้งให้ใหม่ในหน้าทีมงาน", "Wrong PIN", "Try again, or ask a manager to reset your PIN.", "fix_input", "ลองอีกครั้ง"),
   PIN_FORMAT: c("PIN ต้องเป็นตัวเลข 4–6 หลัก", "เช่น 2580 — เลือกเลขที่จำง่ายแต่เดายาก", "PIN must be 4–6 digits", "Pick digits that are easy to remember but hard to guess.", "fix_input", "แก้ไข"),
   PIN_IN_USE: c("PIN นี้มีคนใช้แล้ว", "เลือก PIN อื่นเพื่อไม่ให้สลับตัวผู้ใช้ผิดคน", "PIN already taken", "Choose another PIN so users are never mixed up.", "fix_input", "เลือก PIN ใหม่"),
 
