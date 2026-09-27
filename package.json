@@ -1,0 +1,25 @@
+{
+  "name": "sabai",
+  "private": true,
+  "description": "Sabai — Restaurant & Café Management SaaS (POS, KDS, recipes, inventory, purchasing, finance, analytics)",
+  "packageManager": "pnpm@10.33.0",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "build": "turbo run build",
+    "dev": "turbo run dev --parallel",
+    "lint": "turbo run lint",
+    "typecheck": "turbo run typecheck",
+    "test": "turbo run test",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "db:reset": "pnpm --filter @sabai/db reset",
+    "db:test": "pnpm --filter @sabai/db test:sql"
+  },
+  "devDependencies": {
+    "prettier": "3.9.9",
+    "turbo": "2.11.4",
+    "typescript": "5.9.3"
+  }
+}
