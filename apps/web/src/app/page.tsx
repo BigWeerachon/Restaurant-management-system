@@ -131,7 +131,7 @@ export default function Welcome() {
                     <motion.li key={m.id} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 + i * 0.04 }}>
                       <button
                         onClick={() => enter(m.id)}
-                        className="glass group flex h-full w-full flex-col gap-2.5 rounded-2xl p-4 text-left transition-[box-shadow,transform] hover:-translate-y-0.5 hover:shadow-md focus-visible:shadow-md"
+                        className="glass group flex h-full w-full flex-col gap-2.5 rounded-2xl p-4 text-left transition-[box-shadow,transform,border-color,background-color] hover:-translate-y-0.5 hover:border-brand/60 hover:bg-brand-soft/25 hover:shadow-md focus-visible:border-brand/60 focus-visible:bg-brand-soft/25 focus-visible:shadow-md"
                       >
                         <span className={`grid h-11 w-11 shrink-0 place-items-center rounded-xl transition-transform group-hover:scale-105 ${style?.badge ?? "bg-brand-soft text-brand-soft-ink"}`}>
                           <RoleIcon className="h-5 w-5" aria-hidden="true" />
