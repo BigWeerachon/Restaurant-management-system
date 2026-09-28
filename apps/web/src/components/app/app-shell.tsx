@@ -8,8 +8,6 @@ import Image from "next/image";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState, type ReactNode } from "react";
-import paakinIcon from "@/assets/brand/paakin-icon.png";
-import paakinLogo from "@/assets/brand/paakin-logo.png";
 import { Dialog } from "@/components/ui/overlay";
 import { ProgressRing } from "@/components/ui/feedback";
 import { Icon } from "@/components/ui/icon";
@@ -22,9 +20,9 @@ import { CommandPalette } from "./command-palette";
 
 export function Logo({ compact }: { compact?: boolean }) {
   if (compact) {
-    return <Image src={paakinIcon} alt="Paak In" priority className="h-9 w-9" />;
+    return <Image src="/brand/paakin-icon.png" alt="Paak In" width={512} height={512} priority className="h-9 w-9" />;
   }
-  return <Image src={paakinLogo} alt="Paak In" priority className="h-8 w-auto" />;
+  return <Image src="/brand/paakin-logo.png" alt="Paak In" width={1465} height={364} priority className="h-8 w-auto" />;
 }
 
 function useTheme() {
