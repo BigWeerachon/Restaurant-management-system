@@ -7,14 +7,17 @@ import {
 } from "@sabai/domain";
 import type { Hono } from "hono";
 import { z } from "zod";
+import { ApiFailure } from "../errors";
 import { route, type Deps, type Env } from "../http";
-import { hasPermission, money, num, requirePermission } from "./support";
+import { branchTenant, hasPermission, money, num, requirePermission } from "./support";
 
 const SummaryQuery = z.object({
   from: z.iso.date(),
   to: z.iso.date(),
   branchId: z.uuid().optional(),
 });
+
+const TodayQuery = z.object({ branchId: z.uuid() });
 
 const s = (v: unknown) => toSatang(String(v ?? 0));
 const baht = (satang: number) => money(satang / 100);
@@ -73,6 +76,17 @@ export function registerReports(app: Hono<Env>, deps: Deps) {
              and (${branch}::uuid is null or branch_id = ${branch})
            group by menu_item_id, name`;
 
+        // Orders by hour of the shop's own clock (not UTC) — for the "when do we get busy" chart.
+        const hourRows = await t<{ hour: number; n: string }[]>`
+          select extract(hour from (o.opened_at at time zone tn.timezone))::int as hour, count(*) as n
+            from app.orders o join app.tenants tn on tn.id = o.tenant_id
+           where o.tenant_id = ${tenantId} and o.status = 'paid'
+             and o.business_date between ${query.from}::date and ${query.to}::date
+             and (${branch}::uuid is null or o.branch_id = ${branch})
+           group by hour`;
+        const hours = new Array(24).fill(0) as number[];
+        for (const r of hourRows) hours[r.hour] = num(r.n);
+
         const channelRows: ChannelSales[] = channels.map((c) => ({
           channelId: c.channel_id,
           name: c.name,
@@ -87,11 +101,18 @@ export function registerReports(app: Hono<Env>, deps: Deps) {
         );
 
         return {
+          // Shape mirrors the web demo's reportSummary selector (totals, waterfall,
+          // channels, items, days, hours, branches) so the DataSource mapper
+          // (ADR-0009) only has to convert satang↔decimal and camelCase, not
+          // reshape the whole payload.
           period: { from: query.from, to: query.to, branchId: branch },
-          headline: {
+          totals: {
             orders: num(pnl!.orders),
             netSales: money(pnl!.net_sales),
             avgTicket: num(pnl!.orders) > 0 ? money(num(pnl!.net_sales) / num(pnl!.orders)) : "0.00",
+            ...(showProfit
+              ? { cost: money(pnl!.cogs), commission: money(pnl!.commission), fees: money(pnl!.payment_fees), waste: money(pnl!.waste), variance: money(pnl!.stock_variance), expenses: money(pnl!.expenses) }
+              : {}),
           },
           ...(showProfit
             ? {
@@ -106,7 +127,8 @@ export function registerReports(app: Hono<Env>, deps: Deps) {
                 }).map((w) => ({ ...w, value: baht(w.value), running: baht(w.running) })),
               }
             : {}),
-          daily: daily.map((d) => ({ date: d.date, orders: num(d.orders), netSales: money(d.net_sales), ...(showProfit ? { profit: money(d.profit) } : {}) })),
+          days: daily.map((d) => ({ date: d.date, orders: num(d.orders), netSales: money(d.net_sales), ...(showProfit ? { profit: money(d.profit) } : {}) })),
+          hours,
           branches: branches.map((b) => ({ id: b.id, name: b.name, orders: num(b.orders), netSales: money(b.net_sales), ...(showProfit ? { profit: money(b.profit) } : {}) })),
           channels: channelProfitability(channelRows).map((c) => ({
             channelId: c.channelId,
@@ -117,13 +139,92 @@ export function registerReports(app: Hono<Env>, deps: Deps) {
             shareOfSales: Math.round(c.shareOfSales * 1000) / 10,
             ...(showProfit ? { contribution: baht(c.contribution), marginPct: Math.round(c.marginPct * 1000) / 10, commission: baht(c.commission) } : {}),
           })),
-          topItems: engineered.slice(0, 20).map((i) => ({
+          items: engineered.map((i) => ({
             menuItemId: i.menuItemId,
             name: i.name,
             qty: i.qty,
             sales: baht(i.sales),
             ...(showProfit ? { contributionPerItem: baht(i.contributionPerItem), class: i.class } : {}),
           })),
+        };
+      }),
+  );
+
+  route(
+    app,
+    deps,
+    { method: "GET", path: "/v1/reports/today", tag: "Insights", summary: "ยอดวันนี้ เทียบกับสัปดาห์ก่อนเวลาเดียวกัน พร้อมกราฟ 14 วันย้อนหลัง", query: TodayQuery },
+    async ({ query, tx }) =>
+      tx(async (t) => {
+        const tenantId = await branchTenant(t, query.branchId);
+        if (!(await hasPermission(t, tenantId, "reports.sales", query.branchId)) && !(await hasPermission(t, tenantId, "finance.close_day", query.branchId)) && !(await hasPermission(t, tenantId, "staff.manage")))
+          throw new ApiFailure("PERMISSION_DENIED", 403, { permission: "reports.sales" });
+
+        const [branch] = await t<{ timezone: string }[]>`select timezone from app.branches where id = ${query.branchId}`;
+        if (!branch) throw new ApiFailure("NOT_FOUND", 404, { entity: "branch" });
+        const [clock] = await t<{ today: string; hour: number; minute: number }[]>`
+          select app.business_date(${query.branchId})::text as today,
+                 extract(hour from (now() at time zone ${branch.timezone}))::int as hour,
+                 extract(minute from (now() at time zone ${branch.timezone}))::int as minute`;
+        const { today, hour, minute } = clock!;
+
+        const [today_] = await t`
+          select count(*) as orders, coalesce(sum(total), 0) as sales, coalesce(sum(total - vat_amount - rounding), 0) as net,
+                 coalesce(sum(cost_total), 0) as cost, coalesce(sum(commission_amount), 0) as commission
+            from app.orders where branch_id = ${query.branchId} and status = 'paid' and business_date = ${today}::date`;
+        const [fees_] = await t`
+          select coalesce(sum(p.fee_amount), 0) as fees from app.payments p join app.orders o on o.id = p.order_id
+           where o.branch_id = ${query.branchId} and o.status = 'paid' and o.business_date = ${today}::date`;
+
+        const lastWeek = new Date(new Date(`${today}T00:00:00Z`).getTime() - 7 * 86400000).toISOString().slice(0, 10);
+        const lastWeekHours = await t<{ hour: number; n: string }[]>`
+          select extract(hour from (opened_at at time zone ${branch.timezone}))::int as hour, count(*) as n
+            from app.orders where branch_id = ${query.branchId} and status = 'paid' and business_date = ${lastWeek}::date
+           group by hour`;
+        const [lastWeekTotal] = await t<{ orders: string; gross: string }[]>`
+          select count(*) as orders, coalesce(sum(total), 0) as gross
+            from app.orders where branch_id = ${query.branchId} and status = 'paid' and business_date = ${lastWeek}::date`;
+        const hourBuckets = new Array(24).fill(0) as number[];
+        for (const r of lastWeekHours) hourBuckets[r.hour] = num(r.n);
+        const hourShare = minute / 60;
+        const uptoOrders = hourBuckets.slice(0, hour).reduce((a, b) => a + b, 0) + (hourBuckets[hour] ?? 0) * hourShare;
+        const totalLastWeekOrders = num(lastWeekTotal!.orders);
+        const share = totalLastWeekOrders ? uptoOrders / totalLastWeekOrders : 0;
+        const lastWeekSales = num(lastWeekTotal!.gross) * share;
+
+        const sparkFrom = new Date(new Date(`${today}T00:00:00Z`).getTime() - 14 * 86400000).toISOString().slice(0, 10);
+        const sparkTo = new Date(new Date(`${today}T00:00:00Z`).getTime() - 1 * 86400000).toISOString().slice(0, 10);
+        const sparkRows = await t<{ d: string; gross: string }[]>`
+          select business_date::text as d, coalesce(sum(total), 0) as gross
+            from app.orders where branch_id = ${query.branchId} and status = 'paid' and business_date between ${sparkFrom}::date and ${sparkTo}::date
+           group by business_date`;
+        const sparkByDate = new Map(sparkRows.map((r) => [r.d, num(r.gross)]));
+        const spark: number[] = [];
+        for (let i = 14; i >= 1; i--) {
+          const d = new Date(new Date(`${today}T00:00:00Z`).getTime() - i * 86400000).toISOString().slice(0, 10);
+          spark.push(sparkByDate.get(d) ?? 0);
+        }
+        spark.push(num(today_!.sales));
+
+        const [open] = await t<{ n: string }[]>`select count(*) as n from app.orders where branch_id = ${query.branchId} and status = 'open'`;
+
+        const net = num(today_!.net);
+        const cost = num(today_!.cost);
+        const commission = num(today_!.commission);
+        const fees = num(fees_!.fees);
+        const keep = net - cost - commission - fees;
+
+        return {
+          today,
+          sales: money(today_!.sales),
+          orders: num(today_!.orders),
+          avgTicket: num(today_!.orders) > 0 ? money(num(today_!.sales) / num(today_!.orders)) : "0.00",
+          keep: money(keep),
+          keepPct: net > 0 ? Math.round((keep / net) * 1000) / 1000 : 0,
+          lastWeekSales: money(lastWeekSales),
+          lastWeekOrders: Math.round(uptoOrders),
+          spark: spark.map((v) => money(v)),
+          open: num(open!.n),
         };
       }),
   );

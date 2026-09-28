@@ -477,6 +477,23 @@ describe("closing the day and reading the numbers", () => {
     expect(r.json.error.actionLabel).toBe("ไปปิดกะ");
   });
 
+  it("shows today vs the same time last week, with a 14-day spark line", async () => {
+    const r = await s.call("GET", `/v1/reports/today?branchId=${s.branchId}`);
+    expect(r.status).toBe(200);
+    expect(r.json.today).toBe(s.date);
+    expect(r.json.orders).toBe(1);
+    expect(r.json.sales).toBe("185.00");
+    expect(r.json.open).toBe(0);
+    // No sales a week ago in this brand-new shop.
+    expect(r.json.lastWeekSales).toBe("0.00");
+    expect(r.json.lastWeekOrders).toBe(0);
+    expect(r.json.spark).toHaveLength(15);
+    expect(r.json.spark.at(-1)).toBe("185.00");
+
+    const cashierTry = await s.cashierCall("GET", `/v1/reports/today?branchId=${s.branchId}`);
+    expect(cashierTry.status).toBe(403);
+  });
+
   it("closes shift and day; the books balance", async () => {
     const close = await s.call("POST", `/v1/shifts/${s.shift}/close`, { countedCash: 1185, denominations: { "1000": 1, "100": 1, "50": 1, "20": 1, "10": 1, "5": 1 } });
     expect(close.json.variance).toBe("0.00");
@@ -496,14 +513,18 @@ describe("closing the day and reading the numbers", () => {
   it("answers the owner's questions in one report", async () => {
     const r = await s.call("GET", `/v1/reports/summary?from=${s.date}&to=${s.date}`);
     expect(r.status).toBe(200);
-    expect(r.json.headline.orders).toBe(1);
-    expect(r.json.headline.netSales).toBe("172.90");
+    expect(r.json.totals.orders).toBe(1);
+    expect(r.json.totals.netSales).toBe("172.90");
     const profit = r.json.waterfall.at(-1);
     expect(profit.key).toBe("profit");
     expect(Number(profit.value)).toBeGreaterThan(0);
-    expect(r.json.topItems[0].name).toBe("ลาเต้เย็น");
+    expect(r.json.items[0].name).toBe("ลาเต้เย็น");
     expect(r.json.channels[0].name).toBe("ทานที่ร้าน");
+    // One order at 172.90 net sales, opened this hour — appears once in the 24-hour trend.
+    expect(r.json.hours.reduce((a: number, b: number) => a + b, 0)).toBe(1);
+    expect(r.json.hours).toHaveLength(24);
   });
+
 
   it("tracks onboarding progress automatically", async () => {
     const r = await s.call("GET", "/v1/onboarding");
