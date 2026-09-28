@@ -48,6 +48,31 @@ select seed.put('branch_tl', app.add_branch(jsonb_build_object(
 select seed.put('brand', id) from app.brands where tenant_id = seed.id('tenant') and is_default limit 1;
 
 -- ---------------------------------------------------------------------------
+-- 1b. Dining areas + tables (dine-in orders need somewhere to seat guests)
+-- ---------------------------------------------------------------------------
+with a as (insert into app.dining_areas (tenant_id, branch_id, name, sort)
+  values (seed.id('tenant'), seed.id('branch_ari'), 'ในร้าน', 1) returning id)
+select seed.put('area_ari_main', id) from a;
+with a as (insert into app.dining_areas (tenant_id, branch_id, name, sort)
+  values (seed.id('tenant'), seed.id('branch_ari'), 'ระเบียง', 2) returning id)
+select seed.put('area_ari_patio', id) from a;
+insert into app.dining_tables (tenant_id, branch_id, area_id, name, seats, sort)
+  select seed.id('tenant'), seed.id('branch_ari'), seed.id('area_ari_main'), 'A' || n, 2, n from generate_series(1, 8) n;
+insert into app.dining_tables (tenant_id, branch_id, area_id, name, seats, sort)
+  select seed.id('tenant'), seed.id('branch_ari'), seed.id('area_ari_patio'), 'B' || n, 4, 8 + n from generate_series(1, 4) n;
+
+with a as (insert into app.dining_areas (tenant_id, branch_id, name, sort)
+  values (seed.id('tenant'), seed.id('branch_tl'), 'ในร้าน', 1) returning id)
+select seed.put('area_tl_main', id) from a;
+with a as (insert into app.dining_areas (tenant_id, branch_id, name, sort)
+  values (seed.id('tenant'), seed.id('branch_tl'), 'โซน VIP', 2) returning id)
+select seed.put('area_tl_vip', id) from a;
+insert into app.dining_tables (tenant_id, branch_id, area_id, name, seats, sort)
+  select seed.id('tenant'), seed.id('branch_tl'), seed.id('area_tl_main'), 'T' || n, 2, n from generate_series(1, 10) n;
+insert into app.dining_tables (tenant_id, branch_id, area_id, name, seats, sort)
+  select seed.id('tenant'), seed.id('branch_tl'), seed.id('area_tl_vip'), 'V' || n, 6, 10 + n from generate_series(1, 4) n;
+
+-- ---------------------------------------------------------------------------
 -- 2. Menu categories
 -- ---------------------------------------------------------------------------
 insert into app.menu_categories (tenant_id, brand_id, name, icon, sort) values

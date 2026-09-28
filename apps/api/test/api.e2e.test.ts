@@ -150,6 +150,23 @@ describe("a café's first day, through the API", () => {
     s.cash = r.json.paymentMethods.find((p: any) => p.kind === "cash").id;
   });
 
+  it("boots the whole shop — settings, branches, catalog, roles, team, plan — in one request", async () => {
+    const r = await s.call("GET", "/v1/shop");
+    expect(r.status).toBe(200);
+    expect(r.json.tenant.name).toBe("สบายคาเฟ่");
+    expect(r.json.tenant.vatRegistered).toBe(true);
+    expect(r.json.plan.code).toBe("pro");
+    expect(r.json.branches.map((b: any) => b.id)).toContain(s.branchId);
+    const branch = r.json.branches.find((b: any) => b.id === s.branchId);
+    expect(branch.stations.length).toBeGreaterThan(0);
+    expect(r.json.ingredients.map((i: any) => i.name)).toEqual(expect.arrayContaining(["เมล็ดกาแฟ", "นมสด"]));
+    const latte = r.json.menuItems.find((i: any) => i.id === s.latte);
+    expect(latte.price).toBe("65.00");
+    expect(latte.recipe).toEqual(expect.arrayContaining([expect.objectContaining({ ingredientId: s.coffee, qty: 18 })]));
+    expect(r.json.roles.find((role: any) => role.key === "owner").permissions).toEqual(["*"]);
+    expect(r.json.members.map((m: any) => m.role_key)).toContain("owner");
+  });
+
   it("receives goods from the market (paid in cash, no supplier needed)", async () => {
     const r = await s.call("POST", "/v1/receipts", {
       branchId: s.branchId,

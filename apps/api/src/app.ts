@@ -13,6 +13,7 @@ import { registerInventory } from "./routes/inventory";
 import { registerKitchen } from "./routes/kitchen";
 import { registerPos } from "./routes/pos";
 import { registerReports } from "./routes/reports";
+import { registerShop } from "./routes/shop";
 
 /**
  * Modular monolith: one deployable, modules separated by route files and by
@@ -83,6 +84,7 @@ export function createApp(deps: Deps): Hono<Env> {
   if (deps.config.env !== "production") registerDevAuth(app, deps);
 
   registerIdentity(app, deps);
+  registerShop(app, deps);
   registerCatalog(app, deps);
   registerPos(app, deps);
   registerKitchen(app, deps);
