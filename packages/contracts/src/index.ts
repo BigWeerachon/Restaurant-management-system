@@ -131,6 +131,22 @@ export const AvailabilityBody = z.object({
   until: z.iso.datetime().optional(),
 });
 
+export const UpdateMenuItemBody = z
+  .object({
+    name: Name.optional(),
+    nameEn: z.string().max(80).optional(),
+    price: PositiveMoney.optional(),
+    kitchenRoute: z
+      .string()
+      .regex(/^[a-z][a-z0-9_]{1,30}$/)
+      .optional(),
+    imageUrl: z.url().optional(),
+    active: z.boolean().optional(),
+    /** Replaces the current recipe entirely; omit to leave it unchanged. */
+    recipe: z.array(RecipeLineInput).max(60).optional(),
+  })
+  .refine((b) => Object.keys(b).length > 0, { message: "ไม่มีอะไรให้แก้ไข" });
+
 // ---------------------------------------------------------------------------
 // POS
 // ---------------------------------------------------------------------------

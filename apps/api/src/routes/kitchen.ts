@@ -48,6 +48,17 @@ export function registerKitchen(app: Hono<Env>, deps: Deps) {
       }),
   );
 
+  route(
+    app,
+    deps,
+    { method: "POST", path: "/v1/kds/ticket-items/{id}/toggle", tag: "Kitchen", summary: "เสร็จ/ยังไม่เสร็จ เฉพาะรายการนี้ในตั๋ว (ไม่กระทบรายการอื่น)", permission: "kds.bump" },
+    async ({ params, tx }) =>
+      tx(async (t) => {
+        await t`select app.toggle_ticket_item(${params.id})`;
+        return { id: params.id };
+      }),
+  );
+
   // Server-sent events: KDS and POS screens refresh the moment something happens.
   app.get("/v1/events", async (c) => {
     const actor = c.get("actor");

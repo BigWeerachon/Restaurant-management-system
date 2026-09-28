@@ -140,6 +140,35 @@ describe("a café's first day, through the API", () => {
     expect(costing.json.lines[0].name).toBeTruthy();
   });
 
+  it("edits a menu item's price and swaps its recipe without touching other items", async () => {
+    const created = await s.call("POST", "/v1/menu-items", {
+      categoryName: "กาแฟ",
+      name: "มอคค่าเย็น",
+      price: 70,
+      kitchenRoute: "bar",
+      recipe: [{ ingredientId: s.coffee, qty: 18 }],
+    });
+    const mocha = created.json.id;
+
+    const patched = await s.call("PATCH", `/v1/menu-items/${mocha}`, { price: 75, active: false });
+    expect(patched.status).toBe(200);
+    expect(patched.json.price).toBe("75.00");
+    expect(patched.json.active).toBe(false);
+
+    // Latte's own price and recipe are untouched.
+    const latteStillFine = await s.call("GET", `/v1/menu-items/${s.latte}/costing`);
+    expect(latteStillFine.json.cost).toBe("16.20");
+
+    const resweaped = await s.call("PATCH", `/v1/menu-items/${mocha}`, { recipe: [{ ingredientId: s.coffee, qty: 18 }, { ingredientId: s.milk, qty: 180 }] });
+    expect(resweaped.status).toBe(200);
+    const costing = await s.call("GET", `/v1/menu-items/${mocha}/costing`);
+    expect(costing.json.cost).toBe("16.20"); // same recipe as the latte now
+    expect(costing.json.lines).toHaveLength(2);
+
+    const empty = await s.call("PATCH", `/v1/menu-items/${mocha}`, {});
+    expect(empty.status).toBe(422);
+  });
+
   it("serves the whole POS catalog in one call", async () => {
     const r = await s.call("GET", `/v1/catalog?branchId=${s.branchId}`);
     expect(r.status).toBe(200);
@@ -276,7 +305,26 @@ describe("a café's first day, through the API", () => {
     expect((await s.call("POST", `/v1/kds/tickets/${s.ticket}/status`, { status: "ready" })).status).toBe(200);
     expect((await s.call("POST", `/v1/kds/tickets/${s.ticket}/status`, { status: "in_progress" })).status).toBe(200);
     const tickets = await s.call("GET", `/v1/kds/tickets?branchId=${s.branchId}`);
-    expect(tickets.json.tickets.find((t: any) => t.id === s.ticket).status).toBe("in_progress");
+    const ticket = tickets.json.tickets.find((t: any) => t.id === s.ticket);
+    expect(ticket.status).toBe("in_progress");
+    expect(ticket.items.every((i: any) => i.status === "pending")).toBe(true);
+  });
+
+  it("toggles one item on a ticket done without bumping the other items", async () => {
+    const before = (await s.call("GET", `/v1/kds/tickets?branchId=${s.branchId}`)).json.tickets.find((t: any) => t.id === s.ticket);
+    const [first, second] = before.items;
+
+    const toggle = await s.call("POST", `/v1/kds/ticket-items/${first.id}/toggle`);
+    expect(toggle.status).toBe(200);
+
+    const after = (await s.call("GET", `/v1/kds/tickets?branchId=${s.branchId}`)).json.tickets.find((t: any) => t.id === s.ticket);
+    expect(after.items.find((i: any) => i.id === first.id).status).toBe("done");
+    expect(after.items.find((i: any) => i.id === second.id).status).toBe("pending");
+
+    // Toggling again undoes it.
+    await s.call("POST", `/v1/kds/ticket-items/${first.id}/toggle`);
+    const reverted = (await s.call("GET", `/v1/kds/tickets?branchId=${s.branchId}`)).json.tickets.find((t: any) => t.id === s.ticket);
+    expect(reverted.items.find((i: any) => i.id === first.id).status).toBe("pending");
   });
 
   it("prices exactly like the domain library (parity for the offline POS)", async () => {

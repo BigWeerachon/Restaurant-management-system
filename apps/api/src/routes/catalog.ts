@@ -1,4 +1,4 @@
-import { AvailabilityBody, CreateIngredientBody, CreateMenuItemBody } from "@sabai/contracts";
+import { AvailabilityBody, CreateIngredientBody, CreateMenuItemBody, UpdateMenuItemBody } from "@sabai/contracts";
 import { costRecipe, foodCostPct, marginHealth, suggestPrice, type CostIngredient, type RecipeBook } from "@sabai/domain";
 import type { Hono } from "hono";
 import { z } from "zod";
@@ -108,6 +108,44 @@ export function registerCatalog(app: Hono<Env>, deps: Deps) {
         const showCost = await hasPermission(t, tenantId, "costs.view");
         const [cost] = showCost ? await t<{ c: string }[]>`select app.menu_item_cost(${item!.id}) as c` : [];
         return { id: item!.id, name: item!.name, price: money(item!.price), ...(cost ? { cost: money(cost.c) } : {}) };
+      }),
+  );
+
+  route(
+    app,
+    deps,
+    { method: "PATCH", path: "/v1/menu-items/{id}", tag: "Menu", summary: "แก้ไขเมนู (ชื่อ ราคา เส้นทางครัว สถานะ หรือสูตร)", tenant: true, body: UpdateMenuItemBody, permission: "menu.manage" },
+    async ({ tenantId, params, body, tx }) =>
+      tx(async (t) => {
+        await requirePermission(t, tenantId, "menu.manage");
+        const [existing] = await t<{ id: string }[]>`select id from app.menu_items where id = ${params.id} and tenant_id = ${tenantId}`;
+        if (!existing) throw new ApiFailure("NOT_FOUND", 404, { entity: "menu_item" });
+
+        await t`
+          update app.menu_items
+             set name = coalesce(${body.name ?? null}, name),
+                 name_en = coalesce(${body.nameEn ?? null}, name_en),
+                 price = coalesce(${body.price ?? null}, price),
+                 kitchen_route = coalesce(${body.kitchenRoute ?? null}, kitchen_route),
+                 image_url = coalesce(${body.imageUrl ?? null}, image_url),
+                 is_active = coalesce(${body.active ?? null}, is_active)
+           where id = ${params.id} and tenant_id = ${tenantId}`;
+
+        if (body.recipe) {
+          await requirePermission(t, tenantId, "recipes.manage");
+          await t`update app.recipes set is_current = false where tenant_id = ${tenantId} and menu_item_id = ${params.id} and kind = 'menu_item' and is_current`;
+          const [r] = await t<{ id: string }[]>`insert into app.recipes (tenant_id, kind, menu_item_id) values (${tenantId}, 'menu_item', ${params.id}) returning id`;
+          for (const l of body.recipe) {
+            await t`insert into app.recipe_lines (tenant_id, recipe_id, ingredient_id, qty, waste_rate)
+                    values (${tenantId}, ${r!.id}, ${l.ingredientId}, ${l.qty}, ${l.wasteRate})`;
+          }
+        }
+
+        const [item] = await t<{ id: string; name: string; price: string; is_active: boolean }[]>`
+          select id, name, price, is_active from app.menu_items where id = ${params.id}`;
+        const showCost = await hasPermission(t, tenantId, "costs.view");
+        const [cost] = showCost ? await t<{ c: string }[]>`select app.menu_item_cost(${params.id}) as c` : [];
+        return { id: item!.id, name: item!.name, price: money(item!.price), active: item!.is_active, ...(cost ? { cost: money(cost.c) } : {}) };
       }),
   );
 
