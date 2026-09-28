@@ -30,6 +30,7 @@ export function registerShop(app: Hono<Env>, deps: Deps) {
         roles,
         rolePermissions,
         members,
+        membershipBranches,
       ] = await Promise.all([
         t<{ id: string; name: string; business_type: string; vat_registered: boolean; prices_include_vat: boolean; vat_rate: string; cash_rounding: string; settings: unknown; plan_code: string | null; subscription_status: string | null; trial_ends_at: string | null }[]>`
           select tn.id, tn.name, tn.business_type, tn.vat_registered, tn.prices_include_vat, tn.vat_rate, tn.cash_rounding, tn.settings,
@@ -75,9 +76,11 @@ export function registerShop(app: Hono<Env>, deps: Deps) {
         t<{ id: string; key: string; name: string; description: string | null; grants_all: boolean; home: string; color: string | null; sort: number }[]>`
           select id, key, name, description, grants_all, home, color, sort from app.roles where tenant_id = ${tenantId} order by sort`,
         t<{ role_id: string; permission_key: string }[]>`select role_id, permission_key from app.role_permissions where tenant_id = ${tenantId}`,
-        t`select m.id, m.display_name, m.nickname, m.status, m.all_branches, m.user_id is null as pin_only, r.key as role_key, r.name as role_name
+        t<{ id: string; display_name: string; nickname: string | null; status: string; all_branches: boolean; pin_only: boolean; role_key: string; role_name: string }[]>`
+          select m.id, m.display_name, m.nickname, m.status, m.all_branches, m.user_id is null as pin_only, r.key as role_key, r.name as role_name
             from app.memberships m join app.roles r on r.id = m.role_id
            where m.tenant_id = ${tenantId} and m.status <> 'removed' order by r.sort, m.display_name`,
+        t<{ membership_id: string; branch_id: string }[]>`select membership_id, branch_id from app.membership_branches where tenant_id = ${tenantId}`,
       ]);
 
       const [plan] = tenant?.plan_code
@@ -137,7 +140,10 @@ export function registerShop(app: Hono<Env>, deps: Deps) {
           options: modifierOptions.filter((o) => o.group_id === g.id).map((o) => ({ ...o, price_delta: money(o.price_delta) })),
         })),
         roles: roles.map((r) => ({ ...r, permissions: r.grants_all ? ["*"] : rolePermissions.filter((p) => p.role_id === r.id).map((p) => p.permission_key) })),
-        members,
+        members: members.map((m) => ({
+          ...m,
+          branch_ids: m.all_branches ? null : membershipBranches.filter((mb) => mb.membership_id === m.id).map((mb) => mb.branch_id),
+        })),
       };
     }),
   );
