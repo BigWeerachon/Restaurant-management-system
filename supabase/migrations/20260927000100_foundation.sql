@@ -16,6 +16,11 @@
 
 create schema if not exists extensions;
 create extension if not exists pgcrypto with schema extensions;
+-- Real Supabase projects grant USAGE on `extensions` to these roles by
+-- default, so pgcrypto (gen_random_bytes/crypt) is callable from app code —
+-- e.g. inside app.uuid_v7() below and the PIN hashing in pos_kitchen. Grant
+-- it explicitly rather than depending on platform defaults.
+grant usage on schema extensions to anon, authenticated, service_role;
 
 create schema if not exists app;
 create schema if not exists audit;

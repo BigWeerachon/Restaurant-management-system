@@ -15,6 +15,7 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "db:reset": "pnpm --filter @sabai/db reset",
+    "db:seed": "pnpm --filter @sabai/db seed",
     "db:test": "pnpm --filter @sabai/db test:sql"
   },
   "devDependencies": {
