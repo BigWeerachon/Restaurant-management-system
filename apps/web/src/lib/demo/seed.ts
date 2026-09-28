@@ -155,11 +155,13 @@ const r = (lines: Array<[string, number, number?]>, yieldQty = 1): Recipe => ({
 
 const ICED_CUP: Array<[string, number]> = [["ice", 150], ["cup", 1], ["lid", 1]];
 
+// Distinct hues per category (not shades of the same brown) so the menu grid
+// is scannable by colour, not just by reading each label.
 const menuCategories: MenuCategory[] = [
-  { id: "cat-coffee", name: "กาแฟ", emoji: "☕", color: "#8a5a3b", sort: 1 },
-  { id: "cat-tea", name: "ชา นม โกโก้", emoji: "🧋", color: "#c0772e", sort: 2 },
+  { id: "cat-coffee", name: "กาแฟ", emoji: "☕", color: "#6f4518", sort: 1 },
+  { id: "cat-tea", name: "ชา นม โกโก้", emoji: "🧋", color: "#4d7c4a", sort: 2 },
   { id: "cat-food", name: "อาหารจานเดียว", emoji: "🍛", color: "#c2410c", sort: 3 },
-  { id: "cat-bakery", name: "ขนมและเบเกอรี่", emoji: "🥐", color: "#b45309", sort: 4 },
+  { id: "cat-bakery", name: "ขนมและเบเกอรี่", emoji: "🥐", color: "#b5486b", sort: 4 },
 ];
 
 const modifierGroups: ModifierGroup[] = [
@@ -205,11 +207,11 @@ const MENU: MenuSpec[] = [
   ["americano", "cat-coffee", "อเมริกาโน่เย็น", "🧊", 60, "bar", ["mg-sweet", "mg-extra"], r([["coffee", 18], ["syrup", 10], ...ICED_CUP]), 12],
   ["latte", "cat-coffee", "ลาเต้เย็น", "🥛", 70, "bar", ["mg-sweet", "mg-milk", "mg-extra"], r([["coffee", 18], ["milk", 180], ["syrup", 20], ...ICED_CUP]), 16, ["ขายดี"]],
   ["cappuccino", "cat-coffee", "คาปูชิโน่ร้อน", "☕", 65, "bar", ["mg-sweet", "mg-milk", "mg-extra"], r([["coffee", 18], ["milk", 150], ["syrup", 10]]), 6],
-  ["mocha", "cat-coffee", "มอคค่าเย็น", "🍫", 80, "bar", ["mg-sweet", "mg-milk", "mg-extra"], r([["coffee", 18], ["milk", 160], ["cocoa", 15], ["syrup", 15], ...ICED_CUP]), 7],
-  ["caramel", "cat-coffee", "คาราเมลมัคคิอาโต้", "🍮", 85, "bar", ["mg-milk", "mg-extra"], r([["coffee", 18], ["milk", 180], ["caramel", 25], ...ICED_CUP]), 6],
-  ["thaitea", "cat-tea", "ชาไทยเย็น", "🧡", 55, "bar", ["mg-sweet"], r([["thaitea", 25], ["milk", 120], ["condensed", 30], ["syrup", 20], ...ICED_CUP]), 14, ["ขายดี"]],
-  ["matcha", "cat-tea", "มัทฉะลาเต้", "🍵", 85, "bar", ["mg-sweet", "mg-milk"], r([["matcha", 5], ["milk", 180], ["syrup", 15], ...ICED_CUP]), 9],
-  ["cocoa", "cat-tea", "โกโก้เย็น", "🍫", 60, "bar", ["mg-sweet", "mg-milk", "mg-extra"], r([["cocoa", 25], ["milk", 180], ["syrup", 20], ...ICED_CUP]), 7],
+  ["mocha", "cat-coffee", "มอคค่าเย็น", "🧋", 80, "bar", ["mg-sweet", "mg-milk", "mg-extra"], r([["coffee", 18], ["milk", 160], ["cocoa", 15], ["syrup", 15], ...ICED_CUP]), 7],
+  ["caramel", "cat-coffee", "คาราเมลมัคคิอาโต้", "🥤", 85, "bar", ["mg-milk", "mg-extra"], r([["coffee", 18], ["milk", 180], ["caramel", 25], ...ICED_CUP]), 6],
+  ["thaitea", "cat-tea", "ชาไทยเย็น", "🧋", 55, "bar", ["mg-sweet"], r([["thaitea", 25], ["milk", 120], ["condensed", 30], ["syrup", 20], ...ICED_CUP]), 14, ["ขายดี"]],
+  ["matcha", "cat-tea", "มัทฉะลาเต้", "🥤", 85, "bar", ["mg-sweet", "mg-milk"], r([["matcha", 5], ["milk", 180], ["syrup", 15], ...ICED_CUP]), 9],
+  ["cocoa", "cat-tea", "โกโก้เย็น", "🥤", 60, "bar", ["mg-sweet", "mg-milk", "mg-extra"], r([["cocoa", 25], ["milk", 180], ["syrup", 20], ...ICED_CUP]), 7],
   ["caramelmilk", "cat-tea", "นมสดคาราเมล", "🥛", 65, "bar", ["mg-sweet", "mg-extra"], r([["milk", 200], ["caramel", 25], ...ICED_CUP]), 4],
   ["kaprao-chicken", "cat-food", "ข้าวกะเพราไก่", "🍛", 75, "kitchen", ["mg-egg", "mg-spicy"], r([["rice", 80], ["chicken", 120, 0.08], ["basil", 10], ["garlic", 6], ["chili", 5], ["sauce", 25], ["oil", 15]]), 13, ["ขายดี"]],
   ["kaprao-pork", "cat-food", "ข้าวกะเพราหมูสับ", "🍛", 75, "kitchen", ["mg-egg", "mg-spicy"], r([["rice", 80], ["pork", 110], ["basil", 10], ["garlic", 6], ["chili", 5], ["sauce", 25], ["oil", 15]]), 10],

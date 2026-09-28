@@ -21,6 +21,14 @@
   --surface-3: #e8e5dd;
   --overlay: rgb(28 27 25 / 0.42);
 
+  /* Cheap "product tile" surface (e.g. the POS menu grid) and the category-
+     colour tint mixed into it. In light mode this equals --surface; in dark
+     mode it's bumped to --surface-2/-3 and a stronger tint so a dense grid of
+     tiles doesn't collapse into one flat mass against --bg (see dark blocks
+     below). */
+  --tile-surface: var(--surface);
+  --cat-tint: 14%;
+
   /* Ink */
   --ink: #1c1b19;
   --ink-2: #4f4d47;
@@ -92,6 +100,8 @@
     --surface-2: #232320;
     --surface-3: #2d2c29;
     --overlay: rgb(0 0 0 / 0.6);
+    --tile-surface: var(--surface-2);
+    --cat-tint: 30%;
     --ink: #f4f3ee;
     --ink-2: #c9c7be;
     --ink-3: #a09d94;
@@ -145,6 +155,8 @@
   --surface-2: #232320;
   --surface-3: #2d2c29;
   --overlay: rgb(0 0 0 / 0.6);
+  --tile-surface: var(--surface-2);
+  --cat-tint: 30%;
   --ink: #f4f3ee;
   --ink-2: #c9c7be;
   --ink-3: #a09d94;
@@ -338,7 +350,7 @@
     box-shadow: inset 0 1px 0 var(--glass-sheen), var(--shadow-lg);
   }
   .glass-soft {
-    background: linear-gradient(180deg, color-mix(in srgb, white 8%, var(--surface)), var(--surface));
+    background: linear-gradient(180deg, color-mix(in srgb, white 8%, var(--tile-surface)), var(--tile-surface));
     border: 1px solid var(--line);
   }
   @supports not (backdrop-filter: blur(1px)) {

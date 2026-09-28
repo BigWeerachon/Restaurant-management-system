@@ -388,15 +388,21 @@ function PosScreen() {
                         onClick={() => tap(m)}
                         className={cn("glass-soft group relative flex h-full w-full flex-col overflow-hidden rounded-2xl text-left transition-[box-shadow,border-color]", out ? "opacity-55" : "hover:border-brand/50 hover:shadow-md", inCart && "border-brand ring-2 ring-brand/25")}
                       >
-                        <span className="grid h-24 place-items-center text-5xl sm:h-28" style={{ background: `color-mix(in oklab, ${cat?.color ?? "#13784f"} 12%, var(--surface))` }} aria-hidden="true">
+                        <span
+                          className="grid h-24 place-items-center text-5xl sm:h-28"
+                          style={{
+                            background: `radial-gradient(circle at 50% 32%, color-mix(in srgb, white 18%, transparent), transparent 70%), color-mix(in oklab, ${cat?.color ?? "#13784f"} var(--cat-tint), var(--tile-surface))`,
+                          }}
+                          aria-hidden="true"
+                        >
                           <motion.span whileHover={{ scale: 1.08, rotate: -3 }}>{m.emoji}</motion.span>
                         </span>
                         <span className="flex flex-1 flex-col gap-0.5 p-3">
                           <span className="line-clamp-2 text-[15px] font-semibold leading-snug text-ink">{m.name}</span>
-                          <span className="mt-auto text-[15px] font-medium tabular text-ink-2">{formatBaht(priceFor(m, channel), { compact: true })}</span>
+                          <span className="mt-auto text-[15px] font-semibold tabular text-ink-2">{formatBaht(priceFor(m, channel), { compact: true })}</span>
                         </span>
                         {out && <span className="absolute left-2 top-2 rounded-full bg-ink px-2 py-0.5 text-xs font-semibold text-ink-inverse">หมด</span>}
-                        {!out && m.tags?.[0] && <span className="absolute left-2 top-2 rounded-full bg-surface/90 px-2 py-0.5 text-xs font-medium text-ink-2 shadow-xs">{m.tags[0]}</span>}
+                        {!out && m.tags?.[0] && <span className="absolute left-2 top-2 rounded-full bg-accent px-2 py-0.5 text-xs font-semibold text-[#2b1b00] shadow-sm">{m.tags[0]}</span>}
                         <AnimatePresence>
                           {inCart > 0 && (
                             <motion.span key={inCart} initial={{ scale: 0 }} animate={{ scale: 1 }} exit={{ scale: 0 }} className="absolute right-2 top-2 grid h-7 min-w-7 place-items-center rounded-full bg-brand px-1.5 text-sm font-bold text-brand-ink shadow-md">
