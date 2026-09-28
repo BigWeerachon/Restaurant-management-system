@@ -1088,7 +1088,7 @@ export function addBranch(state: DemoState, ctx: Ctx, input: { name: string; add
   return b;
 }
 
-export function updateChannel(state: DemoState, ctx: Ctx, id: string, patch: Partial<Pick<Channel, "active" | "commissionRate" | "priceMarkup">>) {
+export function updateChannel(state: DemoState, ctx: Ctx, id: string, patch: Partial<Pick<Channel, "active" | "commissionRate" | "priceMarkup" | "name" | "color" | "appliesServiceCharge">>) {
   requirePerm(state, ctx, "settings.manage");
   const c = state.channels.find((x) => x.id === id);
   if (!c) throw new DomainError("NOT_FOUND");

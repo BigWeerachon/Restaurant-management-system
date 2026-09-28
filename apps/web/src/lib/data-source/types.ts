@@ -25,8 +25,6 @@ import type {
   MenuItem,
   PaymentMethod,
   PurchaseOrder,
-  Shift,
-  StockCount,
   Tenant,
   Ticket,
 } from "../demo/types";
@@ -108,9 +106,10 @@ export interface DataSource {
   approve(permission: string, pin: string, target?: { type: string; id: string }, reason?: string): Promise<ApprovalToken>;
 
   // ------------------------------------------------------------- POS / shifts
-  openShift(openingFloat: Satang): Promise<Shift>;
+  /** Returns the id of the newly opened shift. */
+  openShift(openingFloat: Satang): Promise<string>;
   cashMove(kind: "pay_in" | "pay_out", amount: Satang, reason: string): Promise<void>;
-  closeShift(counted: Satang): Promise<Shift>;
+  closeShift(counted: Satang): Promise<{ expected: Satang; counted: Satang; variance: Satang }>;
   submitOrder(input: SubmitOrderInput): Promise<void>;
   applyDiscount(orderId: string, type: "percent" | "amount", value: number, reason: string, approval?: ApprovalToken): Promise<void>;
   voidItem(orderId: string, itemId: string, reason: string, approval?: ApprovalToken): Promise<void>;
@@ -130,12 +129,14 @@ export interface DataSource {
 
   // ------------------------------------------------------------- inventory
   addIngredient(input: NewIngredientInput): Promise<Ingredient>;
-  receiveGoods(input: ReceiveInput): Promise<GoodsReceipt>;
-  recordWaste(ingredientId: string, qty: number, reasonCode: string, note?: string): Promise<void>;
-  startCount(): Promise<StockCount>;
+  receiveGoods(input: ReceiveInput): Promise<Pick<GoodsReceipt, "id" | "grNo" | "total" | "priceAlerts">>;
+  /** Returns the cost (in THB, not satang) of the waste recorded. */
+  recordWaste(ingredientId: string, qty: number, reasonCode: string, note?: string): Promise<number>;
+  /** Returns the id of the newly started count. */
+  startCount(): Promise<string>;
   recordCount(countId: string, ingredientId: string, counted: number | null): Promise<void>;
   submitCount(countId: string): Promise<void>;
-  approveCount(countId: string): Promise<void>;
+  approveCount(countId: string): Promise<{ adjusted: number; value: number }>;
 
   // ------------------------------------------------------------- purchasing
   createPurchaseOrder(supplierId: string, lines: { ingredientId: string; qtyPacks: number }[]): Promise<PurchaseOrder>;
@@ -149,8 +150,8 @@ export interface DataSource {
   setPurchaseOrderStatus(poId: string, status: "approved" | "sent" | "cancelled"): Promise<void>;
 
   // ------------------------------------------------------------- finance
-  closeDay(date: string): Promise<DayClose>;
-  addExpense(expense: Omit<Expense, "id">): Promise<Expense>;
+  closeDay(date: string): Promise<DayClose["summary"]>;
+  addExpense(expense: Omit<Expense, "id">): Promise<void>;
   payBill(billId: string, amount: Satang): Promise<void>;
   matchStatementLine(lineId: string, expectedIds: string[], note?: string): Promise<void>;
   ignoreStatementLine(lineId: string): Promise<void>;
