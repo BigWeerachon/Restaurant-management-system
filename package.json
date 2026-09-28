@@ -16,7 +16,8 @@
     "format:check": "prettier --check .",
     "db:reset": "pnpm --filter @sabai/db reset",
     "db:seed": "pnpm --filter @sabai/db seed",
-    "db:test": "pnpm --filter @sabai/db test:sql"
+    "db:test": "pnpm --filter @sabai/db test:sql",
+    "stack:dev": "bash ./scripts/stack-dev.sh"
   },
   "devDependencies": {
     "prettier": "3.9.9",

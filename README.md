@@ -33,15 +33,21 @@ pnpm install
 # 1) ทดลองหน้าเว็บทันที (ร้านตัวอย่าง + ข้อมูล 30 วัน ไม่ต้องมีเซิร์ฟเวอร์)
 pnpm --filter @sabai/web dev            # http://localhost:3000
 
-# 2) ฐานข้อมูล + API
+# 2) สแตกเต็มบน Postgres จริง (reset DB → seed ร้านตัวอย่าง → API + web พร้อมกัน)
+pnpm stack:dev                          # API http://localhost:8787 · web http://localhost:3000
+
+# ฐานข้อมูล + API แยกทีละส่วน (เทียบเท่าข้อ 2 แต่คุมเองได้)
 pnpm db:test                            # สร้าง DB ทดสอบ รันทุก migration และ SQL e2e
 pnpm db:reset                           # ติดตั้ง migrations ลง sabai_dev
-cp apps/api/.env.example apps/api/.env
+pnpm db:seed                            # ใส่ร้านตัวอย่างเดียวกับเดโม (เมนู/สูตร/พนักงาน/PIN)
 pnpm --filter @sabai/api dev            # http://localhost:8787 · OpenAPI: /v1/openapi.json
 
 # ตรวจทั้งหมด
 pnpm typecheck && pnpm test && pnpm build
 ```
+
+`DATABASE_URL`/`JWT_SECRET` มีค่าเริ่มต้นที่ใช้กับ `sabai_dev` ได้ทันที ไม่ต้องสร้าง `.env`
+(ปรับเองได้ด้วย `apps/api/.env.example` → คัดลอกเป็น `.env`)
 
 ร้านตัวอย่าง: เลือกบทบาทที่หน้าแรกได้เลย หรือสลับผู้ใช้ด้วย PIN —
 เจ้าของ `1234` · ผู้จัดการ `2222` · แคชเชียร์ `3333` · เสิร์ฟ `4444` · ครัว `5555` · สต็อก `6666` · บัญชี `7777`
