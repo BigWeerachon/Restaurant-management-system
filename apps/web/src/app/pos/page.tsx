@@ -286,9 +286,9 @@ function PosScreen() {
   );
 
   return (
-    <div className="flex h-dvh flex-col bg-bg">
+    <div className="glass-field flex h-dvh flex-col bg-bg">
       {/* Top bar */}
-      <header className="flex h-16 shrink-0 items-center gap-2 border-b border-line bg-surface px-3 sm:gap-3 sm:px-4">
+      <header className="flex h-16 shrink-0 items-center gap-2 border-b border-[var(--glass-border)] bg-[var(--glass-bg-strong)] px-3 backdrop-blur-xl backdrop-saturate-150 sm:gap-3 sm:px-4">
         {hasHome ? (
           <Link href={nav.primary.find((n) => n.key !== "pos")?.href ?? "/"} className="grid h-11 w-11 place-items-center rounded-xl text-ink-2 hover:bg-surface-2" aria-label="กลับหน้าหลัก">
             <ArrowLeft className="h-5 w-5" />
@@ -341,7 +341,7 @@ function PosScreen() {
 
       <div className="flex min-h-0 flex-1">
         {/* Categories */}
-        <nav aria-label="หมวดเมนู" className="hidden w-[118px] shrink-0 flex-col gap-1 overflow-y-auto border-r border-line bg-surface p-2 scrollbar-thin md:flex">
+        <nav aria-label="หมวดเมนู" className="hidden w-[118px] shrink-0 flex-col gap-1 overflow-y-auto border-r border-[var(--glass-border)] bg-[var(--glass-bg)] p-2 backdrop-blur-xl backdrop-saturate-150 scrollbar-thin md:flex">
           <LayoutGroup id="cats">
             {[{ id: "all", name: "ทั้งหมด", emoji: "🍽️" }, { id: "best", name: "ขายดี", emoji: "⭐" }, ...db.menuCategories].map((c) => {
               const on = category === c.id;
@@ -386,7 +386,7 @@ function PosScreen() {
                       <motion.button
                         whileTap={{ scale: 0.95 }}
                         onClick={() => tap(m)}
-                        className={cn("group relative flex h-full w-full flex-col overflow-hidden rounded-2xl border bg-surface text-left shadow-xs transition-[box-shadow,border-color]", out ? "border-line opacity-55" : "border-line hover:border-brand/50 hover:shadow-md", inCart && "border-brand ring-2 ring-brand/25")}
+                        className={cn("glass-soft group relative flex h-full w-full flex-col overflow-hidden rounded-2xl text-left transition-[box-shadow,border-color]", out ? "opacity-55" : "hover:border-brand/50 hover:shadow-md", inCart && "border-brand ring-2 ring-brand/25")}
                       >
                         <span className="grid h-24 place-items-center text-5xl sm:h-28" style={{ background: `color-mix(in oklab, ${cat?.color ?? "#13784f"} 12%, var(--surface))` }} aria-hidden="true">
                           <motion.span whileHover={{ scale: 1.08, rotate: -3 }}>{m.emoji}</motion.span>
@@ -420,13 +420,13 @@ function PosScreen() {
         </section>
 
         {/* Cart (desktop/tablet) */}
-        <aside aria-label="บิล" className="hidden w-[380px] shrink-0 border-l border-line bg-surface lg:block">
+        <aside aria-label="บิล" className="hidden w-[380px] shrink-0 border-l border-[var(--glass-border)] bg-[var(--glass-bg-strong)] backdrop-blur-xl backdrop-saturate-150 lg:block">
           {cart}
         </aside>
       </div>
 
       {/* Cart bar (phones & small tablets) */}
-      <div className="safe-bottom fixed inset-x-0 bottom-0 z-20 border-t border-line bg-surface p-3 lg:hidden">
+      <div className="safe-bottom fixed inset-x-0 bottom-0 z-20 border-t border-[var(--glass-border)] bg-[var(--glass-bg-strong)] p-3 backdrop-blur-xl backdrop-saturate-150 lg:hidden">
         <Button size="xl" block onClick={() => setCartOpen(true)} disabled={count === 0} className="justify-between">
           <span className="flex items-center gap-2">
             <span className="grid h-7 min-w-7 place-items-center rounded-full bg-brand-ink/20 px-1.5 text-sm">{count}</span> ดูบิล

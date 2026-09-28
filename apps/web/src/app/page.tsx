@@ -59,10 +59,7 @@ export default function Welcome() {
   const members = sample ? db.members : [];
 
   return (
-    <div className="relative min-h-dvh overflow-hidden bg-bg">
-      <div aria-hidden="true" className="pointer-events-none absolute -left-40 -top-40 h-[520px] w-[520px] rounded-full bg-brand-soft blur-3xl" />
-      <div aria-hidden="true" className="pointer-events-none absolute -bottom-48 right-0 h-[480px] w-[480px] rounded-full bg-accent-soft blur-3xl" />
-
+    <div className="glass-field relative min-h-dvh overflow-hidden bg-bg">
       <div className="relative mx-auto grid min-h-dvh max-w-6xl items-center gap-10 px-5 py-10 lg:grid-cols-[1.05fr_1fr] lg:gap-14 lg:px-8">
         <motion.section initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}>
           <Logo />
@@ -81,7 +78,7 @@ export default function Welcome() {
               { icon: ChefHat, title: "ครัวไม่พลาด", text: "ออเดอร์เด้งขึ้นจอ มีเวลาและสีเตือน" },
               { icon: PiggyBank, title: "รู้เงินเหลือจริง", text: "หัก GP ค่าธรรมเนียม ของเสีย ให้ครบ" },
             ].map((f, i) => (
-              <motion.li key={f.title} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 + i * 0.08 }} className="rounded-2xl border border-line bg-surface/80 p-4 shadow-xs backdrop-blur">
+              <motion.li key={f.title} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 + i * 0.08 }} className="glass rounded-2xl p-4">
                 <f.icon className="h-6 w-6 text-brand" aria-hidden="true" />
                 <p className="mt-2 font-semibold text-ink">{f.title}</p>
                 <p className="text-sm text-ink-3">{f.text}</p>
@@ -95,7 +92,7 @@ export default function Welcome() {
           initial={{ opacity: 0, y: 24 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.5, delay: 0.1, ease: [0.22, 1, 0.36, 1] }}
-          className="rounded-[28px] border border-line bg-surface p-5 shadow-lg sm:p-7"
+          className="glass-overlay rounded-[28px] p-5 sm:p-7"
         >
           {sample ? (
             <>
@@ -118,7 +115,7 @@ export default function Welcome() {
                     <motion.li key={m.id} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 + i * 0.04 }}>
                       <button
                         onClick={() => enter(m.id)}
-                        className="group flex w-full items-center gap-3 rounded-2xl border border-line bg-surface p-3 text-left transition-[border-color,box-shadow,transform] hover:-translate-y-0.5 hover:border-brand hover:shadow-md focus-visible:border-brand"
+                        className="glass group flex w-full items-center gap-3 rounded-2xl p-3 text-left transition-[box-shadow,transform] hover:-translate-y-0.5 hover:shadow-md focus-visible:shadow-md"
                       >
                         <Avatar name={m.name} color={m.color} size={44} />
                         <span className="min-w-0 flex-1">

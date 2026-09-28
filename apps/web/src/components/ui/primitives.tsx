@@ -12,8 +12,8 @@ export function Card({ className, children, interactive, as: As = "div", ...rest
   return (
     <As
       className={cn(
-        "rounded-2xl border border-line bg-surface shadow-xs",
-        interactive && "transition-[box-shadow,border-color,transform] duration-200 hover:-translate-y-0.5 hover:border-line-strong hover:shadow-md",
+        "glass rounded-2xl",
+        interactive && "transition-[box-shadow,border-color,transform] duration-200 hover:-translate-y-0.5 hover:shadow-md",
         className,
       )}
       {...rest}

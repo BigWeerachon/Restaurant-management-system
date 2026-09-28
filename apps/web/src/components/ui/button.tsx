@@ -9,24 +9,26 @@ import { cn } from "@/lib/cn";
 export type ButtonVariant = "primary" | "secondary" | "ghost" | "danger" | "soft" | "outline" | "accent";
 export type ButtonSize = "sm" | "md" | "lg" | "xl" | "icon" | "icon-lg";
 
+const glossy = "shadow-[inset_0_1px_0_rgb(255_255_255/0.35),0_1px_2px_rgb(0_0_0/0.08)]";
+
 const variants: Record<ButtonVariant, string> = {
-  primary: "bg-brand text-brand-ink shadow-sm hover:bg-brand-hover",
-  secondary: "bg-surface text-ink border border-line shadow-xs hover:bg-surface-2 hover:border-line-strong",
-  outline: "bg-transparent text-ink border border-line-strong hover:bg-surface-2",
+  primary: `bg-brand text-brand-ink hover:bg-brand-hover ${glossy}`,
+  secondary: "glass text-ink hover:shadow-sm",
+  outline: "bg-surface/40 text-ink border border-line-strong backdrop-blur-sm hover:bg-surface-2",
   ghost: "bg-transparent text-ink-2 hover:bg-surface-2 hover:text-ink",
   soft: "bg-brand-soft text-brand-soft-ink hover:brightness-95",
-  danger: "bg-danger-fill text-white shadow-sm hover:brightness-95",
-  accent: "bg-accent text-[#2b1b00] shadow-sm hover:brightness-95",
+  danger: `bg-danger-fill text-white hover:brightness-95 ${glossy}`,
+  accent: `bg-accent text-[#2b1b00] hover:brightness-95 ${glossy}`,
 };
 
 // Every size is at least 44px tall (WCAG 2.5.8 AA is 24px; we aim for AAA 44px).
 const sizes: Record<ButtonSize, string> = {
-  sm: "h-9 min-h-9 px-3 text-sm gap-1.5 rounded-[10px]",
-  md: "h-11 px-4 text-[15px] gap-2 rounded-xl",
-  lg: "h-12 px-5 text-base gap-2 rounded-xl",
-  xl: "h-14 px-6 text-lg gap-2.5 rounded-2xl",
-  icon: "h-11 w-11 rounded-xl",
-  "icon-lg": "h-14 w-14 rounded-2xl",
+  sm: "h-9 min-h-9 px-3.5 text-sm gap-1.5 rounded-full",
+  md: "h-11 px-5 text-[15px] gap-2 rounded-full",
+  lg: "h-12 px-6 text-base gap-2 rounded-full",
+  xl: "h-14 px-7 text-lg gap-2.5 rounded-full",
+  icon: "h-11 w-11 rounded-full",
+  "icon-lg": "h-14 w-14 rounded-full",
 };
 
 export interface ButtonProps extends Omit<HTMLMotionProps<"button">, "children"> {

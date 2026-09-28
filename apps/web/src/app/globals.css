@@ -72,6 +72,16 @@
   --shadow-sm: 0 1px 2px rgb(28 27 25 / 0.06), 0 1px 1px rgb(28 27 25 / 0.04);
   --shadow-md: 0 6px 16px -4px rgb(28 27 25 / 0.1), 0 2px 4px -2px rgb(28 27 25 / 0.06);
   --shadow-lg: 0 24px 48px -16px rgb(28 27 25 / 0.22), 0 6px 16px -6px rgb(28 27 25 / 0.1);
+
+  /* Glass material — translucent frosted surfaces (nav, cards, dialogs).
+     Derived from --surface via color-mix so it stays correct in every theme
+     without a second set of hand-picked colours; opacity kept ≥70% so text
+     contrast on top never depends on what happens to be blurred behind it. */
+  --glass-bg: color-mix(in srgb, var(--surface) 72%, transparent);
+  --glass-bg-strong: color-mix(in srgb, var(--surface) 90%, transparent);
+  --glass-border: color-mix(in srgb, white 55%, transparent);
+  --glass-sheen: color-mix(in srgb, white 45%, transparent);
+  --glass-blur: 20px;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -119,6 +129,11 @@
     --shadow-sm: 0 1px 2px rgb(0 0 0 / 0.4);
     --shadow-md: 0 8px 20px -6px rgb(0 0 0 / 0.55);
     --shadow-lg: 0 24px 56px -16px rgb(0 0 0 / 0.7);
+    --glass-bg: color-mix(in srgb, var(--surface) 62%, transparent);
+    --glass-bg-strong: color-mix(in srgb, var(--surface) 85%, transparent);
+    --glass-border: color-mix(in srgb, white 14%, transparent);
+    --glass-sheen: color-mix(in srgb, white 8%, transparent);
+    --glass-blur: 24px;
   }
 }
 
@@ -167,6 +182,11 @@
   --shadow-sm: 0 1px 2px rgb(0 0 0 / 0.4);
   --shadow-md: 0 8px 20px -6px rgb(0 0 0 / 0.55);
   --shadow-lg: 0 24px 56px -16px rgb(0 0 0 / 0.7);
+  --glass-bg: color-mix(in srgb, var(--surface) 62%, transparent);
+  --glass-bg-strong: color-mix(in srgb, var(--surface) 85%, transparent);
+  --glass-border: color-mix(in srgb, white 14%, transparent);
+  --glass-sheen: color-mix(in srgb, white 8%, transparent);
+  --glass-blur: 24px;
 }
 
 @theme inline {
@@ -291,6 +311,63 @@
     background-size: 400% 100%;
     animation: var(--animate-shimmer);
   }
+
+  /* Liquid glass — frosted, translucent chrome (nav, dialogs, top-level cards).
+     Reserved for structural/low-count elements: backdrop-filter is expensive
+     per layer, so repeated grid tiles (e.g. the POS menu) use .glass-soft
+     instead, which fakes the same material with a cheap gradient. */
+  .glass {
+    background: var(--glass-bg);
+    backdrop-filter: blur(var(--glass-blur)) saturate(160%);
+    -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(160%);
+    border: 1px solid var(--glass-border);
+    box-shadow: inset 0 1px 0 var(--glass-sheen), var(--shadow-sm);
+  }
+  .glass-strong {
+    background: var(--glass-bg-strong);
+    backdrop-filter: blur(var(--glass-blur)) saturate(160%);
+    -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(160%);
+    border: 1px solid var(--glass-border);
+    box-shadow: inset 0 1px 0 var(--glass-sheen), var(--shadow-md);
+  }
+  .glass-overlay {
+    background: var(--glass-bg-strong);
+    backdrop-filter: blur(var(--glass-blur)) saturate(160%);
+    -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(160%);
+    border: 1px solid var(--glass-border);
+    box-shadow: inset 0 1px 0 var(--glass-sheen), var(--shadow-lg);
+  }
+  .glass-soft {
+    background: linear-gradient(180deg, color-mix(in srgb, white 8%, var(--surface)), var(--surface));
+    border: 1px solid var(--line);
+  }
+  @supports not (backdrop-filter: blur(1px)) {
+    .glass, .glass-strong, .glass-overlay { background: var(--glass-bg-strong); }
+  }
+
+  /* Ambient mesh — soft, slowly drifting colour behind glass chrome. Fixed
+     and z-index'd under content; a page opts in with .glass-field on its
+     root instead of every page paying for it. */
+  .glass-field { position: relative; isolation: isolate; }
+  .glass-field::before {
+    content: "";
+    position: fixed;
+    inset: 0;
+    z-index: -1;
+    pointer-events: none;
+    background:
+      radial-gradient(38rem 30rem at 8% -5%, var(--brand-soft), transparent 60%),
+      radial-gradient(34rem 28rem at 100% 8%, var(--accent-soft), transparent 55%),
+      radial-gradient(40rem 34rem at 15% 100%, var(--info-soft), transparent 60%);
+    filter: blur(60px) saturate(130%);
+    opacity: 0.8;
+    animation: drift 26s ease-in-out infinite alternate;
+  }
+}
+
+@keyframes drift {
+  from { transform: translate3d(0, 0, 0) scale(1); }
+  to { transform: translate3d(2%, -2%, 0) scale(1.05); }
 }
 
 @media (prefers-reduced-motion: reduce) {

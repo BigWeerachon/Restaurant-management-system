@@ -65,13 +65,13 @@ function BranchSwitcher({ className }: { className?: string }) {
   }
   return (
     <DM.Root>
-      <DM.Trigger className={cn("flex h-11 w-full items-center gap-2 rounded-xl border border-line bg-surface px-3 text-left text-sm font-medium text-ink shadow-xs hover:border-line-strong", className)} aria-label={`${branch.name} (เปลี่ยนสาขา)`}>
+      <DM.Trigger className={cn("glass flex h-11 w-full items-center gap-2 rounded-xl px-3 text-left text-sm font-medium text-ink", className)} aria-label={`${branch.name} (เปลี่ยนสาขา)`}>
         <span className="h-2 w-2 shrink-0 rounded-full bg-brand" aria-hidden="true" />
         <span className="min-w-0 flex-1 truncate">{branch.name}</span>
         <ChevronsUpDown className="h-4 w-4 text-ink-3" aria-hidden="true" />
       </DM.Trigger>
       <DM.Portal>
-        <DM.Content align="start" sideOffset={6} className="z-50 min-w-56 rounded-2xl border border-line bg-surface p-1.5 shadow-lg animate-fade-in">
+        <DM.Content align="start" sideOffset={6} className="glass-overlay z-50 min-w-56 rounded-2xl p-1.5 animate-fade-in">
           <DM.Label className="px-2.5 py-1.5 text-xs text-ink-3">สาขา</DM.Label>
           {branches.map((b) => (
             <DM.Item key={b.id} onSelect={() => setBranch(b.id)} className="flex h-11 cursor-pointer items-center gap-2 rounded-xl px-2.5 text-[15px] text-ink outline-none data-[highlighted]:bg-surface-2">
@@ -110,7 +110,7 @@ function UserMenu({ side = "top", compact }: { side?: "top" | "bottom"; compact?
           {!compact && <ChevronDown className="h-4 w-4 text-ink-3" aria-hidden="true" />}
         </DM.Trigger>
         <DM.Portal>
-          <DM.Content side={side} align="end" sideOffset={8} className="z-50 w-64 rounded-2xl border border-line bg-surface p-1.5 shadow-lg animate-fade-in">
+          <DM.Content side={side} align="end" sideOffset={8} className="glass-overlay z-50 w-64 rounded-2xl p-1.5 animate-fade-in">
             <div className="px-2.5 py-2">
               <p className="text-sm font-semibold text-ink">{member.name}</p>
               <p className="text-xs text-ink-3">{role?.name} · {role?.description}</p>
@@ -196,7 +196,7 @@ function SetupProgress() {
 function NavLink({ href, icon, label, active, layoutId }: { href: string; icon: string; label: string; active: boolean; layoutId: string }) {
   return (
     <Link href={href} aria-current={active ? "page" : undefined} className={cn("relative flex h-11 items-center gap-3 rounded-xl px-3 text-[15px] font-medium transition-colors", active ? "text-ink" : "text-ink-3 hover:bg-surface-2 hover:text-ink")}>
-      {active && <motion.span layoutId={layoutId} className="absolute inset-0 rounded-xl bg-surface shadow-sm ring-1 ring-line" transition={{ type: "spring", stiffness: 500, damping: 40 }} />}
+      {active && <motion.span layoutId={layoutId} className="absolute inset-0 rounded-xl bg-surface/70 shadow-sm ring-1 ring-[var(--glass-border)]" transition={{ type: "spring", stiffness: 500, damping: 40 }} />}
       <Icon name={icon} className={cn("relative h-5 w-5", active && "text-brand")} />
       <span className="relative">{label}</span>
     </Link>
@@ -218,13 +218,13 @@ export function AppShell({ children }: { children: ReactNode }) {
   useEffect(() => setMoreOpen(false), [pathname]);
 
   return (
-    <div className="min-h-dvh bg-bg">
+    <div className="glass-field min-h-dvh bg-bg">
       <a href="#main" className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-[70] focus:rounded-xl focus:bg-surface focus:px-4 focus:py-2 focus:shadow-lg">
         ข้ามไปยังเนื้อหา
       </a>
 
       {/* Desktop sidebar */}
-      <aside className="fixed inset-y-0 left-0 z-30 hidden w-[264px] flex-col gap-4 border-r border-line bg-bg px-4 py-5 lg:flex">
+      <aside className="fixed inset-y-0 left-0 z-30 hidden w-[264px] flex-col gap-4 border-r border-[var(--glass-border)] bg-[var(--glass-bg-strong)] px-4 py-5 backdrop-blur-xl backdrop-saturate-150 lg:flex">
         <div className="px-1">
           <Logo />
         </div>
@@ -262,7 +262,7 @@ export function AppShell({ children }: { children: ReactNode }) {
 
       <div className="lg:pl-[264px]">
         {/* Top bar */}
-        <header className="sticky top-0 z-20 border-b border-line/70 bg-bg/85 backdrop-blur-md">
+        <header className="sticky top-0 z-20 border-b border-[var(--glass-border)] bg-[var(--glass-bg)] backdrop-blur-xl backdrop-saturate-150">
           <div className="mx-auto flex h-16 max-w-[1400px] items-center gap-3 px-4 sm:px-6 lg:px-8">
             <div className="flex items-center gap-3 lg:hidden">
               <Logo compact />
@@ -300,7 +300,7 @@ export function AppShell({ children }: { children: ReactNode }) {
       </div>
 
       {/* Mobile tab bar: the four things this role does most, plus "more". */}
-      <nav aria-label="เมนูหลัก" className="safe-bottom fixed inset-x-0 bottom-0 z-30 border-t border-line bg-surface/95 backdrop-blur-md lg:hidden">
+      <nav aria-label="เมนูหลัก" className="safe-bottom fixed inset-x-0 bottom-0 z-30 border-t border-[var(--glass-border)] bg-[var(--glass-bg-strong)] backdrop-blur-xl backdrop-saturate-150 lg:hidden">
         <div className="mx-auto flex max-w-lg items-stretch justify-around px-2">
           {nav.primary.slice(0, nav.more.length ? 4 : 5).map((n) => {
             const active = isActive(n.href);

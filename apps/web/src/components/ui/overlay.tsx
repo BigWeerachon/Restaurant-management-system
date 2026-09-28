@@ -43,7 +43,7 @@ export function Dialog({
             <RD.Content asChild forceMount aria-describedby={description ? undefined : undefined}>
               <motion.div
                 className={cn(
-                  "fixed inset-x-0 bottom-0 z-50 flex max-h-[92dvh] flex-col rounded-t-[28px] border border-line bg-surface shadow-lg outline-none",
+                  "glass-overlay fixed inset-x-0 bottom-0 z-50 flex max-h-[92dvh] flex-col rounded-t-[28px] outline-none",
                   "sm:inset-x-auto sm:bottom-auto sm:left-1/2 sm:top-1/2 sm:w-[calc(100%-2rem)] sm:-translate-x-1/2 sm:-translate-y-1/2 sm:rounded-[24px]",
                   width,
                 )}
