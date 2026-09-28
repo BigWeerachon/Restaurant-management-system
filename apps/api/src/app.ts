@@ -6,6 +6,7 @@ import { verifyToken } from "./auth";
 import { ApiFailure, toErrorResponse } from "./errors";
 import { openApiDocument, type Deps, type Env } from "./http";
 import { registerCatalog } from "./routes/catalog";
+import { registerDevAuth } from "./routes/dev-auth";
 import { registerFinance } from "./routes/finance";
 import { registerIdentity } from "./routes/identity";
 import { registerInventory } from "./routes/inventory";
@@ -76,6 +77,10 @@ export function createApp(deps: Deps): Hono<Env> {
     await deps.sql`select 1`;
     return c.json({ ok: true, service: "sabai-api", time: new Date().toISOString() });
   });
+
+  // Dev-only convenience login (no password) so local/CI clients can obtain a
+  // bearer token without a real Supabase project. Never mounted in production.
+  if (deps.config.env !== "production") registerDevAuth(app, deps);
 
   registerIdentity(app, deps);
   registerCatalog(app, deps);

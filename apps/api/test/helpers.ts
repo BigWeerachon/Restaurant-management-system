@@ -28,7 +28,8 @@ export async function createTestContext() {
     corsOrigins: ["http://localhost:3000"],
     staffTokenTtlSeconds: 3600,
   };
-  const app = createApp({ sql, config, log: createLogger({ silent: true }), events });
+  const deps = { sql, config, log: createLogger({ silent: true }), events };
+  const app = createApp(deps);
 
   async function newUser(email = `${randomUUID()}@example.com`) {
     const id = randomUUID();
@@ -63,7 +64,7 @@ export async function createTestContext() {
     await sql.end({ timeout: 2 });
   }
 
-  return { app, sql, events, newUser, client, close };
+  return { app, sql, events, deps, newUser, client, close };
 }
 
 /** Time-ordered ids like the POS generates on-device. */

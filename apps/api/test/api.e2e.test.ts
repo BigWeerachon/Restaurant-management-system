@@ -1,5 +1,6 @@
 import { addDays, calculateOrderTotals, PERMISSIONS, toSatang } from "@sabai/domain";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { createApp } from "../src/app";
 import { createTestContext, uuidv7 } from "./helpers";
 
 type Ctx = Awaited<ReturnType<typeof createTestContext>>;
@@ -42,6 +43,29 @@ describe("platform basics", () => {
   it("keeps the permission catalog in code and database in sync", async () => {
     const rows = await ctx.sql<{ key: string }[]>`select key from app.permissions order by key`;
     expect(rows.map((r) => r.key)).toEqual(PERMISSIONS.map((p) => p.key).sort());
+  });
+
+  it("mints a usable token from the dev-only login, but only outside production", async () => {
+    const email = `${uuidv7()}@example.com`;
+    const call = ctx.client();
+    const login = await call("POST", "/v1/dev/login", { email });
+    expect(login.status).toBe(200);
+    expect(login.json.userId).toBeTruthy();
+
+    const me = await ctx.client(login.json.token as string)("GET", "/v1/me");
+    expect(me.status).toBe(200);
+
+    // Same email twice reuses the same auth.users row instead of duplicating it.
+    const again = await call("POST", "/v1/dev/login", { email });
+    expect(again.json.userId).toBe(login.json.userId);
+
+    const prodApp = createApp({ ...ctx.deps, config: { ...ctx.deps.config, env: "production" } });
+    const prodRes = await prodApp.request("/v1/dev/login", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ email }),
+    });
+    expect(prodRes.status).toBe(404);
   });
 });
 
