@@ -87,6 +87,23 @@ export const CreateMemberBody = z.object({
   inviteContact: z.string().max(120).optional(),
 });
 
+export const UpdateMemberBody = z
+  .object({
+    displayName: Name.optional(),
+    nickname: z.string().max(40).optional(),
+    roleKey: z.string().regex(/^[a-z][a-z0-9_]{1,40}$/).optional(),
+    /** Present (even []) scopes to these branches; omit to leave scope unchanged. */
+    branchIds: z.array(Id).max(100).optional(),
+    allBranches: z.boolean().optional(),
+    maxDiscountRate: z.number().min(0).max(1).optional(),
+    status: z.enum(["active", "suspended"]).optional(),
+  })
+  .refine((b) => Object.keys(b).length > 0, { message: "ไม่มีอะไรให้แก้ไข" });
+
+export const SetMemberPinBody = z.object({ pin: z.string().regex(/^\d{4,6}$/, "PIN เป็นตัวเลข 4–6 หลัก") });
+
+export const SetRolePermissionsBody = z.object({ permissions: z.array(z.string().regex(/^[a-z_]+\.[a-z_]+$/)).max(200) });
+
 export const SkipOnboardingBody = z.object({
   step: z.enum(["recipe", "staff"]),
 });

@@ -1,4 +1,13 @@
-import { ApprovalBody, CreateMemberBody, CreateTenantBody, PinSwitchBody, SkipOnboardingBody } from "@sabai/contracts";
+import {
+  ApprovalBody,
+  CreateMemberBody,
+  CreateTenantBody,
+  PinSwitchBody,
+  SetMemberPinBody,
+  SetRolePermissionsBody,
+  SkipOnboardingBody,
+  UpdateMemberBody,
+} from "@sabai/contracts";
 import { homeFor, navigationFor, onboardingProgress, type Home } from "@sabai/domain";
 import type { Hono } from "hono";
 import { mintStaffToken } from "../auth";
@@ -127,6 +136,63 @@ export function registerIdentity(app: Hono<Env>, deps: Deps) {
       }
       if (body.pin) await t`select app.set_member_pin(${m!.id}, ${body.pin})`;
       return { id: m!.id };
+    }),
+  );
+
+  route(app, deps, { method: "PATCH", path: "/v1/members/{id}", tag: "Team", summary: "แก้พนักงาน (ชื่อ ตำแหน่ง สาขา วงเงินส่วนลด) หรือปิด/เปิดใช้งาน", tenant: true, body: UpdateMemberBody, permission: "staff.manage" }, async ({ tenantId, params, body, tx }) =>
+    tx(async (t) => {
+      const [existing] = await t<{ id: string }[]>`select id from app.memberships where id = ${params.id} and tenant_id = ${tenantId} and status <> 'removed'`;
+      if (!existing) throw new ApiFailure("NOT_FOUND", 404, { entity: "member" });
+
+      let roleId: string | null = null;
+      if (body.roleKey !== undefined) {
+        const [role] = await t<{ id: string }[]>`select id from app.roles where tenant_id = ${tenantId} and key = ${body.roleKey}`;
+        if (!role) throw new ApiFailure("VALIDATION", 422, {}, { roleKey: "ไม่พบตำแหน่งนี้" });
+        roleId = role.id;
+      }
+
+      await t`
+        update app.memberships
+           set display_name = coalesce(${body.displayName ?? null}, display_name),
+               nickname = coalesce(${body.nickname ?? null}, nickname),
+               role_id = coalesce(${roleId}, role_id),
+               all_branches = coalesce(${body.allBranches ?? (body.branchIds ? false : null)}, all_branches),
+               status = coalesce(${body.status ?? null}, status),
+               limits = case when ${body.maxDiscountRate ?? null}::numeric is null then limits
+                        else coalesce(limits, '{}'::jsonb) || jsonb_build_object('max_discount_rate', ${body.maxDiscountRate ?? null}::numeric) end
+         where id = ${params.id} and tenant_id = ${tenantId}`;
+
+      if (body.branchIds) {
+        await t`delete from app.membership_branches where tenant_id = ${tenantId} and membership_id = ${params.id}`;
+        for (const b of body.branchIds) {
+          await t`insert into app.membership_branches (tenant_id, membership_id, branch_id) values (${tenantId}, ${params.id}, ${b})`;
+        }
+      } else if (body.allBranches === true) {
+        await t`delete from app.membership_branches where tenant_id = ${tenantId} and membership_id = ${params.id}`;
+      }
+
+      return { id: params.id };
+    }),
+  );
+
+  route(app, deps, { method: "POST", path: "/v1/members/{id}/pin", tag: "Team", summary: "ตั้ง PIN ใหม่ให้พนักงาน", tenant: true, body: SetMemberPinBody, permission: "staff.manage" }, async ({ tenantId, params, body, tx }) =>
+    tx(async (t) => {
+      const [existing] = await t<{ id: string }[]>`select id from app.memberships where id = ${params.id} and tenant_id = ${tenantId} and status <> 'removed'`;
+      if (!existing) throw new ApiFailure("NOT_FOUND", 404, { entity: "member" });
+      await t`select app.set_member_pin(${params.id}, ${body.pin})`;
+      return { ok: true };
+    }),
+  );
+
+  route(app, deps, { method: "PUT", path: "/v1/roles/{id}/permissions", tag: "Team", summary: "ตั้งสิทธิ์ของตำแหน่ง (แทนที่ชุดเดิมทั้งหมด)", tenant: true, body: SetRolePermissionsBody, permission: "staff.manage" }, async ({ tenantId, params, body, tx }) =>
+    tx(async (t) => {
+      const [role] = await t<{ id: string }[]>`select id from app.roles where id = ${params.id} and tenant_id = ${tenantId}`;
+      if (!role) throw new ApiFailure("NOT_FOUND", 404, { entity: "role" });
+      await t`delete from app.role_permissions where tenant_id = ${tenantId} and role_id = ${params.id}`;
+      for (const key of body.permissions) {
+        await t`insert into app.role_permissions (tenant_id, role_id, permission_key) values (${tenantId}, ${params.id}, ${key}) on conflict do nothing`;
+      }
+      return { id: params.id, permissions: body.permissions };
     }),
   );
 

@@ -365,6 +365,7 @@ describe("staff on a shared device", () => {
   it("adds a PIN-only cashier and switches user by PIN", async () => {
     const add = await s.call("POST", "/v1/members", { displayName: "น้องแคช", roleKey: "cashier", pin: "1111", maxDiscountRate: 0.1 });
     expect(add.status).toBe(201);
+    s.cashierId = add.json.id;
     await s.call("POST", "/v1/members", { displayName: "พี่ผู้จัดการ", roleKey: "manager", pin: "9999" });
 
     const wrong = await s.call("POST", "/v1/auth/pin", { branchId: s.branchId, pin: "0000" });
@@ -407,6 +408,38 @@ describe("staff on a shared device", () => {
     expect(voidTry.json.error.code).toBe("APPROVAL_REQUIRED");
     const voided = await s.call("POST", `/v1/orders/${id}/void`, { reason: "ลูกค้ายกเลิก" });
     expect(voided.json.status).toBe("voided");
+  });
+
+  it("edits a member's discount limit and branch scope, suspends and reactivates them, and resets their PIN", async () => {
+    const patch = await s.call("PATCH", `/v1/members/${s.cashierId}`, { maxDiscountRate: 0.2, branchIds: [s.branchId] });
+    expect(patch.status).toBe(200);
+    const members = await s.call("GET", "/v1/members");
+    expect(members.json.find((m: any) => m.id === s.cashierId).all_branches).toBe(false);
+
+    await s.call("PATCH", `/v1/members/${s.cashierId}`, { status: "suspended" });
+    const blocked = await s.call("POST", "/v1/auth/pin", { branchId: s.branchId, pin: "1111" });
+    expect(blocked.status).toBe(401);
+
+    await s.call("PATCH", `/v1/members/${s.cashierId}`, { status: "active" });
+    const reset = await s.call("POST", `/v1/members/${s.cashierId}/pin`, { pin: "2468" });
+    expect(reset.status).toBe(200);
+
+    const oldPin = await s.call("POST", "/v1/auth/pin", { branchId: s.branchId, pin: "1111" });
+    expect(oldPin.status).toBe(401);
+    const newPin = await s.call("POST", "/v1/auth/pin", { branchId: s.branchId, pin: "2468" });
+    expect(newPin.json.membership.role).toBe("cashier");
+
+    const empty = await s.call("PATCH", `/v1/members/${s.cashierId}`, {});
+    expect(empty.status).toBe(422);
+  });
+
+  it("changes what a role is allowed to do", async () => {
+    const [waiterRole] = await ctx.sql<{ id: string }[]>`select id from app.roles where tenant_id = ${s.tenantId} and key = 'waiter'`;
+    const set = await s.call("PUT", `/v1/roles/${waiterRole!.id}/permissions`, { permissions: ["pos.order", "pos.discount"] });
+    expect(set.status).toBe(200);
+    expect(set.json.permissions).toEqual(["pos.order", "pos.discount"]);
+    const rows = await ctx.sql<{ permission_key: string }[]>`select permission_key from app.role_permissions where role_id = ${waiterRole!.id} order by permission_key`;
+    expect(rows.map((r) => r.permission_key)).toEqual(["pos.discount", "pos.order"]);
   });
 });
 
