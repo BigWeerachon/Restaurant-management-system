@@ -54,10 +54,33 @@ export function registerFinance(app: Hono<Env>, deps: Deps) {
     }),
   );
 
+  route(app, deps, { method: "GET", path: "/v1/expenses", tag: "Finance", summary: "ค่าใช้จ่ายที่บันทึกไว้ (เรียงตามวันที่)", tenant: true, query: z.object({ branchId: z.uuid().optional(), from: DateParam.optional(), to: DateParam.optional() }), permission: "finance.view" }, async ({ tenantId, query, tx }) =>
+    tx(async (t) => {
+      const rows = await t`
+        select e.id, e.branch_id, e.expense_date::text, e.period_start::text, e.period_end::text, e.description, e.amount, e.vat_amount,
+               e.wht_amount, e.paid_from, a.name as account, s.name as supplier
+          from app.expenses e join app.accounts a on a.id = e.account_id left join app.suppliers s on s.id = e.supplier_id
+         where e.tenant_id = ${tenantId}
+           and (${query.branchId ?? null}::uuid is null or e.branch_id = ${query.branchId ?? null})
+           and (${query.from ?? null}::date is null or e.expense_date >= ${query.from ?? null})
+           and (${query.to ?? null}::date is null or e.expense_date <= ${query.to ?? null})
+         order by e.expense_date desc, e.created_at desc limit 500`;
+      return rows.map((r) => ({ ...r, amount: money(r.amount), vat_amount: money(r.vat_amount), wht_amount: money(r.wht_amount) }));
+    }),
+  );
+
+  route(app, deps, { method: "GET", path: "/v1/days", tag: "Finance", summary: "ประวัติการปิดยอดประจำวัน", tenant: true, query: z.object({ branchId: z.uuid() }), permission: "finance.view" }, async ({ query, tx }) =>
+    tx(
+      (t) => t`
+        select business_date::text, status, summary, closed_at, reopened_at, note
+          from app.day_closes where branch_id = ${query.branchId} order by business_date desc limit 60`,
+    ),
+  );
+
   route(app, deps, { method: "GET", path: "/v1/bills", tag: "Finance", summary: "บิลค้างจ่าย เรียงตามวันครบกำหนด", tenant: true, permission: "finance.view" }, async ({ tenantId, tx }) =>
     tx(async (t) => {
       const rows = await t`
-        select b.id, b.internal_no, b.bill_no, b.bill_date, b.due_date, b.total, b.amount_paid, b.status, s.name as supplier,
+        select b.id, b.internal_no, b.bill_no, b.bill_date::text, b.due_date::text, b.total, b.amount_paid, b.status, s.name as supplier,
                (b.due_date < current_date) as overdue
           from app.bills b left join app.suppliers s on s.id = b.supplier_id
          where b.tenant_id = ${tenantId} and b.status in ('open','partially_paid')

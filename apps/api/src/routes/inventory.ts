@@ -37,6 +37,19 @@ export function registerInventory(app: Hono<Env>, deps: Deps) {
     }),
   );
 
+  route(app, deps, { method: "GET", path: "/v1/stock-movements", tag: "Inventory", summary: "ความเคลื่อนไหวสต็อกล่าสุด (รับของ ขาย ของเสีย ปรับยอด โอน)", query: BranchQuery.extend({ ingredientId: z.uuid().optional(), limit: z.coerce.number().int().min(1).max(500).default(100) }), permission: "inventory.view" }, async ({ query, tx }) =>
+    tx(async (t) => {
+      const rows = await t`
+        select m.id, m.ingredient_id, i.name, i.base_unit, m.qty, m.unit_cost, m.total_cost, m.reason, m.reason_code,
+               m.business_date::text, m.occurred_at, m.note
+          from app.stock_movements m join app.ingredients i on i.id = m.ingredient_id
+         where m.branch_id = ${query.branchId}
+           and (${query.ingredientId ?? null}::uuid is null or m.ingredient_id = ${query.ingredientId ?? null})
+         order by m.occurred_at desc limit ${query.limit}`;
+      return rows.map((r) => ({ ...r, qty: num(r.qty), unit_cost: num(r.unit_cost), total_cost: num(r.total_cost) }));
+    }),
+  );
+
   route(app, deps, { method: "POST", path: "/v1/receipts", tag: "Inventory", summary: "รับของเข้า (มีหรือไม่มีใบสั่งซื้อก็ได้)", body: ReceiveGoodsBody, permission: "inventory.receive", status: 201 }, async ({ body, tx }) =>
     tx((t) =>
       callJson(t, "app.receive_goods", {
@@ -60,6 +73,16 @@ export function registerInventory(app: Hono<Env>, deps: Deps) {
         })),
       }).then((r) => ({ id: r.id, grNo: r.gr_no, total: money(r.total) })),
     ),
+  );
+
+  route(app, deps, { method: "GET", path: "/v1/receipts", tag: "Inventory", summary: "ประวัติการรับของ", query: BranchQuery.extend({ limit: z.coerce.number().int().min(1).max(200).default(50) }), permission: "inventory.view" }, async ({ query, tx }) =>
+    tx(async (t) => {
+      const rows = await t`
+        select g.id, g.gr_no, g.business_date::text, g.received_at, g.payment_mode, g.total, g.invoice_no, s.name as supplier, g.po_id
+          from app.goods_receipts g left join app.suppliers s on s.id = g.supplier_id
+         where g.branch_id = ${query.branchId} order by g.received_at desc limit ${query.limit}`;
+      return rows.map((r) => ({ ...r, total: money(r.total) }));
+    }),
   );
 
   route(app, deps, { method: "POST", path: "/v1/waste", tag: "Inventory", summary: "บันทึกของเสีย (ไม่ถึง 10 วินาที)", body: WasteBody, permission: "inventory.waste", status: 201 }, async ({ body, tx }) =>
@@ -104,6 +127,17 @@ export function registerInventory(app: Hono<Env>, deps: Deps) {
       : { counted: mapped.filter((l) => l.counted !== null).length, uncounted: mapped.filter((l) => l.counted === null).length };
     return { id: c.id, countNo: c.count_no, status: c.status, blind: c.is_blind, scope: c.scope, lines: mapped, summary };
   };
+
+  route(app, deps, { method: "GET", path: "/v1/stock-counts", tag: "Inventory", summary: "ประวัติการนับสต็อก", query: BranchQuery.extend({ status: z.enum(["in_progress", "submitted", "approved", "cancelled"]).optional() }), permission: "inventory.count" }, async ({ query, tx }) =>
+    tx(
+      (t) => t`
+        select c.id, c.count_no, c.status, c.scope, c.is_blind, c.business_date::text, c.started_at, c.submitted_at, c.approved_at
+          from app.stock_counts c
+         where c.branch_id = ${query.branchId}
+           and (${query.status ?? null}::text is null or c.status = ${query.status ?? null})
+         order by c.started_at desc limit 100`,
+    ),
+  );
 
   route(app, deps, { method: "POST", path: "/v1/stock-counts", tag: "Inventory", summary: "เริ่มนับสต็อก (โหมดนับแบบไม่เห็นยอดระบบ)", body: StartCountBody, permission: "inventory.count", status: 201 }, async ({ body, tx }) =>
     tx(async (t) => {
@@ -172,6 +206,18 @@ export function registerInventory(app: Hono<Env>, deps: Deps) {
         select r.*, s.name as supplier_name from app.v_reorder_suggestions r left join app.suppliers s on s.id = r.supplier_id
          where r.branch_id = ${query.branchId} order by s.name nulls last, r.name`;
       return rows.map((r) => ({ ...r, on_hand: num(r.on_hand), on_order: num(r.on_order), suggested_qty: num(r.suggested_qty), suggested_packs: num(r.suggested_packs), last_price: r.last_price === null ? null : money(r.last_price) }));
+    }),
+  );
+
+  route(app, deps, { method: "GET", path: "/v1/purchase-orders", tag: "Purchasing", summary: "ใบสั่งซื้อของสาขา", query: BranchQuery.extend({ status: z.enum(["draft", "submitted", "approved", "sent", "partially_received", "received", "cancelled"]).optional() }), permission: "purchasing.view" }, async ({ query, tx }) =>
+    tx(async (t) => {
+      const rows = await t`
+        select po.id, po.po_no, po.status, po.expected_date::text, po.total, po.created_at, s.name as supplier
+          from app.purchase_orders po join app.suppliers s on s.id = po.supplier_id
+         where po.branch_id = ${query.branchId}
+           and (${query.status ?? null}::text is null or po.status = ${query.status ?? null})
+         order by po.created_at desc limit 200`;
+      return rows.map((r) => ({ ...r, total: money(r.total) }));
     }),
   );
 

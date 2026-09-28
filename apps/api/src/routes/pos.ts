@@ -39,7 +39,7 @@ export function registerPos(app: Hono<Env>, deps: Deps) {
   route(app, deps, { method: "GET", path: "/v1/shifts/current", tag: "POS", summary: "กะที่เปิดอยู่ของสาขา (พร้อมเงินสดที่ควรมีในลิ้นชัก)", query: z.object({ branchId: z.uuid() }) }, async ({ query, tx }) =>
     tx(async (t) => {
       const [s] = await t`
-        select s.id, s.opened_at, s.opening_float, s.business_date, m.display_name as opened_by_name,
+        select s.id, s.opened_at, s.opening_float, s.business_date::text, m.display_name as opened_by_name,
                app.shift_expected_cash(s.id) as expected_cash
           from app.shifts s left join app.memberships m on m.id = s.opened_by
          where s.branch_id = ${query.branchId} and s.status = 'open'
@@ -50,6 +50,25 @@ export function registerPos(app: Hono<Env>, deps: Deps) {
         // Smart default for the next opening float: what was left last time.
         suggestedOpeningFloat: money(last?.counted_cash ?? 1000),
       };
+    }),
+  );
+
+  route(app, deps, { method: "GET", path: "/v1/shifts", tag: "POS", summary: "ประวัติกะของสาขา", query: z.object({ branchId: z.uuid(), status: z.enum(["open", "closed"]).optional() }) }, async ({ query, tx }) =>
+    tx(async (t) => {
+      const rows = await t`
+        select s.id, s.business_date::text, s.status, s.opening_float, s.expected_cash, s.counted_cash, s.cash_variance,
+               s.opened_at, s.closed_at, m.display_name as opened_by_name
+          from app.shifts s left join app.memberships m on m.id = s.opened_by
+         where s.branch_id = ${query.branchId}
+           and (${query.status ?? null}::text is null or s.status = ${query.status ?? null})
+         order by s.opened_at desc limit 100`;
+      return rows.map((r) => ({
+        ...r,
+        opening_float: money(r.opening_float),
+        expected_cash: r.expected_cash === null ? null : money(r.expected_cash),
+        counted_cash: r.counted_cash === null ? null : money(r.counted_cash),
+        cash_variance: r.cash_variance === null ? null : money(r.cash_variance),
+      }));
     }),
   );
 
@@ -106,7 +125,7 @@ export function registerPos(app: Hono<Env>, deps: Deps) {
   route(app, deps, { method: "GET", path: "/v1/orders", tag: "POS", summary: "บิลของวัน (ค่าเริ่มต้น: วันทำการปัจจุบัน)", query: OrdersQuery }, async ({ query, tx }) =>
     tx(async (t) => {
       const rows = await t`
-        select o.id, o.order_no, o.receipt_no, o.status, o.business_date, o.total, o.guest_count, o.opened_at, o.paid_at,
+        select o.id, o.order_no, o.receipt_no, o.status, o.business_date::text, o.total, o.guest_count, o.opened_at, o.paid_at,
                c.name as channel, dt.name as table_name,
                (select count(*) from app.order_items oi where oi.order_id = o.id and oi.status <> 'voided') as items
           from app.orders o
@@ -123,7 +142,7 @@ export function registerPos(app: Hono<Env>, deps: Deps) {
 
   route(app, deps, { method: "GET", path: "/v1/orders/{id}", tag: "POS", summary: "รายละเอียดบิล" }, async ({ params, tx }) =>
     tx(async (t) => {
-      const [o] = await t`select * from app.orders where id = ${params.id}`;
+      const [o] = await t`select *, business_date::text as business_date from app.orders where id = ${params.id}`;
       if (!o) throw new ApiFailure("NOT_FOUND", 404);
       const items = await t`
         select oi.id, oi.menu_item_id, oi.name, oi.qty, oi.unit_price, oi.modifiers_total, oi.line_total, oi.note, oi.status, oi.void_reason,

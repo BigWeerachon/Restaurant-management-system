@@ -179,6 +179,38 @@ describe("a café's first day, through the API", () => {
     expect(r.json.total).toBe("1300.00");
     const stock = await s.call("GET", `/v1/stock?branchId=${s.branchId}`);
     expect(stock.json.find((x: any) => x.name === "เมล็ดกาแฟ").qty_on_hand).toBe(2000);
+
+    const receipts = await s.call("GET", `/v1/receipts?branchId=${s.branchId}`);
+    expect(receipts.json[0].id).toBe(r.json.id);
+    expect(receipts.json[0].total).toBe("1300.00");
+
+    const movements = await s.call("GET", `/v1/stock-movements?branchId=${s.branchId}&ingredientId=${s.coffee}`);
+    expect(movements.json).toHaveLength(1);
+    expect(movements.json[0]).toMatchObject({ reason: "purchase", qty: 2000 });
+  });
+
+  it("orders from a supplier and lists purchase orders by status", async () => {
+    const [supplier] = await ctx.sql<{ id: string }[]>`
+      insert into app.suppliers (tenant_id, name) values (${s.tenantId}, 'ฟาร์มนมสด') returning id`;
+    const [location] = await ctx.sql<{ id: string }[]>`select id from app.stock_locations where branch_id = ${s.branchId} and is_default`;
+
+    const po = await s.call("POST", "/v1/purchase-orders", {
+      branchId: s.branchId,
+      supplierId: supplier!.id,
+      lines: [{ ingredientId: s.milk, packName: "ขวด 2 ลิตร", packQty: 2000, qtyPacks: 5, unitPrice: 100 }],
+    });
+    expect(po.status).toBe(201);
+    expect(po.json.status).toBe("draft");
+
+    const draftList = await s.call("GET", `/v1/purchase-orders?branchId=${s.branchId}&status=draft`);
+    expect(draftList.json.map((x: any) => x.id)).toContain(po.json.id);
+    expect(draftList.json[0].supplier).toBe("ฟาร์มนมสด");
+
+    const count = await s.call("POST", "/v1/stock-counts", { locationId: location!.id, scope: "partial", ingredientIds: [s.coffee] });
+    expect(count.status).toBe(201);
+    const counts = await s.call("GET", `/v1/stock-counts?branchId=${s.branchId}`);
+    expect(counts.json.map((x: any) => x.id)).toContain(count.json.id);
+    expect(counts.json.find((x: any) => x.id === count.json.id).status).toBe("in_progress");
   });
 
   it("asks to open a shift before taking cash, with a smart default float", async () => {
@@ -230,6 +262,14 @@ describe("a café's first day, through the API", () => {
     const detail = await s.call("GET", `/v1/orders/${s.order}`);
     expect(detail.json.items).toHaveLength(2);
     expect(detail.json.payments[0].change_given).toBe("315.00");
+    // business_date is a plain calendar date, never a full ISO datetime.
+    expect(detail.json.businessDate).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+
+    const list = await s.call("GET", `/v1/orders?branchId=${s.branchId}`);
+    expect(list.json.find((o: any) => o.id === s.order).business_date).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+
+    const shift = await s.call("GET", `/v1/shifts/current?branchId=${s.branchId}`);
+    expect(shift.json.shift.business_date).toMatch(/^\d{4}-\d{2}-\d{2}$/);
   });
 
   it("keeps kitchen in the loop and lets cooks undo a mistaken bump", async () => {
@@ -364,6 +404,12 @@ describe("closing the day and reading the numbers", () => {
     expect(day.json.total).toBe("185.00");
     const [bal] = await ctx.sql<{ ok: boolean }[]>`select sum(debit) = sum(credit) as ok from app.journal_lines where tenant_id = ${s.tenantId}`;
     expect(bal!.ok).toBe(true);
+
+    const shifts = await s.call("GET", `/v1/shifts?branchId=${s.branchId}&status=closed`);
+    expect(shifts.json[0]).toMatchObject({ id: s.shift, cash_variance: "0.00" });
+
+    const days = await s.call("GET", `/v1/days?branchId=${s.branchId}`);
+    expect(days.json[0]).toMatchObject({ business_date: s.date, status: "closed" });
   });
 
   it("answers the owner's questions in one report", async () => {
