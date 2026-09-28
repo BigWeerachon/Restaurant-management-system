@@ -62,15 +62,19 @@ const CHANNEL_MIX: Record<string, Record<string, number>> = {
 // Morning coffee rush, lunch peak, afternoon slump, early evening.
 const HOUR_WEIGHTS = [0, 0, 0, 0, 0, 0, 0, 3, 8, 9, 7, 9, 12, 10, 6, 5, 6, 6, 5, 4, 3, 2, 1, 0];
 
-function pickWeighted<T>(items: T[], weight: (t: T) => number, rnd: () => number): T {
-  const total = items.reduce((s, i) => s + weight(i), 0);
-  let x = rnd() * total;
-  for (const i of items) {
-    x -= weight(i);
-    if (x <= 0) return i;
-  }
-  return items[items.length - 1]!;
+/** Weighted picker with the cumulative table built once (the generator's hot path). */
+function weightedPicker<T>(items: T[], weight: (t: T) => number): (rnd: () => number) => T {
+  const cum: number[] = [];
+  let total = 0;
+  for (const i of items) cum.push((total += weight(i)));
+  return (rnd) => {
+    const x = rnd() * total;
+    for (let i = 0; i < cum.length; i++) if (x <= cum[i]!) return items[i]!;
+    return items[items.length - 1]!;
+  };
 }
+const HOURS = HOUR_WEIGHTS.map((_, h) => h);
+const pickHour = weightedPicker(HOURS, (h) => HOUR_WEIGHTS[h]!);
 
 export function generateHistory(state: DemoState, today: string, days = 30): History {
   if (state.mode !== "demo") return { days: [], branchDays: [], expenses: [] };
@@ -83,8 +87,9 @@ export function generateHistory(state: DemoState, today: string, days = 30): His
   const out: HistoryDay[] = [];
   const branchDays: HistoryBranchDay[] = [];
   const items = state.menuItems.filter((m) => m.active);
-  const drinks = items.filter((m) => m.route === "bar");
-  const food = items.filter((m) => m.route === "kitchen");
+  const pickDrink = weightedPicker(items.filter((m) => m.route === "bar"), (m) => m.weight);
+  const pickFood = weightedPicker(items.filter((m) => m.route === "kitchen"), (m) => m.weight);
+  const takesShot = new Set(items.filter((m) => m.modifierGroupIds.includes("mg-extra")).map((m) => m.id));
 
   for (let d = days; d >= 1; d--) {
     const date = addDays(today, -d);
@@ -100,24 +105,25 @@ export function generateHistory(state: DemoState, today: string, days = 30): His
         const orders = Math.max(1, Math.round(base * share));
         const row: HistoryDay = { date, branchId: branch.id, channelId, orders, gross: 0, netSales: 0, vat: 0, cost: 0, commission: 0, fees: 0, items: {}, hours: new Array(24).fill(0) };
         const delivery = channel.kind === "delivery_platform";
+        const price = new Map(items.map((m) => [m.id, priceFor(m, channel)]));
         for (let o = 0; o < orders; o++) {
-          const hour = pickWeighted(HOUR_WEIGHTS.map((w, h) => ({ w, h })), (x) => x.w, rnd).h;
+          const hour = pickHour(rnd);
           row.hours[hour]! += 1;
           const lines = 1 + (rnd() < 0.55 ? 1 : 0) + (rnd() < 0.15 ? 1 : 0);
           let orderGross = 0;
           for (let l = 0; l < lines; l++) {
-            const pool: MenuItem[] = delivery ? (rnd() < 0.55 ? food : drinks) : l === 0 && hour < 11 ? drinks : rnd() < 0.62 ? drinks : food;
-            const mi = pickWeighted(pool, (m) => m.weight, rnd);
+            const pick = delivery ? (rnd() < 0.55 ? pickFood : pickDrink) : l === 0 && hour < 11 ? pickDrink : rnd() < 0.62 ? pickDrink : pickFood;
+            const mi = pick(rnd);
             const qty = rnd() < 0.1 ? 2 : 1;
-            const shot = mi.modifierGroupIds.includes("mg-extra") && rnd() < 0.12;
-            const price = (priceFor(mi, channel) + (shot ? 1500 : 0)) * qty;
+            const shot = takesShot.has(mi.id) && rnd() < 0.12;
+            const linePrice = (price.get(mi.id)! + (shot ? 1500 : 0)) * qty;
             const cost = Math.round(((itemCost.get(mi.id) ?? 0) + (shot ? shotCost : 0)) * qty * 100);
             const slot = (row.items[mi.id] ??= { qty: 0, sales: 0, cost: 0 });
             slot.qty += qty;
-            slot.sales += price - divRound(price * 700, 10700);
+            slot.sales += linePrice - divRound(linePrice * 700, 10700);
             slot.cost += cost;
             row.cost += cost;
-            orderGross += price;
+            orderGross += linePrice;
           }
           row.gross += orderGross;
           if (!delivery && rnd() < 0.28) row.fees += applyRate(orderGross, 0.02);

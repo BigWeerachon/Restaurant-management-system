@@ -141,6 +141,7 @@ export function ChannelMix({ rows, format }: { rows: ChannelMixRow[]; format: (v
                     <motion.span
                       key={s.key}
                       tabIndex={0}
+                      role="img"
                       aria-label={`${r.name} ${s.label} ${format(v)} (${pct(v / (r.netSales || 1))})`}
                       {...at(`${r.id}:${s.key}`)}
                       className="h-full outline-none first:rounded-l last:rounded-r focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ink"

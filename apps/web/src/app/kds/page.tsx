@@ -6,7 +6,7 @@ import { AnimatePresence, motion } from "motion/react";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
-import { Gate } from "@/components/app/gate";
+import { Gate, RouteGuard } from "@/components/app/gate";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/feedback";
 import { Dialog } from "@/components/ui/overlay";
@@ -226,7 +226,7 @@ function KdsScreen() {
               เกินเวลา <strong className="text-lg tabular">{late}</strong>
             </span>
           </div>
-          <Button variant="secondary" size="lg" onClick={() => setRecallOpen(true)} icon={<History className="h-5 w-5" />}>
+          <Button variant="secondary" size="lg" onClick={() => setRecallOpen(true)} icon={<History className="h-5 w-5" />} aria-label="เรียกคืนออเดอร์ที่ส่งแล้ว">
             <span className="hidden sm:inline">เรียกคืน</span>
           </Button>
           {can("menu.availability") && (
@@ -250,7 +250,7 @@ function KdsScreen() {
       </header>
 
       {counts.length > 0 && (
-        <div className="no-scrollbar flex shrink-0 items-center gap-2 overflow-x-auto border-b border-line bg-surface px-4 py-2" aria-label="รวมทุกออเดอร์">
+        <div className="no-scrollbar flex shrink-0 items-center gap-2 overflow-x-auto border-b border-line bg-surface px-4 py-2 outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring" role="region" tabIndex={0} aria-label="รวมทุกออเดอร์ที่ต้องทำ">
           <span className="shrink-0 text-sm font-medium text-ink-3">รวมที่ต้องทำ</span>
           {counts.map((c) => (
             <span key={c.name} className="shrink-0 rounded-full bg-surface-2 px-3 py-1 text-[15px] text-ink">
@@ -334,7 +334,9 @@ function KdsScreen() {
 export default function KdsPage() {
   return (
     <Gate>
-      <KdsScreen />
+      <RouteGuard>
+        <KdsScreen />
+      </RouteGuard>
     </Gate>
   );
 }

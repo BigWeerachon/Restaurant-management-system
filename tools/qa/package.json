@@ -1,0 +1,15 @@
+{
+  "name": "sabai-qa",
+  "private": true,
+  "type": "module",
+  "description": "Accessibility (axe, WCAG 2.2 AA) and Lighthouse audits against a running web build. Not part of the pnpm workspace on purpose (heavy deps).",
+  "scripts": {
+    "axe": "node axe-pages.mjs && THEME=dark node axe-pages.mjs && node axe-states.mjs",
+    "lighthouse": "FORM=mobile node lighthouse.mjs && FORM=desktop node lighthouse.mjs"
+  },
+  "dependencies": {
+    "@axe-core/playwright": "^4.10.0",
+    "lighthouse": "^12.0.0",
+    "playwright-core": "^1.55.0"
+  }
+}

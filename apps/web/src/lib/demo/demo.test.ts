@@ -25,6 +25,18 @@ describe("demo shop", () => {
     expect(s.statementLines.length).toBe(5);
   });
 
+  it("compares today with the same weekday last week fairly, at any time of day", () => {
+    // 09:15, 13:40 and 20:05 in Bangkok, whatever the machine's own time zone.
+    for (const iso of ["T02:15:00Z", "T06:40:00Z", "T13:05:00Z"]) {
+      const at = new Date(`${today}${iso}`);
+      const base = sampleState(today);
+      const s = produce(base, (d) => seedLive(d, at, today, generateHistory(base, today)));
+      const t = todayStats(s, generateHistory(s, today), "br-ari", at);
+      const change = t.sales / t.lastWeekSales - 1;
+      expect(Math.abs(change), `${iso}: ${(change * 100).toFixed(0)}%`).toBeLessThan(0.3);
+    }
+  });
+
   it("produces believable 30-day economics", () => {
     const s = sample();
     const h = generateHistory(s, today);

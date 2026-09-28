@@ -8,16 +8,12 @@ import { useAccess } from "@/hooks/use-sabai";
 import { useSabai } from "@/lib/demo/store";
 import { Logo } from "./app-shell";
 
-/**
- * Waits for local data to load, then requires a signed-in member who may open
- * this path. A blocked deep link explains itself instead of a blank page.
- */
+/** Waits for local data to load, then requires a signed-in, active member. */
 export function Gate({ children }: { children: ReactNode }) {
   const hydrated = useSabai((s) => s.hydrated);
   const memberId = useSabai((s) => s.session.memberId);
   const router = useRouter();
-  const pathname = usePathname();
-  const { access, member } = useAccess();
+  const { member } = useAccess();
 
   const signOut = useSabai((s) => s.signOut);
   const signedIn = !!member?.active;
@@ -30,8 +26,17 @@ export function Gate({ children }: { children: ReactNode }) {
   }, [hydrated, signedIn, memberId, signOut, router]);
 
   if (!hydrated || !signedIn) return <Splash />;
-  if (!routeAllowed(access, pathname)) return <NoAccessPage />;
   return <>{children}</>;
+}
+
+/**
+ * Deep links respect the same permissions as the navigation. Rendered inside
+ * the app shell, so a blocked page still shows the person where they can go.
+ */
+export function RouteGuard({ children }: { children: ReactNode }) {
+  const pathname = usePathname();
+  const { access } = useAccess();
+  return routeAllowed(access, pathname) ? <>{children}</> : <NoAccessPage />;
 }
 
 export function Splash() {

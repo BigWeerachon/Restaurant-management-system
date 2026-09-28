@@ -2,12 +2,14 @@
 
 import type { ReactNode } from "react";
 import { AppShell } from "@/components/app/app-shell";
-import { Gate } from "@/components/app/gate";
+import { Gate, RouteGuard } from "@/components/app/gate";
 
 export default function BackOfficeLayout({ children }: { children: ReactNode }) {
   return (
     <Gate>
-      <AppShell>{children}</AppShell>
+      <AppShell>
+        <RouteGuard>{children}</RouteGuard>
+      </AppShell>
     </Gate>
   );
 }

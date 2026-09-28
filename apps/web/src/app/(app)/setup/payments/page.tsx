@@ -51,7 +51,8 @@ export default function SetupPaymentsPage() {
   const pp = db.paymentMethods.find((m) => m.kind === "promptpay");
   const card = db.paymentMethods.find((m) => m.kind === "card");
   const platforms = db.channels.filter((c) => c.kind === "delivery_platform");
-  const [usePp, setUsePp] = useState(pp?.active ?? true);
+  // Smart default: PromptPay is how most Thai customers pay — on unless deliberately turned off.
+  const [usePp, setUsePp] = useState(!!pp && (pp.active || !pp.promptpayId));
   const [ppId, setPpId] = useState(pp?.promptpayId ?? "");
   const [useCard, setUseCard] = useState(card?.active ?? false);
   const [chan, setChan] = useState<Record<string, boolean>>(() => Object.fromEntries(platforms.map((c) => [c.id, c.active])));

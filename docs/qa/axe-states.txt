@@ -1,0 +1,12 @@
+POS · modifier sheet               violations=0
+POS · payment dialog               violations=0
+POS · paid / receipt               violations=0
+Command palette                    violations=0
+Team · add staff step 1            violations=0
+Team · add staff step 2            violations=0
+Reports · table view               violations=0
+Phone dark · /today                violations=0
+Phone dark · /reports              violations=0
+Phone dark · /pos                  violations=0
+Phone dark · /kds                  violations=0
+Phone dark · /inventory            violations=0

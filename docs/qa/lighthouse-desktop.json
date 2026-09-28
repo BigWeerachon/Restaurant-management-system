@@ -1,0 +1,112 @@
+[
+  {
+    "route": "/",
+    "perf": 100,
+    "a11y": 100,
+    "bp": 100,
+    "seo": 100,
+    "lcp": "0.2 s",
+    "cls": "0",
+    "tbt": "0 ms",
+    "finalUrl": "http://localhost:3100/"
+  },
+  {
+    "route": "/today",
+    "perf": 100,
+    "a11y": 100,
+    "bp": 100,
+    "seo": 100,
+    "lcp": "0.3 s",
+    "cls": "0",
+    "tbt": "20 ms",
+    "finalUrl": "http://localhost:3100/today"
+  },
+  {
+    "route": "/reports",
+    "perf": 100,
+    "a11y": 100,
+    "bp": 100,
+    "seo": 100,
+    "lcp": "0.4 s",
+    "cls": "0",
+    "tbt": "40 ms",
+    "finalUrl": "http://localhost:3100/reports"
+  },
+  {
+    "route": "/pos",
+    "perf": 100,
+    "a11y": 100,
+    "bp": 100,
+    "seo": 100,
+    "lcp": "0.3 s",
+    "cls": "0",
+    "tbt": "0 ms",
+    "finalUrl": "http://localhost:3100/pos"
+  },
+  {
+    "route": "/kds",
+    "perf": 100,
+    "a11y": 100,
+    "bp": 100,
+    "seo": 100,
+    "lcp": "0.3 s",
+    "cls": "0.001",
+    "tbt": "0 ms",
+    "finalUrl": "http://localhost:3100/kds"
+  },
+  {
+    "route": "/inventory",
+    "perf": 100,
+    "a11y": 100,
+    "bp": 100,
+    "seo": 100,
+    "lcp": "0.4 s",
+    "cls": "0",
+    "tbt": "30 ms",
+    "finalUrl": "http://localhost:3100/inventory"
+  },
+  {
+    "route": "/menu",
+    "perf": 100,
+    "a11y": 100,
+    "bp": 100,
+    "seo": 100,
+    "lcp": "0.3 s",
+    "cls": "0",
+    "tbt": "0 ms",
+    "finalUrl": "http://localhost:3100/menu"
+  },
+  {
+    "route": "/finance",
+    "perf": 100,
+    "a11y": 100,
+    "bp": 100,
+    "seo": 100,
+    "lcp": "0.3 s",
+    "cls": "0",
+    "tbt": "0 ms",
+    "finalUrl": "http://localhost:3100/finance"
+  },
+  {
+    "route": "/team",
+    "perf": 100,
+    "a11y": 100,
+    "bp": 100,
+    "seo": 100,
+    "lcp": "0.4 s",
+    "cls": "0",
+    "tbt": "0 ms",
+    "finalUrl": "http://localhost:3100/team"
+  },
+  {
+    "route": "/settings",
+    "perf": 100,
+    "a11y": 100,
+    "bp": 100,
+    "seo": 100,
+    "lcp": "0.4 s",
+    "cls": "0",
+    "tbt": "0 ms",
+    "finalUrl": "http://localhost:3100/settings"
+  }
+]

@@ -4,7 +4,7 @@
  * came in, supplier bills, and bank lines waiting to be reconciled.
  * Everything goes through the real engine commands.
  */
-import { addDays, applyRate, type Satang } from "@sabai/domain";
+import { addDays, applyRate, shopClock, type Satang } from "@sabai/domain";
 import {
   newId,
   openShift,
@@ -54,8 +54,7 @@ export function seedLive(state: DemoState, now: Date, today: string, history: Hi
   // "vs same time last week" comparisons are fair at any hour of the day.
   const HOURS = [0, 0, 0, 0, 0, 0, 0, 3, 8, 9, 7, 9, 12, 10, 6, 5, 6, 6, 5, 4, 3, 2, 1, 0];
   const weightSum = HOURS.reduce((a, b) => a + b, 0);
-  const localHour = Number(new Intl.DateTimeFormat("en-GB", { hour: "2-digit", hourCycle: "h23", timeZone: "Asia/Bangkok" }).format(now));
-  const minute = now.getMinutes();
+  const { hour: localHour, minute } = shopClock(now);
   const dow = new Date(`${today}T12:00:00Z`).getUTCDay();
   const dowFactor = [1.22, 0.86, 0.9, 0.95, 1.0, 1.16, 1.32][dow]!;
   const perDay: Record<string, number> = { "br-ari": 95 * 1.08, "br-tl": 122 * 1.08 };

@@ -45,3 +45,10 @@ export function addDays(isoDate: string, days: number): string {
 export function daysBetween(from: string, to: string): number {
   return Math.round((Date.parse(`${to}T00:00:00Z`) - Date.parse(`${from}T00:00:00Z`)) / 86_400_000);
 }
+
+/** Wall-clock hour and minute in the shop's time zone (not the device's). */
+export function shopClock(at: Date, timeZone = "Asia/Bangkok"): { hour: number; minute: number } {
+  const parts = new Intl.DateTimeFormat("en-GB", { hour: "2-digit", minute: "2-digit", hourCycle: "h23", timeZone }).formatToParts(at);
+  const get = (t: string) => Number(parts.find((p) => p.type === t)?.value ?? 0);
+  return { hour: get("hour"), minute: get("minute") };
+}

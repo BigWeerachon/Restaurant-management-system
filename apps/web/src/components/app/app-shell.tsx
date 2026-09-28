@@ -65,7 +65,7 @@ function BranchSwitcher({ className }: { className?: string }) {
   }
   return (
     <DM.Root>
-      <DM.Trigger className={cn("flex h-11 w-full items-center gap-2 rounded-xl border border-line bg-surface px-3 text-left text-sm font-medium text-ink shadow-xs hover:border-line-strong", className)} aria-label="เลือกสาขา">
+      <DM.Trigger className={cn("flex h-11 w-full items-center gap-2 rounded-xl border border-line bg-surface px-3 text-left text-sm font-medium text-ink shadow-xs hover:border-line-strong", className)} aria-label={`${branch.name} (เปลี่ยนสาขา)`}>
         <span className="h-2 w-2 shrink-0 rounded-full bg-brand" aria-hidden="true" />
         <span className="min-w-0 flex-1 truncate">{branch.name}</span>
         <ChevronsUpDown className="h-4 w-4 text-ink-3" aria-hidden="true" />
@@ -99,7 +99,7 @@ function UserMenu({ side = "top", compact }: { side?: "top" | "bottom"; compact?
   return (
     <>
       <DM.Root>
-        <DM.Trigger className={cn("flex w-full items-center gap-3 rounded-2xl p-2 text-left hover:bg-surface-2", compact && "w-auto p-1")} aria-label={`บัญชีผู้ใช้ ${member.name}`}>
+        <DM.Trigger className={cn("flex w-full items-center gap-3 rounded-2xl p-2 text-left hover:bg-surface-2", compact && "w-auto p-1")} aria-label={compact ? `${member.name} (เมนูบัญชี)` : undefined}>
           <Avatar name={member.name} color={member.color} size={36} />
           {!compact && (
             <span className="min-w-0 flex-1">
@@ -279,10 +279,10 @@ export function AppShell({ children }: { children: ReactNode }) {
               <span className="hidden items-center gap-1.5 text-xs text-ink-3 md:flex" title="ข้อมูลบันทึกในเครื่องนี้อัตโนมัติ">
                 <CloudCheck className="h-4 w-4 text-success" aria-hidden="true" /> บันทึกอัตโนมัติ
               </span>
-              <button onClick={() => setCommand(true)} className="flex h-11 items-center gap-2 rounded-xl border border-line bg-surface px-3 text-sm text-ink-3 shadow-xs hover:border-line-strong" aria-label="ค้นหา (Ctrl+K)">
+              <button onClick={() => setCommand(true)} className="flex h-11 items-center gap-2 rounded-xl border border-line bg-surface px-3 text-sm text-ink-3 shadow-xs hover:border-line-strong" aria-keyshortcuts="Control+K Meta+K">
                 <Search className="h-4 w-4" aria-hidden="true" />
-                <span className="hidden sm:inline">ค้นหา</span>
-                <span className="hidden items-center gap-0.5 sm:flex">
+                <span className="sr-only sm:not-sr-only">ค้นหา</span>
+                <span className="hidden items-center gap-0.5 sm:flex" aria-hidden="true">
                   <Kbd>⌘</Kbd>
                   <Kbd>K</Kbd>
                 </span>

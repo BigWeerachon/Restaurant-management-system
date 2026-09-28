@@ -1,5 +1,6 @@
 import {
   addDays,
+  shopClock,
   allocateToRange,
   channelProfitability,
   menuEngineering,
@@ -146,7 +147,7 @@ export function reportSummary(state: DemoState, history: History, f: ReportFilte
     const cost = Math.round((o.cost ?? 0) * 100);
     const fees = o.payments.reduce((s, p) => s + p.fee, 0);
     bump(o.businessDate, o.branchId, o.channelId, 1, o.totals.netSales, cost, o.totals.commission, fees);
-    hours[new Date(o.openedAt).getHours()]! += 1;
+    hours[shopClock(new Date(o.openedAt)).hour]! += 1;
     const share = o.totals.itemsTotal > 0 ? o.totals.netSales / o.totals.itemsTotal : 0;
     for (const i of o.items) {
       if (i.status === "voided") continue;
@@ -225,12 +226,14 @@ export function todayStats(state: DemoState, history: History, branchId: string 
 
   // Same weekday last week, up to the same hour — a fair comparison mid-day.
   const lastWeek = addDays(today, -7);
-  const hour = now.getHours();
+  // Count last week's current hour only up to this minute, like today's.
+  const { hour, minute } = shopClock(now);
+  const hourShare = minute / 60;
   let lastWeekSales = 0;
   let lastWeekOrders = 0;
   for (const h of history.days) {
     if (h.date !== lastWeek || !branchIds.includes(h.branchId)) continue;
-    const upto = h.hours.slice(0, hour + 1).reduce((a, b) => a + b, 0);
+    const upto = h.hours.slice(0, hour).reduce((a, b) => a + b, 0) + (h.hours[hour] ?? 0) * hourShare;
     const share = h.orders ? upto / h.orders : 0;
     lastWeekSales += Math.round(h.gross * share);
     lastWeekOrders += upto;
@@ -251,7 +254,7 @@ export function todayStats(state: DemoState, history: History, branchId: string 
     keep: net - cost - commission - fees,
     keepPct: net > 0 ? (net - cost - commission - fees) / net : 0,
     lastWeekSales,
-    lastWeekOrders,
+    lastWeekOrders: Math.round(lastWeekOrders),
     spark: [...spark, sales],
     open: state.orders.filter((o) => o.status === "open" && branchIds.includes(o.branchId)).length,
   };

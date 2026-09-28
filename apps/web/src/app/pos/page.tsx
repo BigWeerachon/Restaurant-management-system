@@ -6,7 +6,7 @@ import { AnimatePresence, LayoutGroup, motion } from "motion/react";
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
-import { Gate } from "@/components/app/gate";
+import { Gate, RouteGuard } from "@/components/app/gate";
 import { DiscountDialog, OpenOrdersDialog, OpenShiftDialog, CloseShiftDialog, TablePicker, VoidDialog } from "@/components/pos/pos-dialogs";
 import { ModifierSheet, defaultOptions, needsSheet } from "@/components/pos/modifier-sheet";
 import { PaymentDialog } from "@/components/pos/payment-dialog";
@@ -318,9 +318,14 @@ function PosScreen() {
             {table ? `โต๊ะ ${table.name}` : "เลือกโต๊ะ"}
           </Button>
         )}
-        <Button variant="secondary" onClick={() => setOrdersOpen(true)} className="relative shrink-0" icon={<ClipboardList className="h-5 w-5" />} aria-label={`บิลค้าง ${openCount} บิล`}>
-          <span className="hidden md:inline">บิลค้าง</span>
-          {openCount > 0 && <span className="grid h-5 min-w-5 place-items-center rounded-full bg-accent px-1 text-xs font-bold text-[#2b1b00]">{openCount}</span>}
+        <Button variant="secondary" onClick={() => setOrdersOpen(true)} className="relative shrink-0" icon={<ClipboardList className="h-5 w-5" />}>
+          <span className="sr-only md:not-sr-only">บิลค้าง</span>
+          {openCount > 0 && (
+            <span className="grid h-5 min-w-5 place-items-center rounded-full bg-accent px-1 text-xs font-bold text-[#2b1b00]">
+              {openCount}
+              <span className="sr-only"> บิล</span>
+            </span>
+          )}
         </Button>
         {can("pos.pay") && (
           <button onClick={() => (shift ? setCloseShiftOpen(true) : setOpenShiftOpen(true))} className={cn("hidden h-11 shrink-0 items-center gap-2 rounded-xl px-3 text-sm font-medium lg:flex", shift ? "bg-success-soft text-success" : "bg-warning-soft text-warning")}>
@@ -381,7 +386,6 @@ function PosScreen() {
                       <motion.button
                         whileTap={{ scale: 0.95 }}
                         onClick={() => tap(m)}
-                        aria-label={`${m.name} ${formatBaht(priceFor(m, channel))}${out ? " หมดแล้ว" : ""}`}
                         className={cn("group relative flex h-full w-full flex-col overflow-hidden rounded-2xl border bg-surface text-left shadow-xs transition-[box-shadow,border-color]", out ? "border-line opacity-55" : "border-line hover:border-brand/50 hover:shadow-md", inCart && "border-brand ring-2 ring-brand/25")}
                       >
                         <span className="grid h-24 place-items-center text-5xl sm:h-28" style={{ background: `color-mix(in oklab, ${cat?.color ?? "#13784f"} 12%, var(--surface))` }} aria-hidden="true">
@@ -396,6 +400,7 @@ function PosScreen() {
                         <AnimatePresence>
                           {inCart > 0 && (
                             <motion.span key={inCart} initial={{ scale: 0 }} animate={{ scale: 1 }} exit={{ scale: 0 }} className="absolute right-2 top-2 grid h-7 min-w-7 place-items-center rounded-full bg-brand px-1.5 text-sm font-bold text-brand-ink shadow-md">
+                              <span className="sr-only">ในบิลแล้ว </span>
                               {inCart}
                             </motion.span>
                           )}
@@ -520,7 +525,9 @@ function PosScreen() {
 export default function PosPage() {
   return (
     <Gate>
-      <PosScreen />
+      <RouteGuard>
+        <PosScreen />
+      </RouteGuard>
     </Gate>
   );
 }

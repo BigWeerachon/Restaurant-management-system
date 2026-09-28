@@ -423,5 +423,15 @@ select test.ok((select count(*) from audit.log where tenant_id = test.id('tenant
 select test.ok((select count(*) from audit.log where row_data ? 'pin_hash') = 0, 'PIN hashes never land in the audit log');
 select test.ok((select count(*) from app.domain_events where event_type = 'order.item_voided') = 1, 'void is in the activity feed');
 
+-- ---------------------------------------------------------------------------
+-- 10. Plan limits: Pro allows 3 branches; the 4th is refused with a clear code.
+--     Limits only stop *adding* — selling in existing branches is never blocked.
+-- ---------------------------------------------------------------------------
+select test.as_user(test.id('owner_b'));
+select app.add_branch(jsonb_build_object('tenant_id', test.id('tenant_b'), 'code', 'B2', 'name', 'สาขาสอง'));
+select app.add_branch(jsonb_build_object('tenant_id', test.id('tenant_b'), 'code', 'B3', 'name', 'สาขาสาม'));
+select test.ok((select count(*) from app.branches where tenant_id = test.id('tenant_b')) = 3, 'three branches on Pro');
+select test.throws(format('select app.add_branch(%L::jsonb)', jsonb_build_object('tenant_id', test.id('tenant_b'), 'code', 'B4', 'name', 'สาขาสี่')), 'PLAN_LIMIT_REACHED');
+
 reset role;
 select 'ALL DATABASE TESTS PASSED' as result;

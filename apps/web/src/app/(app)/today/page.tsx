@@ -223,8 +223,8 @@ export default function TodayPage() {
                         {new Date(e.at).toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit" })} น.
                       </p>
                     </div>
-                    {e.tone === "bad" && <span className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-danger-fill" aria-label="สำคัญ" />}
-                    {e.tone === "warn" && <span className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-warning-fill" aria-label="ควรดู" />}
+                    {e.tone === "bad" && <span className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-danger-fill" role="img" aria-label="สำคัญ" />}
+                    {e.tone === "warn" && <span className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-warning-fill" role="img" aria-label="ควรดู" />}
                   </li>
                 ))}
               </ol>
