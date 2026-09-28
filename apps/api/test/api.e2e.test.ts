@@ -597,3 +597,43 @@ describe("settings", () => {
     expect(bad.status).toBe(422);
   });
 });
+
+describe("purchasing and expense shortcuts", () => {
+  it("records an expense by category, mapped to the right ledger account", async () => {
+    const r = await s.call("POST", "/v1/expenses", { category: "utilities", description: "ค่าไฟเดือนนี้", amount: 1500, paidFrom: "bank" });
+    expect(r.status).toBe(201);
+    const [row] = await ctx.sql<{ account_id: string; system_key: string }[]>`
+      select e.account_id, a.system_key from app.expenses e join app.accounts a on a.id = e.account_id where e.id = ${r.json.id}`;
+    expect(row!.system_key).toBe("utilities");
+
+    const missingBoth = await s.call("POST", "/v1/expenses", { description: "ไม่ระบุ", amount: 100, paidFrom: "bank" });
+    expect(missingBoth.status).toBe(422);
+  });
+
+  it("turns a reorder suggestion into a draft purchase order", async () => {
+    const [supplier] = await ctx.sql<{ id: string }[]>`insert into app.suppliers (tenant_id, name) values (${s.tenantId}, 'โรงคั่วใบชา') returning id`;
+    const tea = await s.call("POST", "/v1/ingredients", { name: "ใบชาไทย", baseUnit: "g", reorderPoint: 100, parLevel: 1000 });
+    expect(tea.status).toBe(201);
+    await ctx.sql`
+      insert into app.supplier_items (tenant_id, supplier_id, ingredient_id, pack_name, pack_qty, last_price, is_preferred)
+      values (${s.tenantId}, ${supplier!.id}, ${tea.json.id}, 'ถุง 1 กก.', 1000, 250, true)`;
+
+    const suggestions = await s.call("GET", `/v1/reorder-suggestions?branchId=${s.branchId}`);
+    const line = suggestions.json.find((x: any) => x.ingredient_id === tea.json.id);
+    expect(line).toBeTruthy();
+    expect(line.suggested_packs).toBe(1);
+
+    const po = await s.call("POST", "/v1/purchase-orders/from-suggestions", { branchId: s.branchId, supplierId: supplier!.id });
+    expect(po.status).toBe(201);
+    expect(po.json.status).toBe("draft");
+    expect(po.json.lineCount).toBe(1);
+    const lines = await ctx.sql<{ ingredient_id: string; qty_packs: string; unit_price: string }[]>`
+      select ingredient_id, qty_packs, unit_price from app.purchase_order_lines where po_id = ${po.json.id}`;
+    expect(lines).toEqual([expect.objectContaining({ ingredient_id: tea.json.id, unit_price: "250.0000" })]);
+
+    // Once it's actually on order (not just a draft), it stops being suggested again.
+    await s.call("POST", `/v1/purchase-orders/${po.json.id}/status`, { status: "submitted" });
+    const noneLeft = await s.call("POST", "/v1/purchase-orders/from-suggestions", { branchId: s.branchId, supplierId: supplier!.id });
+    expect(noneLeft.status).toBe(422);
+  });
+});

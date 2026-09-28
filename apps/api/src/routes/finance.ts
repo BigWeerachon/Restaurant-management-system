@@ -2,6 +2,7 @@ import { CloseDayBody, ExpenseBody, ImportStatementBody, MatchBody, Money } from
 import { reconciliationStatus, suggestMatches, toSatang, type ExpectedReceipt } from "@sabai/domain";
 import type { Hono } from "hono";
 import { z } from "zod";
+import { ApiFailure } from "../errors";
 import { route, type Deps, type Env } from "../http";
 import { callJson, money } from "./support";
 
@@ -34,12 +35,19 @@ export function registerFinance(app: Hono<Env>, deps: Deps) {
     }),
   );
 
-  route(app, deps, { method: "POST", path: "/v1/expenses", tag: "Finance", summary: "บันทึกค่าใช้จ่าย (จ่ายแล้วหรือค้างจ่าย)", body: ExpenseBody, permission: "finance.manage", status: 201 }, async ({ body, tx }) =>
+  route(app, deps, { method: "POST", path: "/v1/expenses", tag: "Finance", summary: "บันทึกค่าใช้จ่าย (จ่ายแล้วหรือค้างจ่าย)", tenant: true, body: ExpenseBody, permission: "finance.manage", status: 201 }, async ({ tenantId, body, tx }) =>
     tx(async (t) => {
+      let accountId = body.accountId;
+      if (!accountId && body.category) {
+        const systemKey = body.category === "other" ? "other_expense" : body.category;
+        const [account] = await t<{ id: string }[]>`select id from app.accounts where tenant_id = ${tenantId} and system_key = ${systemKey}`;
+        if (!account) throw new ApiFailure("NOT_FOUND", 404, { entity: "account" });
+        accountId = account.id;
+      }
       const id = await callJson<string>(t, "app.record_expense", {
         branch_id: body.branchId,
         expense_date: body.expenseDate,
-        account_id: body.accountId,
+        account_id: accountId,
         description: body.description,
         amount: body.amount,
         vat_amount: body.vatAmount,

@@ -1,4 +1,5 @@
 import {
+  CreatePOFromSuggestionsBody,
   PurchaseOrderStatusBody,
   ReceiveGoodsBody,
   RecordCountBody,
@@ -219,6 +220,34 @@ export function registerInventory(app: Hono<Env>, deps: Deps) {
          order by po.created_at desc limit 200`;
       return rows.map((r) => ({ ...r, total: money(r.total) }));
     }),
+  );
+
+  route(
+    app,
+    deps,
+    { method: "POST", path: "/v1/purchase-orders/from-suggestions", tag: "Purchasing", summary: "สร้างใบสั่งซื้อฉบับร่างจากคำแนะนำ (เลือกผู้ขายรายเดียว)", body: CreatePOFromSuggestionsBody, permission: "purchasing.manage", status: 201 },
+    async ({ body, tx }) =>
+      tx(async (t) => {
+        const rows = await t<{ ingredient_id: string; pack_name: string | null; pack_qty: string | null; last_price: string | null; suggested_packs: string }[]>`
+          select ingredient_id, pack_name, pack_qty, last_price, suggested_packs
+            from app.v_reorder_suggestions
+           where branch_id = ${body.branchId} and supplier_id = ${body.supplierId} and suggested_packs > 0
+             and (${body.ingredientIds ?? null}::uuid[] is null or ingredient_id = any(${body.ingredientIds ?? null}::uuid[]))`;
+        if (!rows.length) throw new ApiFailure("VALIDATION", 422, {}, { _: "ไม่มีรายการที่ต้องสั่งจากผู้ขายรายนี้" });
+        const lines = rows.map((r) => ({
+          ingredient_id: r.ingredient_id,
+          pack_name: r.pack_name ?? "แพ็ก",
+          pack_qty: num(r.pack_qty ?? 1),
+          qty_packs: num(r.suggested_packs),
+          unit_price: r.last_price ? num(r.last_price) : 0,
+        }));
+        const result = await callJson<{ id: string; po_no: string; status: string; total: string }>(t, "app.save_purchase_order", {
+          branch_id: body.branchId,
+          supplier_id: body.supplierId,
+          lines,
+        });
+        return { id: result.id, poNo: result.po_no, status: result.status, total: money(result.total), lineCount: lines.length };
+      }),
   );
 
   route(app, deps, { method: "POST", path: "/v1/purchase-orders", tag: "Purchasing", summary: "สร้าง/แก้ไขใบสั่งซื้อฉบับร่าง", body: SavePurchaseOrderBody, permission: "purchasing.manage", status: 201 }, async ({ body, tx }) =>

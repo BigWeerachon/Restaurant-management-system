@@ -363,29 +363,44 @@ export const SavePurchaseOrderBody = z.object({
 
 export const PurchaseOrderStatusBody = z.object({ status: z.enum(["submitted", "approved", "sent", "cancelled"]) });
 
+export const CreatePOFromSuggestionsBody = z.object({
+  branchId: Id,
+  supplierId: Id,
+  /** Omit to include every suggested item for this supplier. */
+  ingredientIds: z.array(Id).max(200).optional(),
+});
+
 // ---------------------------------------------------------------------------
 // Finance
 // ---------------------------------------------------------------------------
 export const CloseDayBody = z.object({ branchId: Id, note: z.string().max(500).optional() });
 
-export const ExpenseBody = z.object({
-  branchId: Id.optional(),
-  expenseDate: IsoDate.optional(),
-  accountId: Id,
-  description: z.string().trim().min(1, "บอกว่าจ่ายค่าอะไร").max(200),
-  amount: PositiveMoney,
-  vatAmount: Money.optional(),
-  whtAmount: Money.optional(),
-  paidFrom: z.enum(["cash_on_hand", "bank", "credit"]),
-  supplierId: Id.optional(),
-  attachmentUrl: z.url().optional(),
-  /** Service period, e.g. the month a rent payment covers. Reports spread the amount over it. */
-  periodStart: IsoDate.optional(),
-  periodEnd: IsoDate.optional(),
-}).refine((b) => (b.periodStart === undefined) === (b.periodEnd === undefined) && (!b.periodStart || !b.periodEnd || b.periodEnd >= b.periodStart), {
-  message: "ช่วงเวลาไม่ถูกต้อง: ใส่ทั้งวันเริ่มและวันสิ้นสุด โดยวันสิ้นสุดต้องไม่ก่อนวันเริ่ม",
-  path: ["periodEnd"],
-});
+/** Matches the account system_key seeded by app.install_chart_of_accounts, "other" → "other_expense". */
+export const ExpenseCategory = z.enum(["rent", "salaries", "utilities", "marketing", "supplies", "repairs", "other"]);
+
+export const ExpenseBody = z
+  .object({
+    branchId: Id.optional(),
+    expenseDate: IsoDate.optional(),
+    /** Either works: accountId for a specific ledger account, or category for the usual ones (rent, salaries, ...). */
+    accountId: Id.optional(),
+    category: ExpenseCategory.optional(),
+    description: z.string().trim().min(1, "บอกว่าจ่ายค่าอะไร").max(200),
+    amount: PositiveMoney,
+    vatAmount: Money.optional(),
+    whtAmount: Money.optional(),
+    paidFrom: z.enum(["cash_on_hand", "bank", "credit"]),
+    supplierId: Id.optional(),
+    attachmentUrl: z.url().optional(),
+    /** Service period, e.g. the month a rent payment covers. Reports spread the amount over it. */
+    periodStart: IsoDate.optional(),
+    periodEnd: IsoDate.optional(),
+  })
+  .refine((b) => b.accountId || b.category, { message: "เลือกบัญชีหรือหมวดหมู่ค่าใช้จ่าย", path: ["accountId"] })
+  .refine((b) => (b.periodStart === undefined) === (b.periodEnd === undefined) && (!b.periodStart || !b.periodEnd || b.periodEnd >= b.periodStart), {
+    message: "ช่วงเวลาไม่ถูกต้อง: ใส่ทั้งวันเริ่มและวันสิ้นสุด โดยวันสิ้นสุดต้องไม่ก่อนวันเริ่ม",
+    path: ["periodEnd"],
+  });
 
 export const ImportStatementBody = z.object({
   bankAccountId: Id,
