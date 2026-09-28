@@ -45,6 +45,46 @@ describe("platform basics", () => {
     expect(rows.map((r) => r.key)).toEqual(PERMISSIONS.map((p) => p.key).sort());
   });
 
+  it("documents every endpoint added in V1.1 with a working request schema", async () => {
+    const doc = (await ctx.client()("GET", "/v1/openapi.json")).json;
+    const v11Routes: [string, string][] = [
+      ["get", "/v1/shop"],
+      ["post", "/v1/dev/login"],
+      ["get", "/v1/stock-movements"],
+      ["get", "/v1/receipts"],
+      ["get", "/v1/stock-counts"],
+      ["get", "/v1/purchase-orders"],
+      ["post", "/v1/purchase-orders/from-suggestions"],
+      ["get", "/v1/expenses"],
+      ["get", "/v1/days"],
+      ["get", "/v1/shifts"],
+      ["patch", "/v1/menu-items/{id}"],
+      ["post", "/v1/kds/ticket-items/{id}/toggle"],
+      ["patch", "/v1/members/{id}"],
+      ["post", "/v1/members/{id}/pin"],
+      ["put", "/v1/roles/{id}/permissions"],
+      ["patch", "/v1/tenant"],
+      ["post", "/v1/branches"],
+      ["patch", "/v1/branches/{id}"],
+      ["patch", "/v1/channels/{id}"],
+      ["post", "/v1/channels/{id}/commission-rate"],
+      ["patch", "/v1/payment-methods/{id}"],
+      ["post", "/v1/settings/payments/confirm-cash-only"],
+      ["post", "/v1/settings/plan"],
+      ["get", "/v1/reports/today"],
+    ];
+    for (const [method, path] of v11Routes) {
+      const op = doc.paths[path]?.[method];
+      expect(op, `${method.toUpperCase()} ${path} should be documented`).toBeTruthy();
+      expect(op.summary, `${method.toUpperCase()} ${path} should have a summary`).toBeTruthy();
+      if (op.requestBody) {
+        const schema = op.requestBody.content["application/json"].schema;
+        expect(schema, `${method.toUpperCase()} ${path} request schema should not be empty`).not.toEqual({});
+      }
+    }
+    expect(Object.keys(doc.paths).length).toBeGreaterThanOrEqual(35 + v11Routes.length);
+  });
+
   it("mints a usable token from the dev-only login, but only outside production", async () => {
     const email = `${uuidv7()}@example.com`;
     const call = ctx.client();
