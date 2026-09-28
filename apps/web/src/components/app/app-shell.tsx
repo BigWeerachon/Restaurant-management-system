@@ -4,9 +4,12 @@ import * as DM from "@radix-ui/react-dropdown-menu";
 import { formatThaiDate } from "@sabai/domain";
 import { Check, ChevronDown, ChevronsUpDown, CloudCheck, LogOut, Monitor, MoonStar, MoreHorizontal, RefreshCcw, Search, Sun, UserRoundCog } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
+import Image from "next/image";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState, type ReactNode } from "react";
+import paakinIcon from "@/assets/brand/paakin-icon.png";
+import paakinLogo from "@/assets/brand/paakin-logo.png";
 import { Dialog } from "@/components/ui/overlay";
 import { ProgressRing } from "@/components/ui/feedback";
 import { Icon } from "@/components/ui/icon";
@@ -18,20 +21,10 @@ import { useSabai } from "@/lib/demo/store";
 import { CommandPalette } from "./command-palette";
 
 export function Logo({ compact }: { compact?: boolean }) {
-  return (
-    <span className="flex items-center gap-2.5">
-      <span className="relative grid h-9 w-9 place-items-center rounded-[12px] bg-brand text-[19px] font-bold leading-none text-brand-ink shadow-sm" aria-hidden="true">
-        ส
-        <span className="absolute -right-0.5 -top-0.5 h-2.5 w-2.5 rounded-full border-2 border-surface bg-accent" />
-      </span>
-      {!compact && (
-        <span className="leading-tight">
-          <span className="block text-[17px] font-bold tracking-tight text-ink">Sabai</span>
-          <span className="block text-[11px] text-ink-3">ร้านอาหารที่ใช้สบาย</span>
-        </span>
-      )}
-    </span>
-  );
+  if (compact) {
+    return <Image src={paakinIcon} alt="Paak In" priority className="h-9 w-9" />;
+  }
+  return <Image src={paakinLogo} alt="Paak In" priority className="h-8 w-auto" />;
 }
 
 function useTheme() {
