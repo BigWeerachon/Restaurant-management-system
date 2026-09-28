@@ -12,6 +12,7 @@ import {
   PERMISSIONS,
   quickActionsFor,
   ROLE_TEMPLATES,
+  routeAllowed,
   roleTemplate,
   shortReference,
 } from "../src";
@@ -141,5 +142,26 @@ describe("human error messages", () => {
 
   it("creates short references staff can read aloud", () => {
     expect(shortReference("01a0e339-25b1-7bcb-b330-c5e55f15106f")).toBe("5F15-106F");
+  });
+});
+
+describe("routeAllowed", () => {
+  const cashier = accessFromRole(ROLE_TEMPLATES.find((r) => r.key === "cashier")!);
+  const owner = accessFromRole(ROLE_TEMPLATES.find((r) => r.key === "owner")!);
+  const stock = accessFromRole(ROLE_TEMPLATES.find((r) => r.key === "stock")!);
+  it("lets people open what their job needs", () => {
+    expect(routeAllowed(cashier, "/pos")).toBe(true);
+    expect(routeAllowed(cashier, "/orders")).toBe(true);
+    expect(routeAllowed(stock, "/inventory/receive")).toBe(true);
+    expect(routeAllowed(owner, "/team")).toBe(true);
+  });
+  it("blocks deep links outside the role", () => {
+    expect(routeAllowed(cashier, "/reports")).toBe(false);
+    expect(routeAllowed(cashier, "/team")).toBe(false);
+    expect(routeAllowed(cashier, "/finance/close")).toBe(false);
+    expect(routeAllowed(stock, "/settings")).toBe(false);
+  });
+  it("never blocks the no-access page itself", () => {
+    expect(routeAllowed(cashier, "/no-access")).toBe(true);
   });
 });

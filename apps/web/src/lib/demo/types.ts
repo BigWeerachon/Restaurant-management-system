@@ -344,6 +344,9 @@ export interface Expense {
   description: string;
   amount: Satang;
   paidFrom: "cash_on_hand" | "bank" | "credit";
+  /** Service period (e.g. the month rent covers); reports spread the amount over it. */
+  periodStart?: string;
+  periodEnd?: string;
 }
 
 export interface Bill {
@@ -365,6 +368,8 @@ export interface ExpectedReceipt {
   expectedDate: string;
   amount: Satang;
   sourceType: "card_batch" | "payment" | "platform_payout";
+  /** Who pays it out (card acquirer, platform) — only same-payer receipts combine. */
+  payer?: string;
   status: "open" | "matched";
 }
 

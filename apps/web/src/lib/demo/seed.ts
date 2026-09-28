@@ -14,7 +14,7 @@ import type {
   Tenant,
 } from "./types";
 
-export const DEMO_VERSION = 7;
+export const DEMO_VERSION = 9;
 
 const baht = (n: number) => Math.round(n * 100);
 

@@ -1,5 +1,6 @@
 import {
   addDays,
+  allocateToRange,
   channelProfitability,
   menuEngineering,
   onboardingProgress,
@@ -163,9 +164,10 @@ export function reportSummary(state: DemoState, history: History, f: ReportFilte
     if (m.reason === "count_adjust") variance += Math.round(-m.qty * m.unitCost * 100);
   }
 
+  // Accrual view: each expense counts for the days its service period overlaps.
   const expenses = [...history.expenses, ...state.expenses]
-    .filter((e) => inRange(e.date) && (!f.branchId || e.branchId === f.branchId))
-    .reduce((s, e) => s + e.amount, 0);
+    .filter((e) => !f.branchId || e.branchId === f.branchId)
+    .reduce((s, e) => s + allocateToRange(e.amount, { start: e.periodStart ?? e.date, end: e.periodEnd ?? e.date }, { from: f.from, to: f.to }), 0);
 
   const totals = [...channels.values()].reduce(
     (a, c) => ({ netSales: a.netSales + c.netSales, cost: a.cost + c.cost, commission: a.commission + c.commission, fees: a.fees + c.paymentFees, orders: a.orders + c.orders }),

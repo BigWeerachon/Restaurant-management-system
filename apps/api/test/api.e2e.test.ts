@@ -1,4 +1,4 @@
-import { calculateOrderTotals, PERMISSIONS, toSatang } from "@sabai/domain";
+import { addDays, calculateOrderTotals, PERMISSIONS, toSatang } from "@sabai/domain";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { createTestContext, uuidv7 } from "./helpers";
 
@@ -342,6 +342,18 @@ describe("closing the day and reading the numbers", () => {
     const byKey = Object.fromEntries(r.json.steps.map((x: any) => [x.key, x.status]));
     expect(byKey).toMatchObject({ ingredient: "done", menu: "done", recipe: "done", staff: "done", first_sale: "done" });
     expect(r.json.next.key).toBe("branch");
+  });
+
+  it("spreads a monthly bill over the days it covers, so one day never looks like a loss", async () => {
+    const [rent] = await ctx.sql<{ id: string }[]>`select id from app.accounts where tenant_id = ${s.tenantId} and system_key = 'rent'`;
+    const base = { branchId: s.branchId, accountId: rent!.id, description: "ค่าเช่าร้าน", amount: 3000, paidFrom: "bank" };
+    const bad = await s.call("POST", "/v1/expenses", { ...base, periodStart: addDays(s.date, 5), periodEnd: s.date });
+    expect(bad.status).toBe(422);
+    expect(JSON.stringify(bad.json)).toMatch(/วันสิ้นสุด/);
+    const ok = await s.call("POST", "/v1/expenses", { ...base, periodStart: addDays(s.date, -10), periodEnd: addDays(s.date, 19) });
+    expect(ok.status).toBe(201);
+    const r = await s.call("GET", `/v1/reports/summary?from=${s.date}&to=${s.date}`);
+    expect(Number(r.json.waterfall.find((w: any) => w.key === "expenses").value)).toBe(-100);
   });
 
   it("records the activity feed for owners", async () => {

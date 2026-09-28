@@ -2,6 +2,7 @@
  * The owner's four questions, as pure functions:
  *   อะไรขายดี · ขายที่ไหน · ผ่านช่องทางไหน · สุดท้ายเหลือเงินจริงเท่าไร
  */
+import { daysBetween } from "./business-date";
 import type { Satang } from "./money";
 
 // ---------------------------------------------------------------------------
@@ -58,6 +59,25 @@ export function profitWaterfall(i: ProfitInput): WaterfallStep[] {
     explain: "กำไรจากการดำเนินงานหลังหักทุกอย่างที่ระบบรู้",
   });
   return out;
+}
+
+/**
+ * Accrual view of an expense: the part of `amount` that belongs to [from, to],
+ * spread evenly over its service period (e.g. September rent over 30 days).
+ * Mirrors the expense branch of app.v_branch_daily_pnl.
+ */
+export function allocateToRange(
+  amount: Satang,
+  period: { start: string; end: string },
+  range: { from: string; to: string },
+): Satang {
+  const days = daysBetween(period.start, period.end) + 1;
+  if (days <= 0) return 0;
+  const start = period.start > range.from ? period.start : range.from;
+  const end = period.end < range.to ? period.end : range.to;
+  const overlap = daysBetween(start, end) + 1;
+  if (overlap <= 0) return 0;
+  return overlap === days ? amount : Math.round((amount * overlap) / days);
 }
 
 // ---------------------------------------------------------------------------

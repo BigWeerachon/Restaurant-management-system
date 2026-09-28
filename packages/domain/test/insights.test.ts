@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
   addDays,
+  allocateToRange,
+  daysBetween,
   allDayCounts,
   businessDate,
   channelProfitability,
@@ -92,6 +94,20 @@ describe("reconciliation suggestions", () => {
     expect(byLine.b3!.varianceAccount).toBe("commission_expense");
   });
 
+  it("only combines receipts from the same payer (Grab never pays LINE MAN's money)", () => {
+    const interleaved = [
+      { id: "g1", label: "Grab 21", expectedDate: "2026-09-28", amount: 300000, sourceType: "platform_payout" as const, payer: "grab" },
+      { id: "l1", label: "LINE MAN 21", expectedDate: "2026-09-28", amount: 120000, sourceType: "platform_payout" as const, payer: "lineman" },
+      { id: "g2", label: "Grab 22", expectedDate: "2026-09-29", amount: 250000, sourceType: "platform_payout" as const, payer: "grab" },
+      { id: "l2", label: "LINE MAN 22", expectedDate: "2026-09-29", amount: 90000, sourceType: "platform_payout" as const, payer: "lineman" },
+    ];
+    const [m] = suggestMatches([{ id: "b", date: "2026-09-29", amount: 550000 }], interleaved);
+    expect(m?.reason).toBe("combined");
+    expect(m?.expectedIds).toEqual(["g1", "g2"]);
+    // 300000 + 120000 would also sum to a plausible amount, but crosses payers.
+    expect(suggestMatches([{ id: "x", date: "2026-09-29", amount: 420000 }], interleaved).find((s) => s.reason === "combined")).toBeUndefined();
+  });
+
   it("lists money that has not arrived yet", () => {
     const st = reconciliationStatus(expected, new Set(["card-27"]), "2026-10-02");
     expect(st.missing).toHaveLength(3);
@@ -150,5 +166,26 @@ describe("business date", () => {
     // 06:00 Bangkok on 28 Sep → 28 Sep
     expect(businessDate(new Date("2026-09-27T23:00:00Z"))).toBe("2026-09-28");
     expect(addDays("2026-09-30", 1)).toBe("2026-10-01");
+  });
+});
+
+describe("allocateToRange (accrual view of monthly bills)", () => {
+  const sept = { start: "2026-09-01", end: "2026-09-30" };
+  it("spreads a monthly bill evenly per day", () => {
+    expect(allocateToRange(3_000_000, sept, { from: "2026-09-21", to: "2026-09-27" })).toBe(700_000);
+  });
+  it("keeps the whole amount when the range covers the period", () => {
+    expect(allocateToRange(4_500_000, sept, { from: "2026-08-15", to: "2026-10-15" })).toBe(4_500_000);
+  });
+  it("is zero outside the period", () => {
+    expect(allocateToRange(4_500_000, sept, { from: "2026-10-01", to: "2026-10-07" })).toBe(0);
+  });
+  it("treats a one-day expense as belonging to that day", () => {
+    const day = { start: "2026-09-10", end: "2026-09-10" };
+    expect(allocateToRange(12_345, day, { from: "2026-09-10", to: "2026-09-10" })).toBe(12_345);
+    expect(allocateToRange(12_345, day, { from: "2026-09-11", to: "2026-09-30" })).toBe(0);
+  });
+  it("counts days across month ends correctly", () => {
+    expect(daysBetween("2026-02-27", "2026-03-02")).toBe(3);
   });
 });

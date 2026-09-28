@@ -20,6 +20,12 @@ export interface ExpectedReceipt {
   expectedDate: string; // YYYY-MM-DD
   amount: Satang;
   sourceType: "card_batch" | "payment" | "platform_payout" | "cash_deposit" | "other";
+  /**
+   * Who pays it (e.g. the delivery platform or card acquirer). Only receipts
+   * from the same payer are ever combined into one bank line — Grab never
+   * pays out LINE MAN's money. Falls back to sourceType.
+   */
+  payer?: string;
 }
 
 export interface MatchSuggestion {
@@ -120,10 +126,13 @@ function explainVariance(source: ExpectedReceipt["sourceType"], diff: Satang) {
     : { varianceHint: "เงินเข้ามากกว่าที่คาด", varianceAccount: "other_income" };
 }
 
-/** Small subset-sum over candidates of the same source type (bounded, deterministic). */
+/** Small subset-sum over candidates from the same payer (bounded, deterministic). */
 function findCombination(target: Satang, candidates: ExpectedReceipt[], maxCombine: number): ExpectedReceipt[] | null {
   const bySource = new Map<string, ExpectedReceipt[]>();
-  for (const c of candidates) bySource.set(c.sourceType, [...(bySource.get(c.sourceType) ?? []), c]);
+  for (const c of candidates) {
+    const key = c.payer ?? c.sourceType;
+    bySource.set(key, [...(bySource.get(key) ?? []), c]);
+  }
   for (const group of bySource.values()) {
     const items = group.slice(0, 16).sort((a, b) => a.expectedDate.localeCompare(b.expectedDate));
     // Prefer consecutive runs (a platform pays days in sequence) — O(n²).

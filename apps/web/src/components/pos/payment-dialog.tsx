@@ -1,9 +1,9 @@
 "use client";
 
-import { changeDue, parsePromptPayId, promptPayPayload, suggestTenders, type Satang } from "@sabai/domain";
+import { changeDue, suggestTenders, type Satang } from "@sabai/domain";
+import { PromptPayQr } from "@/components/app/promptpay-qr";
 import { Banknote, Bike, CreditCard, Printer, QrCode, Receipt } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
-import QRCode from "qrcode";
 import { useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { AnimatedNumber, Keypad, SuccessCheck } from "@/components/ui/feedback";
@@ -17,21 +17,6 @@ import { useSabai } from "@/lib/demo/store";
 import type { Order, PaymentMethod } from "@/lib/demo/types";
 
 const ICON: Record<string, typeof Banknote> = { cash: Banknote, promptpay: QrCode, card: CreditCard, platform: Bike, ewallet: CreditCard };
-
-function PromptPayQr({ id, amount }: { id: string; amount: number }) {
-  const [svg, setSvg] = useState<string>("");
-  useEffect(() => {
-    const target = parsePromptPayId(id);
-    if (!target) return;
-    QRCode.toString(promptPayPayload(target, amount), { type: "svg", margin: 1, errorCorrectionLevel: "M", color: { dark: "#1c1b19", light: "#ffffff" } }).then(setSvg);
-  }, [id, amount]);
-  return (
-    <div className="mx-auto w-56 rounded-3xl bg-white p-3 shadow-md ring-1 ring-line">
-      <div className="mb-2 flex items-center justify-center gap-1.5 rounded-xl bg-[#113566] py-1.5 text-xs font-semibold text-white">THAI QR PAYMENT · PromptPay</div>
-      {svg ? <div className="aspect-square" dangerouslySetInnerHTML={{ __html: svg }} aria-label={`QR พร้อมเพย์ ยอด ${amount.toFixed(2)} บาท`} role="img" /> : <div className="skeleton aspect-square rounded-xl" />}
-    </div>
-  );
-}
 
 export function PaymentDialog({ order, open, onClose, onPaid }: { order: Order | null; open: boolean; onClose: () => void; onPaid: (o: Order) => void }) {
   const db = useSabai((s) => s.db);

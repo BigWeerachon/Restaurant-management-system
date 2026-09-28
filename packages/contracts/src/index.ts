@@ -285,6 +285,12 @@ export const ExpenseBody = z.object({
   paidFrom: z.enum(["cash_on_hand", "bank", "credit"]),
   supplierId: Id.optional(),
   attachmentUrl: z.url().optional(),
+  /** Service period, e.g. the month a rent payment covers. Reports spread the amount over it. */
+  periodStart: IsoDate.optional(),
+  periodEnd: IsoDate.optional(),
+}).refine((b) => (b.periodStart === undefined) === (b.periodEnd === undefined) && (!b.periodStart || !b.periodEnd || b.periodEnd >= b.periodStart), {
+  message: "ช่วงเวลาไม่ถูกต้อง: ใส่ทั้งวันเริ่มและวันสิ้นสุด โดยวันสิ้นสุดต้องไม่ก่อนวันเริ่ม",
+  path: ["periodEnd"],
 });
 
 export const ImportStatementBody = z.object({

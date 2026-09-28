@@ -97,6 +97,7 @@ export const ERROR_CATALOG = {
   PAYMENT_REFERENCE_REQUIRED: c("ใส่เลขอ้างอิงการชำระ", (p) => `${p.method ?? "ช่องทางนี้"} ต้องมีเลขอ้างอิง (เช่น 4 ตัวท้ายบัตร) เพื่อกระทบยอดภายหลัง`, "Reference needed", "Enter the reference (e.g. last 4 digits) for reconciliation.", "fix_input", "ใส่เลขอ้างอิง", "info"),
   PAYMENT_TOTAL_MISMATCH: c("ยอดชำระไม่ตรงกับบิล", (p) => `ยอดบิล ${baht(p.total)} แต่รับมา ${baht(p.paid)} ตรวจจำนวนอีกครั้ง`, "Amount doesn't match", (p) => `Bill is ${baht(p.total)}, received ${baht(p.paid)}.`, "fix_input", "แก้ยอด"),
   INVALID_AMOUNT: c("จำนวนเงินไม่ถูกต้อง", "ใส่จำนวนเงินที่มากกว่า 0", "Invalid amount", "Enter an amount greater than zero.", "fix_input", "แก้ไข"),
+  INVALID_PERIOD: c("ช่วงเวลาไม่ถูกต้อง", "ใส่ทั้งวันเริ่มและวันสิ้นสุด และวันสิ้นสุดต้องไม่ก่อนวันเริ่ม (ไม่เกิน 1 ปี)", "Invalid period", "Enter a start and an end date, end on or after start (max 1 year).", "fix_input", "แก้ไข"),
   INVALID_TENDERED: c("รับเงินมาน้อยกว่ายอด", "เงินที่รับมาต้องไม่น้อยกว่ายอดที่ชำระ", "Not enough cash", "Cash received must cover the amount.", "fix_input", "แก้ไข"),
   INVALID_DISCOUNT: c("ส่วนลดไม่ถูกต้อง", "ส่วนลดเป็นเปอร์เซ็นต์ได้ 0–100% หรือเป็นจำนวนเงิน", "Invalid discount", "Use 0–100% or a fixed amount.", "fix_input", "แก้ไข"),
   DISCOUNT_OVER_LIMIT: c("ส่วนลดเกินวงเงินที่อนุมัติได้", "ลดราคาได้ไม่เกินวงเงินของผู้อนุมัติ ให้เจ้าของร้านอนุมัติแทน", "Discount over limit", "Ask the owner to approve this discount.", "request_approval", "ขออนุมัติ"),
@@ -150,6 +151,10 @@ export const ERROR_CATALOG = {
   FEATURE_NOT_IN_PLAN: c("ฟีเจอร์นี้อยู่ในแพ็กเกจที่สูงกว่า", "อัปเกรดเพื่อใช้งาน ข้อมูลทั้งหมดของร้านยังอยู่ครบ", "Upgrade to use this", "Your data stays safe; upgrade anytime.", "upgrade", "ดูแพ็กเกจ", "info"),
 
   // Generic / transport
+  LAST_OWNER: c("ต้องมีเจ้าของร้านอย่างน้อย 1 คน", "เพิ่มหรือแต่งตั้งเจ้าของร้านคนใหม่ก่อน แล้วค่อยเปลี่ยนตำแหน่งหรือปิดบัญชีนี้", "At least one owner is required", "Make someone else an owner first.", "fix_input", "เข้าใจแล้ว"),
+  CANNOT_DEACTIVATE_SELF: c("ปิดบัญชีของตัวเองไม่ได้", "ให้เจ้าของร้านหรือผู้จัดการอีกคนเป็นผู้ปิดให้", "You can't deactivate yourself", "Ask another owner or manager.", "fix_input", "เข้าใจแล้ว"),
+  PROMPTPAY_ID_INVALID: c("หมายเลขพร้อมเพย์ไม่ถูกต้อง", "ใช้เบอร์มือถือ 10 หลัก หรือเลขประจำตัวผู้เสียภาษี/บัตรประชาชน 13 หลัก", "Invalid PromptPay ID", "Use a 10-digit mobile number or a 13-digit tax ID.", "fix_input", "แก้ไข"),
+  CASH_REQUIRED: c("ปิดการรับเงินสดไม่ได้", "เงินสดใช้สำหรับทอนและกรณีระบบอื่นขัดข้อง จึงต้องเปิดไว้เสมอ", "Cash can't be turned off", "Cash is needed for change and as a fallback.", "fix_input", "เข้าใจแล้ว"),
   NOT_FOUND: c("ไม่พบข้อมูล", "ข้อมูลอาจถูกลบหรือย้ายไปแล้ว ลองโหลดหน้าใหม่", "Not found", "It may have been removed. Try refreshing.", "refresh", "โหลดใหม่"),
   VALIDATION: c("ข้อมูลยังไม่ครบ", "ตรวจช่องที่มีกรอบสีแดง แล้วลองอีกครั้ง", "Check the form", "Fix the highlighted fields and try again.", "fix_input", "แก้ไข", "info"),
   CONFLICT: c("มีข้อมูลนี้อยู่แล้ว", "ชื่อหรือรหัสนี้ถูกใช้แล้ว ลองใช้ชื่ออื่น", "Already exists", "That name or code is taken.", "fix_input", "แก้ไข"),

@@ -1,21 +1,36 @@
 "use client";
 
-import { useRouter } from "next/navigation";
+import { routeAllowed } from "@sabai/domain";
+import { usePathname, useRouter } from "next/navigation";
 import { useEffect, type ReactNode } from "react";
-import { Logo } from "./app-shell";
+import NoAccessPage from "@/app/(app)/no-access/page";
+import { useAccess } from "@/hooks/use-sabai";
 import { useSabai } from "@/lib/demo/store";
+import { Logo } from "./app-shell";
 
-/** Waits for local data to load, then requires a signed-in member. */
+/**
+ * Waits for local data to load, then requires a signed-in member who may open
+ * this path. A blocked deep link explains itself instead of a blank page.
+ */
 export function Gate({ children }: { children: ReactNode }) {
   const hydrated = useSabai((s) => s.hydrated);
   const memberId = useSabai((s) => s.session.memberId);
   const router = useRouter();
+  const pathname = usePathname();
+  const { access, member } = useAccess();
+
+  const signOut = useSabai((s) => s.signOut);
+  const signedIn = !!member?.active;
 
   useEffect(() => {
-    if (hydrated && !memberId) router.replace("/");
-  }, [hydrated, memberId, router]);
+    if (!hydrated || signedIn) return;
+    // Covers a member deactivated or removed while signed in on this device.
+    if (memberId) signOut();
+    router.replace("/");
+  }, [hydrated, signedIn, memberId, signOut, router]);
 
-  if (!hydrated || !memberId) return <Splash />;
+  if (!hydrated || !signedIn) return <Splash />;
+  if (!routeAllowed(access, pathname)) return <NoAccessPage />;
   return <>{children}</>;
 }
 

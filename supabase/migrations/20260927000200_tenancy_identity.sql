@@ -150,6 +150,29 @@ create table app.memberships (
   foreign key (tenant_id, role_id) references app.roles(tenant_id, id)
 );
 create unique index memberships_user_per_tenant on app.memberships (tenant_id, user_id) where user_id is not null;
+
+-- A shop must always keep one active owner, or nobody could manage it again.
+create or replace function app.protect_last_owner()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $$
+begin
+  if not exists (select 1 from app.tenants t where t.id = old.tenant_id) then
+    return null; -- the whole tenant is being deleted
+  end if;
+  if old.status = 'active'
+     and exists (select 1 from app.roles r where r.id = old.role_id and r.grants_all)
+     and not exists (select 1 from app.memberships m join app.roles r on r.id = m.role_id
+                      where m.tenant_id = old.tenant_id and m.status = 'active' and r.grants_all) then
+    perform app.raise_error('LAST_OWNER');
+  end if;
+  return null;
+end;
+$$;
+create trigger memberships_last_owner after update of role_id, status or delete on app.memberships
+  for each row execute function app.protect_last_owner();
 create index memberships_user on app.memberships (user_id) where status = 'active';
 create trigger memberships_touch before update on app.memberships for each row execute function app.touch_row();
 

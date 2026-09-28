@@ -1,6 +1,6 @@
 "use client";
 
-import { formatThaiDate, suggestMatches } from "@sabai/domain";
+import { addDays, formatThaiDate, suggestMatches } from "@sabai/domain";
 import { ArrowRight, Banknote, Check, CircleHelp, Landmark, Link2, Moon, Plus, Upload } from "lucide-react";
 import { motion } from "motion/react";
 import { useSearchParams } from "next/navigation";
@@ -17,6 +17,7 @@ import { formatBaht } from "@/lib/demo/selectors";
 import { useSabai } from "@/lib/demo/store";
 import type { Expense } from "@/lib/demo/types";
 
+const MONTHLY: Expense["category"][] = ["rent", "salaries", "utilities"];
 const CATEGORIES: { value: Expense["category"]; label: string; emoji: string }[] = [
   { value: "rent", label: "ค่าเช่า", emoji: "🏠" },
   { value: "salaries", label: "ค่าแรง", emoji: "👥" },
@@ -109,7 +110,7 @@ function Reconcile() {
     () =>
       suggestMatches(
         lines.map((l) => ({ id: l.id, date: l.date, amount: l.amount, description: l.description })),
-        open.map((e) => ({ id: e.id, label: e.label, expectedDate: e.expectedDate, amount: e.amount, sourceType: e.sourceType })),
+        open.map((e) => ({ id: e.id, label: e.label, expectedDate: e.expectedDate, amount: e.amount, sourceType: e.sourceType, payer: e.payer })),
       ),
     [lines, open],
   );
@@ -280,7 +281,13 @@ function Expenses() {
   const [desc, setDesc] = useState("");
   const [amount, setAmount] = useState("");
   const [paidFrom, setPaidFrom] = useState<Expense["paidFrom"]>("bank");
+  const [cover, setCover] = useState<"once" | "month">("month");
   const [error, setError] = useState<Record<string, string>>({});
+  const pickCategory = (c: Expense["category"]) => {
+    setCategory(c);
+    // Smart default: rent, wages and utilities are monthly costs.
+    setCover(MONTHLY.includes(c) ? "month" : "once");
+  };
   const list = [...db.expenses, ...history.expenses].filter((e) => e.branchId === branch.id).sort((a, b) => b.date.localeCompare(a.date)).slice(0, 15);
   const save = async () => {
     const e: Record<string, string> = {};
@@ -288,7 +295,9 @@ function Expenses() {
     if (!(Number(amount) > 0)) e.amount = "ใส่จำนวนเงิน";
     setError(e);
     if (Object.keys(e).length) return;
-    const r = await exec((d, c) => addExpense(d, c, { branchId: branch.id, date, category, description: desc, amount: Math.round(Number(amount) * 100), paidFrom }), { success: "บันทึกค่าใช้จ่ายแล้ว", successDetail: "นับรวมในรายงานเงินเหลือจริงแล้ว" });
+    const monthStart = `${date.slice(0, 8)}01`;
+    const period = cover === "month" ? { periodStart: monthStart, periodEnd: addDays(`${addDays(monthStart, 32).slice(0, 8)}01`, -1) } : {};
+    const r = await exec((d, c) => addExpense(d, c, { branchId: branch.id, date, category, description: desc, amount: Math.round(Number(amount) * 100), paidFrom, ...period }), { success: "บันทึกค่าใช้จ่ายแล้ว", successDetail: "นับรวมในรายงานเงินเหลือจริงแล้ว" });
     if (r.ok) {
       setDesc("");
       setAmount("");
@@ -301,7 +310,7 @@ function Expenses() {
           <p className="font-semibold text-ink">บันทึกค่าใช้จ่าย</p>
           <div className="flex flex-wrap gap-2" role="radiogroup" aria-label="หมวดค่าใช้จ่าย">
             {CATEGORIES.map((c) => (
-              <button key={c.value} role="radio" aria-checked={category === c.value} onClick={() => setCategory(c.value)} className={cn("h-10 rounded-full border px-3 text-sm", category === c.value ? "border-brand bg-brand-soft text-brand-soft-ink" : "border-line text-ink-2 hover:border-line-strong")}>
+              <button key={c.value} role="radio" aria-checked={category === c.value} onClick={() => pickCategory(c.value)} className={cn("h-10 rounded-full border px-3 text-sm", category === c.value ? "border-brand bg-brand-soft text-brand-soft-ink" : "border-line text-ink-2 hover:border-line-strong")}>
                 {c.emoji} {c.label}
               </button>
             ))}
@@ -312,6 +321,10 @@ function Expenses() {
           <Field label="จำนวนเงิน" required error={error.amount} htmlFor="xamt">
             <Input id="xamt" inputMode="decimal" prefix="฿" invalid={!!error.amount} value={amount} onChange={(e) => setAmount(e.target.value.replace(/[^\d.]/g, ""))} />
           </Field>
+          <div>
+            <Segmented label="ค่าใช้จ่ายนี้เป็นของ" value={cover} onChange={setCover} className="w-full" options={[{ value: "month", label: "ทั้งเดือนนี้" }, { value: "once", label: "วันนี้ครั้งเดียว" }]} />
+            <p className="mt-1.5 text-xs text-ink-3">{cover === "month" ? "ระบบจะเฉลี่ยให้ทุกวันของเดือน กำไรรายวันและรายสัปดาห์จึงไม่เพี้ยนในวันที่จ่าย" : "นับเป็นค่าใช้จ่ายของวันนี้ทั้งหมด"}</p>
+          </div>
           <Segmented label="จ่ายจาก" value={paidFrom} onChange={setPaidFrom} className="w-full" options={[{ value: "bank", label: "โอนจากบัญชี" }, { value: "cash_on_hand", label: "เงินสดในร้าน" }]} />
           <Button block loading={pending} onClick={save} icon={<Plus className="h-4 w-4" />}>
             บันทึก

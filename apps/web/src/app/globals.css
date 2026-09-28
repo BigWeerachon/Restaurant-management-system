@@ -206,6 +206,8 @@
   --color-series-2: var(--series-2);
   --color-series-3: var(--series-3);
   --color-series-neg: var(--series-neg);
+  --color-viz-grid: var(--viz-grid);
+  --color-viz-axis: var(--viz-axis);
 
   --shadow-xs: var(--shadow-xs);
   --shadow-sm: var(--shadow-sm);

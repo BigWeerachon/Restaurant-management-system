@@ -379,6 +379,26 @@ select test.ok((select net_sales from app.v_branch_daily_pnl where branch_id = t
 select app.reopen_business_day(test.id('branch_a'), (select business_date from app.day_closes where branch_id = test.id('branch_a')), 'ลืมบันทึกของเสีย');
 select test.ok((select sum(debit) = sum(credit) from app.journal_lines where tenant_id = test.id('tenant_a')), 'GL balanced after reopen');
 
+-- A monthly bill is spread over its service period (30 days × 100 = 3,000).
+do $$
+declare
+  d date := app.business_date(test.id('branch_a'));
+  rent uuid := (select id from app.accounts where tenant_id = test.id('tenant_a') and system_key = 'rent');
+begin
+  perform app.record_expense(jsonb_build_object('branch_id', test.id('branch_a'), 'account_id', rent,
+    'description', 'ค่าเช่าร้าน', 'amount', 3000, 'paid_from', 'bank', 'period_start', d - 10, 'period_end', d + 19));
+  perform test.ok((select expenses from app.v_branch_daily_pnl where branch_id = test.id('branch_a') and business_date = d + 5) = 100,
+                  'monthly expense spread per day');
+  perform test.ok((select sum(expenses) from app.v_branch_daily_pnl where branch_id = test.id('branch_a') and business_date between d - 10 and d + 19) = 3000,
+                  'spread sums back to the full amount');
+end $$;
+select test.throws(format('select app.record_expense(%L::jsonb)', jsonb_build_object('branch_id', test.id('branch_a'),
+  'account_id', (select id from app.accounts where tenant_id = test.id('tenant_a') and system_key = 'rent'),
+  'description', 'x', 'amount', 1, 'paid_from', 'bank', 'period_start', '2026-09-30', 'period_end', '2026-09-01')), 'INVALID_PERIOD');
+
+-- The only owner can't be demoted or removed (the shop would be locked out).
+select test.throws(format('update app.memberships set status = %L where tenant_id = %L and user_id = %L', 'suspended', test.id('tenant_a'), test.id('owner_a')), 'LAST_OWNER');
+
 -- ---------------------------------------------------------------------------
 -- 8. Tenant isolation: owner B sees nothing of A and cannot act on A's data
 -- ---------------------------------------------------------------------------

@@ -47,6 +47,8 @@ export function registerFinance(app: Hono<Env>, deps: Deps) {
         paid_from: body.paidFrom,
         supplier_id: body.supplierId,
         attachment_url: body.attachmentUrl,
+        period_start: body.periodStart,
+        period_end: body.periodEnd,
       });
       return { id };
     }),
@@ -86,10 +88,13 @@ export function registerFinance(app: Hono<Env>, deps: Deps) {
       const lines = await t<{ id: string; txn_date: string; amount: string; description: string | null }[]>`
         select id, txn_date::text, amount, description from app.statement_lines
          where tenant_id = ${tenantId} and status = 'unmatched' order by txn_date desc limit 500`;
-      const expected = await t<{ id: string; label: string; expected_date: string; expected_amount: string; source_type: ExpectedReceipt["sourceType"] }[]>`
-        select id, label, expected_date::text, expected_amount, source_type from app.expected_receipts
+      const expected = await t<{ id: string; label: string; expected_date: string; expected_amount: string; source_type: ExpectedReceipt["sourceType"]; payer: string }[]>`
+        select id, label, expected_date::text, expected_amount, source_type,
+               -- card batches & payouts: the method/channel; single transfers: their clearing account
+               case when source_type = 'payment' then clearing_account_id else coalesce(source_id, clearing_account_id) end::text as payer
+          from app.expected_receipts
          where tenant_id = ${tenantId} and status in ('open','partial') order by expected_date limit 1000`;
-      const exp: ExpectedReceipt[] = expected.map((e) => ({ id: e.id, label: e.label, expectedDate: e.expected_date, amount: toSatang(e.expected_amount), sourceType: e.source_type }));
+      const exp: ExpectedReceipt[] = expected.map((e) => ({ id: e.id, label: e.label, expectedDate: e.expected_date, amount: toSatang(e.expected_amount), sourceType: e.source_type, payer: e.payer }));
       const suggestions = suggestMatches(
         lines.map((l) => ({ id: l.id, date: l.txn_date, amount: toSatang(l.amount), description: l.description ?? undefined })),
         exp,

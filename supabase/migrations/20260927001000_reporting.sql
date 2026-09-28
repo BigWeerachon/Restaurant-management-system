@@ -139,8 +139,12 @@ with facts as (
   select p.tenant_id, p.branch_id, p.business_date, 0, 0, 0, 0, 0, p.fee_amount, 0, 0
     from app.payments p
   union all
-  select e.tenant_id, e.branch_id, e.expense_date, 0, 0, 0, 0, 0, 0, e.amount, 0
-    from app.expenses e where e.branch_id is not null
+  -- Expenses are spread evenly across their service period (accrual view).
+  select e.tenant_id, e.branch_id, d::date, 0, 0, 0, 0, 0, 0,
+         e.amount / ((coalesce(e.period_end, e.expense_date) - coalesce(e.period_start, e.expense_date)) + 1), 0
+    from app.expenses e
+    cross join lateral generate_series(coalesce(e.period_start, e.expense_date), coalesce(e.period_end, e.expense_date), interval '1 day') d
+   where e.branch_id is not null
 )
 select tenant_id, branch_id, business_date,
        sum(orders) as orders,

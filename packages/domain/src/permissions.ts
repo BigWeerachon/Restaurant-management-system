@@ -269,6 +269,27 @@ export function homeFor(access: Access, preferred?: Home): string {
 }
 
 // ---------------------------------------------------------------------------
+// Route guard — deep links respect the same permissions as the navigation
+// ---------------------------------------------------------------------------
+const ROUTE_RULES: readonly { prefix: string; anyOf: readonly Permission[] }[] = [
+  { prefix: "/inventory/receive", anyOf: ["inventory.receive"] },
+  { prefix: "/inventory/waste", anyOf: ["inventory.waste"] },
+  { prefix: "/inventory/count", anyOf: ["inventory.count"] },
+  { prefix: "/inventory/new", anyOf: ["inventory.manage"] },
+  { prefix: "/menu/new", anyOf: ["menu.manage"] },
+  { prefix: "/finance/close", anyOf: ["finance.close_day"] },
+  { prefix: "/setup", anyOf: ["settings.manage"] },
+  ...NAV_ITEMS.map((n) => ({ prefix: n.href, anyOf: n.anyOf })),
+];
+
+/** Whether a signed-in person may open this path. Unknown paths are left to the router (404). */
+export function routeAllowed(access: Access, pathname: string): boolean {
+  if (pathname === "/no-access") return true;
+  const rule = ROUTE_RULES.find((r) => pathname === r.prefix || pathname.startsWith(`${r.prefix}/`));
+  return !rule || canAny(access, rule.anyOf);
+}
+
+// ---------------------------------------------------------------------------
 // Quick actions ("ทำอะไรต่อดี") for the Today screen
 // ---------------------------------------------------------------------------
 export interface QuickAction {

@@ -256,6 +256,10 @@ create table app.expenses (
   tenant_id       uuid not null,
   branch_id       uuid,
   expense_date    date not null,
+  -- Service period (e.g. September rent). Reports spread the amount evenly over
+  -- these days so a monthly bill never makes one week look like a loss.
+  period_start    date,
+  period_end      date,
   account_id      uuid not null,
   description     text not null,
   amount          numeric(14,2) not null check (amount > 0),
@@ -269,6 +273,8 @@ create table app.expenses (
   created_by      uuid,
   created_at      timestamptz not null default now(),
   unique (tenant_id, id),
+  check ((period_start is null) = (period_end is null)),
+  check (period_end >= period_start and period_end - period_start <= 366),
   foreign key (tenant_id, branch_id) references app.branches(tenant_id, id),
   foreign key (tenant_id, account_id) references app.accounts(tenant_id, id),
   foreign key (tenant_id, supplier_id) references app.suppliers(tenant_id, id)
@@ -341,6 +347,8 @@ declare
   v_vat numeric := coalesce(nullif(p->>'vat_amount', '')::numeric, 0);
   v_wht numeric := coalesce(nullif(p->>'wht_amount', '')::numeric, 0);
   v_paid text := p->>'paid_from';
+  v_from date := nullif(p->>'period_start', '')::date;
+  v_to date := nullif(p->>'period_end', '')::date;
   eid uuid;
   exp_id uuid;
   bill uuid;
@@ -352,6 +360,9 @@ begin
   if v_amount is null or v_amount <= 0 then perform app.raise_error('INVALID_AMOUNT'); end if;
   v_date := coalesce(nullif(p->>'expense_date', '')::date, case when v_branch is not null then app.business_date(v_branch) else current_date end);
   if v_branch is not null then perform app.assert_period_open(v_branch, v_date); end if;
+  if (v_from is null) <> (v_to is null) or v_to < v_from or v_to - v_from > 366 then
+    perform app.raise_error('INVALID_PERIOD');
+  end if;
 
   if v_paid = 'credit' then
     if nullif(p->>'supplier_id', '') is null then perform app.raise_error('SUPPLIER_REQUIRED_FOR_CREDIT'); end if;
@@ -371,9 +382,9 @@ begin
       jsonb_build_object('account', case v_paid when 'credit' then 'accounts_payable' else v_paid end, 'amount', -(v_amount + v_vat - case when v_paid = 'credit' then 0 else v_wht end)),
       jsonb_build_object('account', 'wht_payable', 'amount', -(case when v_paid = 'credit' then 0 else v_wht end))));
 
-  insert into app.expenses (tenant_id, branch_id, expense_date, account_id, description, amount, vat_amount, wht_amount,
+  insert into app.expenses (tenant_id, branch_id, expense_date, period_start, period_end, account_id, description, amount, vat_amount, wht_amount,
                             paid_from, supplier_id, bill_id, journal_entry_id, attachment_url, created_by)
-  values (v_tenant, v_branch, v_date, acc.id, p->>'description', v_amount, v_vat, v_wht, v_paid,
+  values (v_tenant, v_branch, v_date, v_from, v_to, acc.id, p->>'description', v_amount, v_vat, v_wht, v_paid,
           nullif(p->>'supplier_id', '')::uuid, bill, eid, nullif(p->>'attachment_url', ''), app.actor_membership_id(v_tenant))
   returning id into exp_id;
   update app.bills set source_id = exp_id where id = bill;
@@ -726,8 +737,8 @@ begin
 
   -- ---- Money we expect to land in the bank -------------------------------------
   bank := (select id from app.accounts where tenant_id = b.tenant_id and system_key = 'bank');
-  insert into app.expected_receipts (tenant_id, branch_id, business_date, source_type, label, clearing_account_id, bank_account_id, expected_date, expected_amount)
-  select b.tenant_id, b.id, p_date, 'card_batch', pm.name || ' ' || to_char(p_date, 'DD/MM'),
+  insert into app.expected_receipts (tenant_id, branch_id, business_date, source_type, source_id, label, clearing_account_id, bank_account_id, expected_date, expected_amount)
+  select b.tenant_id, b.id, p_date, 'card_batch', pm.id, pm.name || ' ' || to_char(p_date, 'DD/MM'),
          pm.ledger_account_id, coalesce(pm.settlement_account_id, bank), p_date + pm.settlement_days,
          sum(case when p.kind = 'payment' then p.amount else -p.amount end) - sum(p.fee_amount)
     from app.payments p join app.payment_methods pm on pm.id = p.method_id

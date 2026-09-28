@@ -143,29 +143,35 @@ export function generateHistory(state: DemoState, today: string, days = 30): His
 /** Recurring costs the owner recorded (rent, wages, utilities, marketing, supplies). */
 function historyExpenses(today: string, days: number): Expense[] {
   const out: Expense[] = [];
-  const add = (branchId: string, date: string, category: Expense["category"], description: string, baht: number, paidFrom: Expense["paidFrom"] = "bank") =>
-    out.push({ id: `hx-${branchId}-${date}-${category}-${out.length}`, branchId, date, category, description, amount: baht * 100, paidFrom });
-  for (let d = days; d >= 0; d--) {
+  const monthOf = (date: string) => {
+    const start = `${date.slice(0, 8)}01`;
+    return { periodStart: start, periodEnd: addDays(addDays(start, 32).slice(0, 8) + "01", -1) };
+  };
+  const add = (branchId: string, date: string, category: Expense["category"], description: string, baht: number, period: { periodStart: string; periodEnd: string }, paidFrom: Expense["paidFrom"] = "bank") =>
+    out.push({ id: `hx-${branchId}-${date}-${category}-${out.length}`, branchId, date, category, description, amount: baht * 100, paidFrom, ...period });
+  // Start a month early: last month's bills still cover the first days of the window.
+  for (let d = days + 31; d >= 0; d--) {
     const date = addDays(today, -d);
     const day = Number(date.slice(8));
     const dow = new Date(`${date}T12:00:00Z`).getUTCDay();
     if (day === 1) {
-      add("br-ari", date, "rent", "ค่าเช่าร้าน สาขาอารีย์", 45000);
-      add("br-tl", date, "rent", "ค่าเช่าร้าน สาขาทองหล่อ", 65000);
+      add("br-ari", date, "rent", "ค่าเช่าร้าน สาขาอารีย์", 45000, monthOf(date));
+      add("br-tl", date, "rent", "ค่าเช่าร้าน สาขาทองหล่อ", 65000, monthOf(date));
     }
     if (day === 5) {
-      add("br-ari", date, "utilities", "ค่าไฟ ค่าน้ำ ค่าแก๊ส", 12400);
-      add("br-tl", date, "utilities", "ค่าไฟ ค่าน้ำ ค่าแก๊ส", 17800);
+      add("br-ari", date, "utilities", "ค่าไฟ ค่าน้ำ ค่าแก๊ส", 12400, monthOf(date));
+      add("br-tl", date, "utilities", "ค่าไฟ ค่าน้ำ ค่าแก๊ส", 17800, monthOf(date));
     }
     if (day === 28) {
-      add("br-ari", date, "salaries", "เงินเดือนพนักงาน 5 คน", 72000);
-      add("br-tl", date, "salaries", "เงินเดือนพนักงาน 7 คน", 108000);
+      add("br-ari", date, "salaries", "เงินเดือนพนักงาน 5 คน", 72000, monthOf(date));
+      add("br-tl", date, "salaries", "เงินเดือนพนักงาน 7 คน", 108000, monthOf(date));
     }
     if (dow === 1) {
-      add("br-ari", date, "marketing", "โฆษณาบนแพลตฟอร์มเดลิเวอรี", 1800);
-      add("br-tl", date, "marketing", "โฆษณาบนแพลตฟอร์มเดลิเวอรี", 2400);
-      add("br-ari", date, "supplies", "ของใช้สิ้นเปลือง น้ำยาล้างจาน ทิชชู", 1350, "cash_on_hand");
-      add("br-tl", date, "supplies", "ของใช้สิ้นเปลือง น้ำยาล้างจาน ทิชชู", 1750, "cash_on_hand");
+      const week = { periodStart: date, periodEnd: addDays(date, 6) };
+      add("br-ari", date, "marketing", "โฆษณาบนแพลตฟอร์มเดลิเวอรี", 1800, week);
+      add("br-tl", date, "marketing", "โฆษณาบนแพลตฟอร์มเดลิเวอรี", 2400, week);
+      add("br-ari", date, "supplies", "ของใช้สิ้นเปลือง น้ำยาล้างจาน ทิชชู", 1350, week, "cash_on_hand");
+      add("br-tl", date, "supplies", "ของใช้สิ้นเปลือง น้ำยาล้างจาน ทิชชู", 1750, week, "cash_on_hand");
     }
   }
   return out;

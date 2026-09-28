@@ -143,9 +143,9 @@ export function seedLive(state: DemoState, now: Date, today: string, history: Hi
     const x = byDate.get(date)!;
     const label = `${date.slice(8)}/${date.slice(5, 7)}`;
     state.expected.push(
-      { id: `exp-card-${date}`, branchId: "br-ari", label: `บัตร ${label}`, expectedDate: addDays(date, 2), amount: x.card, sourceType: "card_batch", status: "open" },
-      { id: `exp-grab-${date}`, branchId: "br-ari", label: `GrabFood ${label}`, expectedDate: addDays(date, 7), amount: x.grab, sourceType: "platform_payout", status: "open" },
-      { id: `exp-lm-${date}`, branchId: "br-ari", label: `LINE MAN ${label}`, expectedDate: addDays(date, 7), amount: x.lineman, sourceType: "platform_payout", status: "open" },
+      { id: `exp-card-${date}`, branchId: "br-ari", label: `บัตร ${label}`, expectedDate: addDays(date, 2), amount: x.card, sourceType: "card_batch", payer: "pm-card", status: "open" },
+      { id: `exp-grab-${date}`, branchId: "br-ari", label: `GrabFood ${label}`, expectedDate: addDays(date, 7), amount: x.grab, sourceType: "platform_payout", payer: "ch-grab", status: "open" },
+      { id: `exp-lm-${date}`, branchId: "br-ari", label: `LINE MAN ${label}`, expectedDate: addDays(date, 7), amount: x.lineman, sourceType: "platform_payout", payer: "ch-lineman", status: "open" },
     );
   }
   const exp = (id: string) => state.expected.find((e) => e.id === id)?.amount ?? 0;
@@ -155,7 +155,7 @@ export function seedLive(state: DemoState, now: Date, today: string, history: Hi
       { id: "sl-1", date: addDays(d1, 2), amount: exp(`exp-card-${d1}`), description: "KBANK EDC SETTLEMENT", status: "unmatched" },
       { id: "sl-2", date: addDays(d2, 2), amount: exp(`exp-card-${d2}`), description: "KBANK EDC SETTLEMENT", status: "unmatched" },
       { id: "sl-3", date: addDays(d2, 7), amount: exp(`exp-grab-${d1}`) + exp(`exp-grab-${d2}`), description: "GRAB THAILAND PAYOUT", status: "unmatched" },
-      { id: "sl-4", date: addDays(d1, 7), amount: exp(`exp-lm-${d1}`) - 18000, description: "LINE MAN WONGNAI", status: "unmatched" },
+      { id: "sl-4", date: addDays(d1, 7), amount: exp(`exp-lm-${d1}`) - 4500, description: "LINE MAN WONGNAI", status: "unmatched" },
       { id: "sl-5", date: addDays(d3, 1), amount: 5000000, description: "โอนจาก คุณปิยะ (เงินทุนเพิ่ม)", status: "unmatched" },
     );
   }

@@ -25,7 +25,11 @@ import {
   menuItemCost,
   roundQty,
   WASTE_REASONS,
+  parsePromptPayId,
+  planLimit,
+  type PlanCode,
 } from "@sabai/domain";
+import { defaultStations } from "./seed";
 import type {
   Channel,
   DemoState,
@@ -37,6 +41,8 @@ import type {
   OrderItem,
   PaymentMethod,
   Role,
+  Tenant,
+  Branch,
   Ticket,
 } from "./types";
 
@@ -946,12 +952,12 @@ export function closeDay(state: DemoState, ctx: Ctx, date: string) {
   for (const [methodId, total] of byMethod) {
     const m = state.paymentMethods.find((x) => x.id === methodId);
     if (!m || m.kind !== "card" || total <= 0) continue;
-    state.expected.push({ id: newId("exp"), branchId: ctx.branchId, label: `บัตร ${date.slice(8)}/${date.slice(5, 7)}`, expectedDate: addDays(date, m.settlementDays), amount: total - applyRate(total, m.feeRate), sourceType: "card_batch", status: "open" });
+    state.expected.push({ id: newId("exp"), branchId: ctx.branchId, label: `บัตร ${date.slice(8)}/${date.slice(5, 7)}`, expectedDate: addDays(date, m.settlementDays), amount: total - applyRate(total, m.feeRate), sourceType: "card_batch", payer: m.id, status: "open" });
   }
   for (const [channelId, v] of byChannel) {
     const ch = state.channels.find((c) => c.id === channelId);
     if (!ch || ch.kind !== "delivery_platform" || v.payout <= 0) continue;
-    state.expected.push({ id: newId("exp"), branchId: ctx.branchId, label: `${ch.name} ${date.slice(8)}/${date.slice(5, 7)}`, expectedDate: addDays(date, ch.settlementDays), amount: v.payout, sourceType: "platform_payout", status: "open" });
+    state.expected.push({ id: newId("exp"), branchId: ctx.branchId, label: `${ch.name} ${date.slice(8)}/${date.slice(5, 7)}`, expectedDate: addDays(date, ch.settlementDays), amount: v.payout, sourceType: "platform_payout", payer: ch.id, status: "open" });
   }
   log(state, ctx, "finance.day_closed", `${actorName(state, ctx.actorId)} ปิดยอดวันที่ ${date} ยอดขาย ฿${(summary.total / 100).toLocaleString("th-TH")} (${summary.orders} บิล)`, "good");
   return summary;
@@ -1005,6 +1011,7 @@ export function addMember(state: DemoState, ctx: Ctx, input: { name: string; rol
   if (!/^\d{4,6}$/.test(input.pin)) throw new DomainError("PIN_FORMAT");
   if (state.members.some((m) => m.active && m.pin === input.pin)) throw new DomainError("PIN_IN_USE");
   if (!state.roles.some((r) => r.key === input.roleKey)) throw new DomainError("VALIDATION", { field: "role" });
+  assertPlanLimit(state, "staff", state.members.filter((m) => m.active).length + 1);
   const colors = ["emerald", "sky", "amber", "rose", "indigo", "orange", "violet"];
   const m: Member = { id: newId("m"), name: input.name.trim(), roleKey: input.roleKey, pin: input.pin, branchIds: input.branchIds, maxDiscountRate: input.maxDiscountRate, color: colors[state.members.length % colors.length]!, active: true };
   state.members.push(m);
@@ -1018,6 +1025,113 @@ export function setRolePermissions(state: DemoState, ctx: Ctx, roleKey: string, 
   if (!role || role.grantsAll) throw new DomainError("PERMISSION_DENIED");
   role.permissions = permissions;
   log(state, ctx, "team.role_changed", `${actorName(state, ctx.actorId)} ปรับสิทธิ์ตำแหน่ง “${role.name}”`, "warn");
+}
+
+/** Mirrors app.enforce_plan_limits: selling never stops, only adding more. */
+function assertPlanLimit(state: DemoState, metric: "staff" | "branches", wanted: number) {
+  const limit = planLimit(state.tenant.plan, metric);
+  if (limit !== null && wanted > limit) throw new DomainError("PLAN_LIMIT_REACHED", { metric: metric === "staff" ? "พนักงาน" : "สาขา", limit });
+}
+
+const activeOwners = (state: DemoState) => state.members.filter((m) => m.active && state.roles.find((r) => r.key === m.roleKey)?.grantsAll).length;
+
+export function updateMember(state: DemoState, ctx: Ctx, id: string, patch: Partial<Pick<Member, "name" | "roleKey" | "branchIds" | "maxDiscountRate" | "active">>) {
+  requirePerm(state, ctx, "staff.manage");
+  const m = state.members.find((x) => x.id === id);
+  if (!m) throw new DomainError("NOT_FOUND");
+  const wasOwner = !!state.roles.find((r) => r.key === m.roleKey)?.grantsAll;
+  const staysOwner = patch.active !== false && !!state.roles.find((r) => r.key === (patch.roleKey ?? m.roleKey))?.grantsAll;
+  if (wasOwner && !staysOwner && m.active && activeOwners(state) <= 1) throw new DomainError("LAST_OWNER");
+  if (patch.active === false && id === ctx.actorId) throw new DomainError("CANNOT_DEACTIVATE_SELF");
+  if (patch.active === true && !m.active) assertPlanLimit(state, "staff", state.members.filter((x) => x.active).length + 1);
+  if (patch.name !== undefined && !patch.name.trim()) throw new DomainError("VALIDATION", { field: "name" });
+  Object.assign(m, patch);
+  log(state, ctx, "team.member_updated", `${actorName(state, ctx.actorId)} ${patch.active === false ? "ปิดการใช้งาน" : "แก้ไขข้อมูล"}พนักงาน “${m.name}”`, patch.active === false ? "warn" : "neutral");
+}
+
+export function resetMemberPin(state: DemoState, ctx: Ctx, id: string, pin: string) {
+  requirePerm(state, ctx, "staff.manage");
+  const m = state.members.find((x) => x.id === id);
+  if (!m) throw new DomainError("NOT_FOUND");
+  if (!/^\d{4,6}$/.test(pin)) throw new DomainError("PIN_FORMAT");
+  if (state.members.some((x) => x.active && x.id !== id && x.pin === pin)) throw new DomainError("PIN_IN_USE");
+  m.pin = pin;
+  log(state, ctx, "team.pin_reset", `${actorName(state, ctx.actorId)} ตั้ง PIN ใหม่ให้ “${m.name}”`, "warn");
+}
+
+export function updateTenant(state: DemoState, ctx: Ctx, patch: Partial<Pick<Tenant, "name" | "businessType" | "vatRegistered" | "pricesIncludeVat" | "cashRounding">>) {
+  requirePerm(state, ctx, "settings.manage");
+  if (patch.name !== undefined && !patch.name.trim()) throw new DomainError("VALIDATION", { field: "name" });
+  Object.assign(state.tenant, patch);
+  log(state, ctx, "settings.updated", `${actorName(state, ctx.actorId)} แก้ไขข้อมูลร้าน`);
+}
+
+export function updateBranch(state: DemoState, ctx: Ctx, id: string, patch: Partial<Pick<Branch, "name" | "address" | "phone" | "openingHours" | "dayCutoff" | "serviceChargeRate">>) {
+  requirePerm(state, ctx, "settings.manage");
+  const b = state.branches.find((x) => x.id === id);
+  if (!b) throw new DomainError("NOT_FOUND");
+  if (patch.name !== undefined && !patch.name.trim()) throw new DomainError("VALIDATION", { field: "name" });
+  if (patch.dayCutoff !== undefined && !/^([01]\d|2[0-3]):[0-5]\d$/.test(patch.dayCutoff)) throw new DomainError("VALIDATION", { field: "dayCutoff" });
+  if (patch.serviceChargeRate !== undefined && !(patch.serviceChargeRate >= 0 && patch.serviceChargeRate <= 0.2)) throw new DomainError("VALIDATION", { field: "serviceChargeRate" });
+  Object.assign(b, patch);
+  log(state, ctx, "settings.branch_updated", `${actorName(state, ctx.actorId)} แก้ไขข้อมูล${b.name}`);
+}
+
+export function addBranch(state: DemoState, ctx: Ctx, input: { name: string; address?: string; phone?: string }): Branch {
+  requirePerm(state, ctx, "settings.manage");
+  if (!input.name.trim()) throw new DomainError("VALIDATION", { field: "name" });
+  assertPlanLimit(state, "branches", state.branches.length + 1);
+  const b: Branch = { id: newId("br"), code: `B${state.branches.length + 1}`, name: input.name.trim(), address: input.address, phone: input.phone, dayCutoff: "05:00", serviceChargeRate: 0, tables: [] };
+  state.branches.push(b);
+  state.stations.push(...defaultStations(b.id));
+  log(state, ctx, "settings.branch_added", `${actorName(state, ctx.actorId)} เปิด${b.name}`, "good");
+  return b;
+}
+
+export function updateChannel(state: DemoState, ctx: Ctx, id: string, patch: Partial<Pick<Channel, "active" | "commissionRate" | "priceMarkup">>) {
+  requirePerm(state, ctx, "settings.manage");
+  const c = state.channels.find((x) => x.id === id);
+  if (!c) throw new DomainError("NOT_FOUND");
+  if (patch.commissionRate !== undefined && !(patch.commissionRate >= 0 && patch.commissionRate <= 0.6)) throw new DomainError("VALIDATION", { field: "commissionRate" });
+  if (patch.priceMarkup !== undefined && !(patch.priceMarkup >= 0 && patch.priceMarkup <= 1)) throw new DomainError("VALIDATION", { field: "priceMarkup" });
+  // New GP applies to sales from now on; past orders keep the rate they were sold at.
+  Object.assign(c, patch);
+  log(state, ctx, "settings.channel_updated", `${actorName(state, ctx.actorId)} ปรับช่องทาง ${c.name}${patch.commissionRate !== undefined ? ` GP ${Math.round(patch.commissionRate * 100)}%` : ""}`);
+}
+
+export function updatePaymentMethod(state: DemoState, ctx: Ctx, id: string, patch: Partial<Pick<PaymentMethod, "active" | "promptpayId" | "feeRate">>) {
+  requirePerm(state, ctx, "settings.manage");
+  const m = state.paymentMethods.find((x) => x.id === id);
+  if (!m) throw new DomainError("NOT_FOUND");
+  if (patch.promptpayId !== undefined) {
+    const t = parsePromptPayId(patch.promptpayId);
+    if (!t) throw new DomainError("PROMPTPAY_ID_INVALID");
+    patch = { ...patch, promptpayId: t.value };
+  }
+  if (m.kind === "promptpay" && patch.active && !(patch.promptpayId ?? m.promptpayId)) throw new DomainError("PROMPTPAY_ID_INVALID");
+  if (m.kind === "cash" && patch.active === false) throw new DomainError("CASH_REQUIRED");
+  Object.assign(m, patch);
+  log(state, ctx, "settings.payment_updated", `${actorName(state, ctx.actorId)} ${patch.active === false ? "ปิด" : "ตั้งค่า"}การรับเงินแบบ${m.name}`);
+}
+
+export function skipOnboardingStep(state: DemoState, ctx: Ctx, key: string) {
+  requirePerm(state, ctx, "settings.manage");
+  if (!state.tenant.onboarding.skipped.includes(key)) state.tenant.onboarding.skipped.push(key);
+}
+
+export function confirmCashOnly(state: DemoState, ctx: Ctx) {
+  requirePerm(state, ctx, "settings.manage");
+  state.tenant.onboarding.paymentsConfirmed = true;
+}
+
+export function changePlan(state: DemoState, ctx: Ctx, plan: PlanCode) {
+  requirePerm(state, ctx, "billing.manage");
+  const branches = planLimit(plan, "branches");
+  const staff = planLimit(plan, "staff");
+  if (branches !== null && state.branches.length > branches) throw new DomainError("PLAN_LIMIT_REACHED", { metric: "สาขา", limit: branches });
+  if (staff !== null && state.members.filter((m) => m.active).length > staff) throw new DomainError("PLAN_LIMIT_REACHED", { metric: "พนักงาน", limit: staff });
+  state.tenant.plan = plan;
+  log(state, ctx, "billing.plan_changed", `${actorName(state, ctx.actorId)} เปลี่ยนแพ็กเกจเป็น ${plan}`, "good");
 }
 
 /** Finds the member whose PIN this is (shared-device user switch). */
