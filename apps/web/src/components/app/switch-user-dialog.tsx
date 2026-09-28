@@ -1,0 +1,65 @@
+"use client";
+
+import { humanizeError } from "@sabai/domain";
+import { useRouter } from "next/navigation";
+import { useEffect, useState } from "react";
+import { toast } from "sonner";
+import { Keypad, PinDots } from "@/components/ui/feedback";
+import { Dialog } from "@/components/ui/overlay";
+import { useUi } from "@/hooks/use-sabai";
+import { accessFromRole, homeFor, type Home, type Permission } from "@sabai/domain";
+import { memberByPin } from "@/lib/demo/engine";
+import { isDomainError, useSabai } from "@/lib/demo/store";
+
+/** Shared device: the next person taps their 4-digit PIN and lands on their own screen. */
+export function SwitchUserDialog() {
+  const open = useUi((s) => s.switchUserOpen);
+  const setOpen = useUi((s) => s.setSwitchUserOpen);
+  const db = useSabai((s) => s.db);
+  const signIn = useSabai((s) => s.signIn);
+  const branchId = useSabai((s) => s.session.branchId) ?? db.branches[0]?.id ?? "";
+  const router = useRouter();
+  const [pin, setPin] = useState("");
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (open) {
+      setPin("");
+      setError(null);
+    }
+  }, [open]);
+
+  const submit = (value: string) => {
+    try {
+      const m = memberByPin(db, value, branchId);
+      const role = db.roles.find((r) => r.key === m.roleKey)!;
+      signIn(m.id, branchId);
+      setOpen(false);
+      toast.success(`สวัสดี ${m.name}`, { description: `เข้าใช้งานในตำแหน่ง ${role.name}` });
+      router.push(homeFor(accessFromRole({ grantsAll: role.grantsAll, permissions: role.permissions as Permission[] }), role.home as Home));
+    } catch (e) {
+      setError(humanizeError(isDomainError(e) ? e.code : "INTERNAL").message);
+      setPin("");
+    }
+  };
+
+  const onKey = (k: string) => {
+    if (pin.length >= 4) return;
+    const next = pin + k;
+    setError(null);
+    setPin(next);
+    if (next.length === 4) setTimeout(() => submit(next), 120);
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={setOpen} title="สลับผู้ใช้" description="ใส่ PIN 4 หลักของคุณ" size="sm">
+      <div className="space-y-5 pb-2">
+        <PinDots length={4} filled={pin.length} error={!!error} />
+        <p className={error ? "text-center text-sm text-danger" : "sr-only"} role={error ? "alert" : undefined}>
+          {error}
+        </p>
+        <Keypad onKey={onKey} onBackspace={() => setPin((p) => p.slice(0, -1))} onClear={() => setPin("")} size="lg" />
+      </div>
+    </Dialog>
+  );
+}

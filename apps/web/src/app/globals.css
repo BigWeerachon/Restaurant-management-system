@@ -1,0 +1,310 @@
+@import "tailwindcss";
+@import "@fontsource/ibm-plex-sans-thai/400.css";
+@import "@fontsource/ibm-plex-sans-thai/500.css";
+@import "@fontsource/ibm-plex-sans-thai/600.css";
+@import "@fontsource/ibm-plex-sans-thai/700.css";
+
+/* =============================================================================
+   Sabai design tokens
+   – Semantic tokens only; components never use raw hex.
+   – Light is the default; dark is its own selected set (not an inversion).
+   – The kitchen display (.kds) always runs dark + high contrast.
+   ========================================================================== */
+
+:root {
+  color-scheme: light;
+
+  /* Surfaces — warm "rice paper" neutrals, calmer than pure white */
+  --bg: #f6f5f1;
+  --surface: #fdfcfa;
+  --surface-2: #f1efe9;
+  --surface-3: #e8e5dd;
+  --overlay: rgb(28 27 25 / 0.42);
+
+  /* Ink */
+  --ink: #1c1b19;
+  --ink-2: #4f4d47;
+  --ink-3: #6b6861;
+  --ink-inverse: #fdfcfa;
+
+  /* Lines */
+  --line: #e4e1d8;
+  --line-strong: #cfcbc0;
+
+  /* Brand — "pandan" green (ใบเตย) */
+  --brand: #13784f;
+  --brand-hover: #0f6443;
+  --brand-ink: #ffffff;
+  --brand-soft: #e3f4ea;
+  --brand-soft-ink: #0f5a3d;
+  --brand-glow: rgb(19 120 79 / 0.22);
+
+  /* Accent — saffron, for highlights and celebration only */
+  --accent: #f2a516;
+  --accent-soft: #fdf0d3;
+  --accent-ink: #7a4d00;
+
+  /* Status (always paired with an icon + words) */
+  --success: #12703a;
+  --success-soft: #e2f5e8;
+  --warning: #9c4406;
+  --warning-fill: #f59e0b;
+  --warning-soft: #fdf1dc;
+  --danger: #c0262d;
+  --danger-fill: #e0474c;
+  --danger-soft: #fce8e8;
+  --info: #1d5fc4;
+  --info-soft: #e5eefc;
+
+  --ring: #1d5fc4;
+
+  /* Data viz (validated palette slots; see docs/02-ux-principles.md) */
+  --viz-surface: #fdfcfa;
+  --viz-grid: #e8e5dd;
+  --viz-axis: #c3c0b6;
+  --series-1: #2a78d6;
+  --series-2: #eb6834;
+  --series-3: #1baf7a;
+  --series-neg: #e34948;
+
+  /* Elevation */
+  --shadow-xs: 0 1px 1px rgb(28 27 25 / 0.04);
+  --shadow-sm: 0 1px 2px rgb(28 27 25 / 0.06), 0 1px 1px rgb(28 27 25 / 0.04);
+  --shadow-md: 0 6px 16px -4px rgb(28 27 25 / 0.1), 0 2px 4px -2px rgb(28 27 25 / 0.06);
+  --shadow-lg: 0 24px 48px -16px rgb(28 27 25 / 0.22), 0 6px 16px -6px rgb(28 27 25 / 0.1);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --bg: #11110f;
+    --surface: #1a1a18;
+    --surface-2: #232320;
+    --surface-3: #2d2c29;
+    --overlay: rgb(0 0 0 / 0.6);
+    --ink: #f4f3ee;
+    --ink-2: #c9c7be;
+    --ink-3: #a09d94;
+    --ink-inverse: #1a1a18;
+    --line: #2f2e2a;
+    --line-strong: #43423d;
+    --brand: #3fbf87;
+    --brand-hover: #5dcd9b;
+    --brand-ink: #06231a;
+    --brand-soft: #16362a;
+    --brand-soft-ink: #9be3c1;
+    --brand-glow: rgb(63 191 135 / 0.25);
+    --accent: #f6b73c;
+    --accent-soft: #3a2c10;
+    --accent-ink: #fcd98a;
+    --success: #4ade80;
+    --success-soft: #133222;
+    --warning: #fbbf24;
+    --warning-fill: #f59e0b;
+    --warning-soft: #362a0f;
+    --danger: #f87171;
+    --danger-fill: #ef4444;
+    --danger-soft: #3a1618;
+    --info: #7aa7f5;
+    --info-soft: #172642;
+    --ring: #7aa7f5;
+    --viz-surface: #1a1a18;
+    --viz-grid: #2c2c2a;
+    --viz-axis: #43423d;
+    --series-1: #3987e5;
+    --series-2: #d95926;
+    --series-3: #199e70;
+    --series-neg: #e66767;
+    --shadow-xs: 0 1px 1px rgb(0 0 0 / 0.3);
+    --shadow-sm: 0 1px 2px rgb(0 0 0 / 0.4);
+    --shadow-md: 0 8px 20px -6px rgb(0 0 0 / 0.55);
+    --shadow-lg: 0 24px 56px -16px rgb(0 0 0 / 0.7);
+  }
+}
+
+:root[data-theme="dark"],
+.kds {
+  color-scheme: dark;
+  --bg: #11110f;
+  --surface: #1a1a18;
+  --surface-2: #232320;
+  --surface-3: #2d2c29;
+  --overlay: rgb(0 0 0 / 0.6);
+  --ink: #f4f3ee;
+  --ink-2: #c9c7be;
+  --ink-3: #a09d94;
+  --ink-inverse: #1a1a18;
+  --line: #2f2e2a;
+  --line-strong: #43423d;
+  --brand: #3fbf87;
+  --brand-hover: #5dcd9b;
+  --brand-ink: #06231a;
+  --brand-soft: #16362a;
+  --brand-soft-ink: #9be3c1;
+  --brand-glow: rgb(63 191 135 / 0.25);
+  --accent: #f6b73c;
+  --accent-soft: #3a2c10;
+  --accent-ink: #fcd98a;
+  --success: #4ade80;
+  --success-soft: #133222;
+  --warning: #fbbf24;
+  --warning-fill: #f59e0b;
+  --warning-soft: #362a0f;
+  --danger: #f87171;
+  --danger-fill: #ef4444;
+  --danger-soft: #3a1618;
+  --info: #7aa7f5;
+  --info-soft: #172642;
+  --ring: #7aa7f5;
+  --viz-surface: #1a1a18;
+  --viz-grid: #2c2c2a;
+  --viz-axis: #43423d;
+  --series-1: #3987e5;
+  --series-2: #d95926;
+  --series-3: #199e70;
+  --series-neg: #e66767;
+  --shadow-xs: 0 1px 1px rgb(0 0 0 / 0.3);
+  --shadow-sm: 0 1px 2px rgb(0 0 0 / 0.4);
+  --shadow-md: 0 8px 20px -6px rgb(0 0 0 / 0.55);
+  --shadow-lg: 0 24px 56px -16px rgb(0 0 0 / 0.7);
+}
+
+@theme inline {
+  --font-sans: "IBM Plex Sans Thai", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-surface-3: var(--surface-3);
+  --color-overlay: var(--overlay);
+  --color-ink: var(--ink);
+  --color-ink-2: var(--ink-2);
+  --color-ink-3: var(--ink-3);
+  --color-ink-inverse: var(--ink-inverse);
+  --color-line: var(--line);
+  --color-line-strong: var(--line-strong);
+  --color-brand: var(--brand);
+  --color-brand-hover: var(--brand-hover);
+  --color-brand-ink: var(--brand-ink);
+  --color-brand-soft: var(--brand-soft);
+  --color-brand-soft-ink: var(--brand-soft-ink);
+  --color-accent: var(--accent);
+  --color-accent-soft: var(--accent-soft);
+  --color-accent-ink: var(--accent-ink);
+  --color-success: var(--success);
+  --color-success-soft: var(--success-soft);
+  --color-warning: var(--warning);
+  --color-warning-fill: var(--warning-fill);
+  --color-warning-soft: var(--warning-soft);
+  --color-danger: var(--danger);
+  --color-danger-fill: var(--danger-fill);
+  --color-danger-soft: var(--danger-soft);
+  --color-info: var(--info);
+  --color-info-soft: var(--info-soft);
+  --color-ring: var(--ring);
+  --color-series-1: var(--series-1);
+  --color-series-2: var(--series-2);
+  --color-series-3: var(--series-3);
+  --color-series-neg: var(--series-neg);
+
+  --shadow-xs: var(--shadow-xs);
+  --shadow-sm: var(--shadow-sm);
+  --shadow-md: var(--shadow-md);
+  --shadow-lg: var(--shadow-lg);
+
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-xl: 20px;
+  --radius-2xl: 28px;
+
+  --ease-out-soft: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+
+  --animate-shimmer: shimmer 1.6s linear infinite;
+  --animate-pulse-soft: pulse-soft 1.8s ease-in-out infinite;
+  --animate-fade-in: fade-in 240ms var(--ease-out-soft) both;
+}
+
+@keyframes shimmer {
+  from { background-position: -200% 0; }
+  to { background-position: 200% 0; }
+}
+@keyframes pulse-soft {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.55; }
+}
+@keyframes fade-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: none; }
+}
+
+@layer base {
+  html {
+    -webkit-text-size-adjust: 100%;
+    text-rendering: optimizeLegibility;
+  }
+  body {
+    background: var(--bg);
+    color: var(--ink);
+    font-family: var(--font-sans);
+    font-size: 15px;
+    line-height: 1.55;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    -webkit-tap-highlight-color: transparent;
+  }
+  /* Thai stacks tone marks above letters — give headings room. */
+  h1, h2, h3, h4 {
+    line-height: 1.3;
+    letter-spacing: -0.005em;
+    text-wrap: balance;
+  }
+  p { text-wrap: pretty; }
+  button, [role="button"], a { touch-action: manipulation; }
+  :focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+    border-radius: 6px;
+  }
+  ::selection { background: var(--brand-soft); color: var(--brand-soft-ink); }
+  input[type="number"]::-webkit-inner-spin-button,
+  input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+  input[type="number"] { -moz-appearance: textfield; }
+}
+
+@layer utilities {
+  .tabular { font-variant-numeric: tabular-nums; }
+  .scrollbar-thin { scrollbar-width: thin; scrollbar-color: var(--line-strong) transparent; }
+  .no-scrollbar { scrollbar-width: none; }
+  .no-scrollbar::-webkit-scrollbar { display: none; }
+  .safe-bottom { padding-bottom: max(env(safe-area-inset-bottom), 0px); }
+  .text-balance { text-wrap: balance; }
+  .bg-grain {
+    background-image: radial-gradient(ellipse at top left, var(--brand-soft), transparent 55%),
+      radial-gradient(ellipse at bottom right, var(--accent-soft), transparent 50%);
+  }
+  .skeleton {
+    background: linear-gradient(90deg, var(--surface-2) 25%, var(--surface-3) 37%, var(--surface-2) 63%);
+    background-size: 400% 100%;
+    animation: var(--animate-shimmer);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 1ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 1ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+@media (forced-colors: active) {
+  .status-dot { forced-color-adjust: none; border: 1px solid CanvasText; }
+}
+
+@media print {
+  body { background: white; }
+  .no-print { display: none !important; }
+}
