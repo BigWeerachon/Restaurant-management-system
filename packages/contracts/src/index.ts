@@ -67,6 +67,67 @@ export const PinSwitchBody = z.object({
   pin: z.string().regex(/^\d{4,6}$/, "PIN เป็นตัวเลข 4–6 หลัก"),
 });
 
+// ---------------------------------------------------------------------------
+// Settings
+// ---------------------------------------------------------------------------
+export const UpdateTenantBody = z
+  .object({
+    name: Name.optional(),
+    businessType: z.enum(["cafe", "restaurant", "bar", "bakery", "cloud_kitchen", "food_truck", "buffet", "other"]).optional(),
+    vatRegistered: z.boolean().optional(),
+    pricesIncludeVat: z.boolean().optional(),
+    vatRate: z.number().min(0).max(1).optional(),
+    cashRounding: z.enum(["none", "0.25", "1.00"]).optional(),
+  })
+  .refine((b) => Object.keys(b).length > 0, { message: "ไม่มีอะไรให้แก้ไข" });
+
+export const CreateBranchBody = z.object({
+  code: z.string().regex(/^[A-Za-z0-9]{2,8}$/, "รหัสสาขา 2–8 ตัวอักษร/ตัวเลข"),
+  name: Name,
+  kind: z.enum(["outlet", "central_kitchen", "warehouse"]).default("outlet"),
+  address: z.string().max(200).optional(),
+  phone: z.string().max(20).optional(),
+  dayCutoff: z.string().regex(/^\d{2}:\d{2}$/).optional(),
+  serviceChargeRate: z.number().min(0).max(0.3).optional(),
+});
+
+export const UpdateBranchBody = z
+  .object({
+    name: Name.optional(),
+    address: z.string().max(200).optional(),
+    phone: z.string().max(20).optional(),
+    dayCutoff: z.string().regex(/^\d{2}:\d{2}$/).optional(),
+    serviceChargeRate: z.number().min(0).max(0.3).optional(),
+    isActive: z.boolean().optional(),
+  })
+  .refine((b) => Object.keys(b).length > 0, { message: "ไม่มีอะไรให้แก้ไข" });
+
+export const UpdateChannelBody = z
+  .object({
+    name: Name.optional(),
+    color: z.string().max(20).optional(),
+    active: z.boolean().optional(),
+    appliesServiceCharge: z.boolean().optional(),
+  })
+  .refine((b) => Object.keys(b).length > 0, { message: "ไม่มีอะไรให้แก้ไข" });
+
+export const SetChannelCommissionBody = z.object({
+  rate: z.number().min(0).max(1),
+  validFrom: IsoDate,
+  note: z.string().max(200).optional(),
+});
+
+export const UpdatePaymentMethodBody = z
+  .object({
+    name: Name.optional(),
+    active: z.boolean().optional(),
+    feeRate: z.number().min(0).max(0.2).optional(),
+    promptpayId: z.string().max(20).optional(),
+  })
+  .refine((b) => Object.keys(b).length > 0, { message: "ไม่มีอะไรให้แก้ไข" });
+
+export const ChangePlanBody = z.object({ planCode: z.enum(["free", "starter", "pro", "business", "enterprise"]) });
+
 export const ApprovalBody = z.object({
   branchId: Id,
   permission: z.enum(["pos.discount", "pos.void", "pos.refund"]),

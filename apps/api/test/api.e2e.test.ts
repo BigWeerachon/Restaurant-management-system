@@ -532,3 +532,68 @@ describe("closing the day and reading the numbers", () => {
     expect(types).toContain("finance.day_closed");
   });
 });
+
+describe("settings", () => {
+  it("edits the shop's own tax and rounding settings", async () => {
+    const r = await s.call("PATCH", "/v1/tenant", { cashRounding: "1.00", vatRate: 0.07 });
+    expect(r.status).toBe(200);
+    const [tenant] = await ctx.sql<{ cash_rounding: string }[]>`select cash_rounding from app.tenants where id = ${s.tenantId}`;
+    expect(tenant!.cash_rounding).toBe("1.00");
+
+    const empty = await s.call("PATCH", "/v1/tenant", {});
+    expect(empty.status).toBe(422);
+  });
+
+  it("adds a second branch and edits an existing one", async () => {
+    const created = await s.call("POST", "/v1/branches", { code: "TL2", name: "สาขาทองหล่อ 2" });
+    expect(created.status).toBe(201);
+
+    const edited = await s.call("PATCH", `/v1/branches/${s.branchId}`, { phone: "021234567", serviceChargeRate: 0.1 });
+    expect(edited.status).toBe(200);
+    const [branch] = await ctx.sql<{ phone: string; service_charge_rate: string }[]>`select phone, service_charge_rate from app.branches where id = ${s.branchId}`;
+    expect(branch!.phone).toBe("021234567");
+    expect(Number(branch!.service_charge_rate)).toBe(0.1);
+  });
+
+  it("edits a sales channel and sets a new GP that only applies from a future date", async () => {
+    const [channel] = s.channels.filter((c: any) => c.kind === "delivery_platform" || c.kind === "takeaway");
+    const edited = await s.call("PATCH", `/v1/channels/${channel.id}`, { appliesServiceCharge: true });
+    expect(edited.status).toBe(200);
+
+    const rate = await s.call("POST", `/v1/channels/${channel.id}/commission-rate`, { rate: 0.28, validFrom: "2026-12-01", note: "เจรจาสัญญาใหม่" });
+    expect(rate.status).toBe(200);
+    const rows = await ctx.sql<{ rate: string; valid_from: string; valid_to: string | null }[]>`
+      select rate, valid_from::text, valid_to::text from app.channel_commission_rates where channel_id = ${channel.id} order by valid_from`;
+    expect(rows.at(-1)).toMatchObject({ rate: "0.2800", valid_from: "2026-12-01", valid_to: null });
+  });
+
+  it("lets a shop confirm cash-only instead of setting up PromptPay", async () => {
+    const before = await s.call("GET", "/v1/onboarding");
+    expect(before.json.steps.find((x: any) => x.key === "payments").status).not.toBe("done");
+
+    const r = await s.call("POST", "/v1/settings/payments/confirm-cash-only");
+    expect(r.status).toBe(200);
+    const after = await s.call("GET", "/v1/onboarding");
+    expect(after.json.steps.find((x: any) => x.key === "payments").status).toBe("done");
+  });
+
+  it("edits a payment method's PromptPay number and fee", async () => {
+    const [pm] = await ctx.sql<{ id: string }[]>`select id from app.payment_methods where tenant_id = ${s.tenantId} and kind = 'promptpay'`;
+    const r = await s.call("PATCH", `/v1/payment-methods/${pm!.id}`, { active: true, promptpayId: "0891234567", feeRate: 0 });
+    expect(r.status).toBe(200);
+    const [row] = await ctx.sql<{ is_active: boolean; config: { promptpay_id?: string } }[]>`select is_active, config from app.payment_methods where id = ${pm!.id}`;
+    expect(row!.is_active).toBe(true);
+    expect(row!.config.promptpay_id).toBe("0891234567");
+  });
+
+  it("changes the shop's plan", async () => {
+    const r = await s.call("POST", "/v1/settings/plan", { planCode: "business" });
+    expect(r.status).toBe(200);
+    expect(r.json.planCode).toBe("business");
+    const [sub] = await ctx.sql<{ plan_code: string }[]>`select plan_code from app.subscriptions where tenant_id = ${s.tenantId}`;
+    expect(sub!.plan_code).toBe("business");
+
+    const bad = await s.call("POST", "/v1/settings/plan", { planCode: "not_a_real_plan" });
+    expect(bad.status).toBe(422);
+  });
+});

@@ -13,6 +13,7 @@ import { registerInventory } from "./routes/inventory";
 import { registerKitchen } from "./routes/kitchen";
 import { registerPos } from "./routes/pos";
 import { registerReports } from "./routes/reports";
+import { registerSettings } from "./routes/settings";
 import { registerShop } from "./routes/shop";
 
 /**
@@ -91,6 +92,7 @@ export function createApp(deps: Deps): Hono<Env> {
   registerInventory(app, deps);
   registerFinance(app, deps);
   registerReports(app, deps);
+  registerSettings(app, deps);
 
   app.get("/v1/openapi.json", (c) => c.json(openApiDocument()));
 
