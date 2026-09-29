@@ -53,6 +53,7 @@ export type Slice =
   | "orders"
   | "tickets"
   | "stock"
+  | "counts"
   | "shifts"
   | "availability"
   | "purchasing"

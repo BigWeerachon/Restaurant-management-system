@@ -11,7 +11,7 @@ const json = (status: number, body: unknown) => new Response(JSON.stringify(body
 function shop(members: ShopApiResponse["members"]): ShopApiResponse {
   return {
     tenant: { name: "ร้านทดสอบ", businessType: "cafe", vatRegistered: false, pricesIncludeVat: true, vatRate: 0.07, cashRounding: "none", planCode: "free", trialEndsAt: null, settings: null },
-    branches: [{ id: "br-1", code: "A", name: "อารีย์", address: null, phone: null, day_cutoff: "04:00:00", service_charge_rate: 0, tables: [], stations: [] }],
+    branches: [{ id: "br-1", code: "A", name: "อารีย์", address: null, phone: null, day_cutoff: "04:00:00", service_charge_rate: 0, stock_location_id: "loc-1", tables: [], stations: [] }],
     channels: [],
     paymentMethods: [],
     suppliers: [],

@@ -190,7 +190,14 @@ export const CreateIngredientBody = z.object({
   /** Cost per base unit used until the first purchase is recorded. */
   standardCost: z.number().nonnegative().optional(),
   storageZone: z.string().max(40).optional(),
-});
+  /** Category by name: an existing one is reused, a new name creates it (like menu categories). */
+  categoryName: z.string().trim().min(1).max(60).optional(),
+  /** How it is usually bought. Remembered as the supplier's pack when a supplier is given. */
+  pack: z.object({ name: z.string().max(40), qty: Qty, price: Money.refine((v) => v >= 0, "ราคาต้องไม่ติดลบ"), supplierId: Id.optional() }).optional(),
+  /** Stock already on the shelf, recorded as an opening movement in this branch's default location. */
+  openingQty: Qty.optional(),
+  branchId: Id.optional(),
+}).refine((b) => b.openingQty === undefined || b.branchId !== undefined, { message: "ระบุสาขาที่นับของเปิดยอด", path: ["branchId"] });
 
 export const CreateMenuItemBody = z.object({
   categoryId: Id.optional(),

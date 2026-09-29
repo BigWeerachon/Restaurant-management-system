@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { orderApi, ticketApi } from "./fixtures";
-import { mapClosedShift, mapCurrentShift, mapOrder, mapTicket } from "./live-mappers";
+import { mapBalances, mapClosedShift, mapCount, mapCurrentShift, mapMovement, mapOrder, mapTicket } from "./live-mappers";
 
 const menu = [{ id: "mi-latte", emoji: "🥤" }];
 
@@ -90,5 +90,49 @@ describe("shifts", () => {
     );
     expect(s).toMatchObject({ status: "closed", countedCash: 319000, expectedCash: 320000, variance: -1000, openedBy: "", closedAt: "2026-09-28T14:00:00.000Z" });
     expect(s.cashMoves).toEqual([]);
+  });
+});
+
+describe("stock", () => {
+  it("keys balances by branch and ingredient, with the average cost in baht per base unit", () => {
+    expect(
+      mapBalances(
+        [
+          { ingredient_id: "ing-1", qty_on_hand: 2500, unit_cost: 0.032 },
+          // A person who may not see costs gets no unit_cost: it must not become a made-up price.
+          { ingredient_id: "ing-2", qty_on_hand: -30 },
+        ],
+        "br-1",
+      ),
+    ).toEqual({ "br-1:ing-1": { qty: 2500, avgCost: 0.032 }, "br-1:ing-2": { qty: -30, avgCost: 0 } });
+  });
+
+  it("maps a movement with its own cost per unit and the reason code, if any", () => {
+    const m = mapMovement({ id: "mv-1", ingredient_id: "ing-1", qty: -120, unit_cost: 0.025, reason: "waste", reason_code: "spoiled", business_date: "2026-09-29", occurred_at: "2026-09-29T03:00:00.000Z", note: null, created_by: "m-1" }, "br-1");
+    expect(m).toEqual({ id: "mv-1", branchId: "br-1", ingredientId: "ing-1", qty: -120, unitCost: 0.025, reason: "waste", reasonCode: "spoiled", at: "2026-09-29T03:00:00.000Z", by: "m-1", businessDate: "2026-09-29", note: undefined });
+  });
+});
+
+describe("mapCount", () => {
+  const row = { id: "c-1", status: "in_progress" as const, started_at: "2026-09-29T02:00:00.000Z", submitted_at: null, approved_at: null };
+
+  it("keeps expected quantities out of a blind count that is still being counted", () => {
+    const c = mapCount({ id: "c-1", countNo: "CNT-0007", status: "in_progress", blind: true, lines: [{ ingredientId: "ing-1", counted: null }, { ingredientId: "ing-2", counted: 900 }] }, row, "br-1");
+    expect(c).toMatchObject({ id: "c-1", branchId: "br-1", countNo: "CNT-0007", status: "in_progress", blind: true, startedAt: row.started_at });
+    expect(c.lines).toEqual([
+      { ingredientId: "ing-1", counted: null, expected: undefined, unitCost: undefined },
+      { ingredientId: "ing-2", counted: 900, expected: undefined, unitCost: undefined },
+    ]);
+  });
+
+  it("carries expected quantities and costs once the count is submitted, and its times", () => {
+    const c = mapCount(
+      { id: "c-1", countNo: "CNT-0007", status: "submitted", blind: true, lines: [{ ingredientId: "ing-1", counted: 800, expected: 1000, unitCost: 0.03 }] },
+      { ...row, status: "submitted", submitted_at: "2026-09-29T03:00:00.000Z" },
+      "br-1",
+    );
+    expect(c.status).toBe("submitted");
+    expect(c.submittedAt).toBe("2026-09-29T03:00:00.000Z");
+    expect(c.lines[0]).toEqual({ ingredientId: "ing-1", counted: 800, expected: 1000, unitCost: 0.03 });
   });
 });

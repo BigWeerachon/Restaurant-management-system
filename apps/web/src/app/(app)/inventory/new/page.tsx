@@ -9,9 +9,8 @@ import { PageHeader } from "@/components/app/page-header";
 import { Button, LinkButton } from "@/components/ui/button";
 import { Stepper, SuccessCheck } from "@/components/ui/feedback";
 import { Card, Field, Input, Select } from "@/components/ui/primitives";
-import { useAction } from "@/hooks/use-sabai";
+import { useDsAction } from "@/hooks/use-data-source";
 import { cn } from "@/lib/cn";
-import { addIngredient } from "@/lib/demo/engine";
 import { useSabai } from "@/lib/demo/store";
 
 const EMOJI: [RegExp, string][] = [
@@ -30,7 +29,7 @@ const KINDS = [
 
 export default function NewIngredientPage() {
   const db = useSabai((s) => s.db);
-  const { exec, pending } = useAction();
+  const { exec, pending } = useDsAction();
   const [step, setStep] = useState(0);
   const [name, setName] = useState("");
   const [base, setBase] = useState<"g" | "ml" | "pcs">("g");
@@ -70,8 +69,8 @@ export default function NewIngredientPage() {
   };
 
   const save = async () => {
-    const r = await exec((d, c) =>
-      addIngredient(d, c, {
+    const r = await exec((ds) =>
+      ds.addIngredient({
         name,
         emoji,
         baseUnit: base,

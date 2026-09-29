@@ -5,13 +5,14 @@ import { ArrowLeft, ArrowRight, CheckCircle2, ClipboardCheck, EyeOff, SkipForwar
 import { AnimatePresence, motion } from "motion/react";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
+import { LoadBanner } from "@/components/app/load-banner";
 import { PageHeader } from "@/components/app/page-header";
 import { Button, LinkButton } from "@/components/ui/button";
 import { EmptyState, Keypad, ProgressBar } from "@/components/ui/feedback";
 import { Badge, Callout, Card, Segmented } from "@/components/ui/primitives";
-import { useAccess, useAction } from "@/hooks/use-sabai";
+import { useDsAction, useLoad } from "@/hooks/use-data-source";
+import { useAccess } from "@/hooks/use-sabai";
 import { cn } from "@/lib/cn";
-import { approveCount, recordCount, startCount, submitCount } from "@/lib/demo/engine";
 import { formatBaht } from "@/lib/demo/selectors";
 import { useSabai } from "@/lib/demo/store";
 
@@ -22,7 +23,8 @@ import { useSabai } from "@/lib/demo/store";
 export default function CountPage() {
   const db = useSabai((s) => s.db);
   const { branch, can } = useAccess();
-  const { exec, pending } = useAction();
+  const { exec, pending } = useDsAction();
+  const load = useLoad(["counts"]);
   const count = db.counts.find((c) => c.branchId === branch.id && c.status !== "approved");
   const [idx, setIdx] = useState(0);
   const [value, setValue] = useState("");
@@ -53,7 +55,7 @@ export default function CountPage() {
   const save = async (advance: boolean, skip = false) => {
     if (!count || !line || !ing) return;
     const qty = skip || value === "" ? null : toBase(Number(value), unit);
-    const r = await exec((d, c) => recordCount(d, c, count.id, line.ingredientId, qty));
+    const r = await exec((ds) => ds.recordCount(count.id, line.ingredientId, qty));
     if (r.ok && advance) {
       setIdx((i) => Math.min(i + 1, lines.length - 1));
     }
@@ -63,13 +65,14 @@ export default function CountPage() {
     return (
       <div className="mx-auto max-w-2xl">
         <PageHeader eyebrow={<Link href="/inventory" className="inline-flex items-center gap-1 hover:text-ink"><ArrowLeft className="h-4 w-4" /> สต็อก</Link>} title="นับสต็อก" />
+        <LoadBanner state={load} className="mb-4" />
         <Card>
           <EmptyState
             emoji="📋"
             title="พร้อมนับสต็อกหรือยัง?"
             description="ระบบจะเรียงรายการตามชั้นวาง นับทีละรายการ ไม่ต้องจดใส่กระดาษ ถ้าพักกลางทางก็กลับมานับต่อได้"
             action={
-              <Button size="lg" icon={<ClipboardCheck className="h-5 w-5" />} loading={pending} onClick={() => exec((d, c) => startCount(d, c))}>
+              <Button size="lg" icon={<ClipboardCheck className="h-5 w-5" />} loading={pending} onClick={() => exec((ds) => ds.startCount())}>
                 เริ่มนับ ({db.ingredients.filter((i) => i.trackStock).length} รายการ)
               </Button>
             }
@@ -88,6 +91,7 @@ export default function CountPage() {
     return (
       <div className="mx-auto max-w-3xl">
         <PageHeader title={`ผลการนับ ${count.countNo}`} description="ส่วนต่าง = ที่นับได้ − ที่ระบบคาด (ขาย รับของ ของเสีย ที่บันทึกไว้)" />
+        <LoadBanner state={load} className="mb-4" />
         {summary && (
           <div className="mb-4 grid gap-3 sm:grid-cols-3">
             <Card className="p-4">
@@ -125,7 +129,7 @@ export default function CountPage() {
           </Card>
         )}
         {can("inventory.adjust") ? (
-          <Button size="lg" loading={pending} onClick={() => exec((d, c) => approveCount(d, c, count.id), { success: "ปรับยอดสต็อกตามที่นับแล้ว", successDetail: "ส่วนต่างถูกบันทึกเป็น “ของหายจากการนับ” ในรายงานเงินเหลือจริง" })}>
+          <Button size="lg" loading={pending} onClick={() => exec((ds) => ds.approveCount(count.id), { success: "ปรับยอดสต็อกตามที่นับแล้ว", successDetail: "ส่วนต่างถูกบันทึกเป็น “ของหายจากการนับ” ในรายงานเงินเหลือจริง" })}>
             อนุมัติและปรับยอดสต็อก
           </Button>
         ) : (
@@ -144,6 +148,7 @@ export default function CountPage() {
         description="นับทีละรายการตามชั้นวาง ระบบบันทึกให้ทุกครั้งที่กดถัดไป"
         actions={<Badge tone="info" icon={<EyeOff className="h-3.5 w-3.5" aria-hidden="true" />}>นับแบบไม่เห็นยอดระบบ</Badge>}
       />
+      <LoadBanner state={load} className="mb-4" />
       <div className="mb-4 flex items-center gap-3">
         <ProgressBar value={(counted / Math.max(lines.length, 1)) * 100} label="ความคืบหน้าการนับ" />
         <span className="shrink-0 text-sm tabular text-ink-3">
@@ -203,7 +208,7 @@ export default function CountPage() {
       )}
       <div className="mt-6 flex flex-wrap items-center justify-between gap-3">
         <p className="text-sm text-ink-3">ยังไม่ได้นับ {lines.length - counted} รายการ — รายการที่ไม่นับจะไม่ถูกปรับยอด (ไม่ถือว่าเป็นศูนย์)</p>
-        <Button variant={counted === lines.length ? "primary" : "secondary"} disabled={counted === 0} loading={pending} onClick={() => exec((d, c) => submitCount(d, c, count.id), { success: "ส่งผลการนับแล้ว" })}>
+        <Button variant={counted === lines.length ? "primary" : "secondary"} disabled={counted === 0} loading={pending} onClick={() => exec((ds) => ds.submitCount(count.id), { success: "ส่งผลการนับแล้ว" })}>
           ส่งผลการนับ
         </Button>
       </div>

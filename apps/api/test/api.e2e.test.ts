@@ -228,6 +228,8 @@ describe("a café's first day, through the API", () => {
     expect(r.json.branches.map((b: any) => b.id)).toContain(s.branchId);
     const branch = r.json.branches.find((b: any) => b.id === s.branchId);
     expect(branch.stations.length).toBeGreaterThan(0);
+    // Where waste, counts and opening stock are recorded — the client can't guess a location id.
+    expect(branch.stock_location_id).toBeTruthy();
     expect(r.json.ingredients.map((i: any) => i.name)).toEqual(expect.arrayContaining(["เมล็ดกาแฟ", "นมสด"]));
     const latte = r.json.menuItems.find((i: any) => i.id === s.latte);
     expect(latte.price).toBe("65.00");
@@ -273,6 +275,8 @@ describe("a café's first day, through the API", () => {
     const movements = await s.call("GET", `/v1/stock-movements?branchId=${s.branchId}&ingredientId=${s.coffee}`);
     expect(movements.json).toHaveLength(1);
     expect(movements.json[0]).toMatchObject({ reason: "purchase", qty: 2000 });
+    // Who recorded it is part of the answer (the movements list shows names, not "the system").
+    expect(movements.json[0].created_by).toEqual(expect.any(String));
   });
 
   it("orders from a supplier and lists purchase orders by status", async () => {
@@ -306,6 +310,45 @@ describe("a café's first day, through the API", () => {
     const counts = await s.call("GET", `/v1/stock-counts?branchId=${s.branchId}`);
     expect(counts.json.map((x: any) => x.id)).toContain(count.json.id);
     expect(counts.json.find((x: any) => x.id === count.json.id).status).toBe("in_progress");
+  });
+
+  it("adds an ingredient with its category, usual pack and opening stock in one step", async () => {
+    const before = await s.call("GET", "/v1/shop");
+    const supplier = before.json.suppliers[0];
+    const r = await s.call("POST", "/v1/ingredients", {
+      name: "น้ำตาลทราย",
+      baseUnit: "g",
+      displayUnit: "kg",
+      categoryName: "ของแห้ง",
+      pack: { name: "ถุง 1 กก.", qty: 1000, price: 25, supplierId: supplier.id },
+      reorderPoint: 500,
+      openingQty: 3000,
+      branchId: s.branchId,
+    });
+    expect(r.status).toBe(201);
+
+    const after = await s.call("GET", "/v1/shop");
+    // The pack's price becomes the cost per gram until the first purchase: ฿25 / 1000 g.
+    expect(after.json.ingredients.find((i: any) => i.id === r.json.id)).toMatchObject({ category: "ของแห้ง", standard_cost: 0.025 });
+    expect(after.json.suppliers.find((x: any) => x.id === supplier.id).items).toEqual(
+      expect.arrayContaining([{ ingredientId: r.json.id, packName: "ถุง 1 กก.", packQty: 1000, lastPrice: "25.00", isPreferred: true }]),
+    );
+    const stock = await s.call("GET", `/v1/stock?branchId=${s.branchId}`);
+    expect(stock.json.find((x: any) => x.ingredient_id === r.json.id).qty_on_hand).toBe(3000);
+    const moves = await s.call("GET", `/v1/stock-movements?branchId=${s.branchId}&ingredientId=${r.json.id}`);
+    expect(moves.json).toHaveLength(1);
+    expect(moves.json[0]).toMatchObject({ reason: "opening", qty: 3000, unit_cost: 0.025 });
+
+    // The same category name is reused, not duplicated.
+    const again = await s.call("POST", "/v1/ingredients", { name: "แป้งสาลี", baseUnit: "g", categoryName: "ของแห้ง" });
+    expect(again.status).toBe(201);
+    const cats = await ctx.sql<{ n: number }[]>`select count(*)::int as n from app.ingredient_categories where tenant_id = ${s.tenantId} and name = 'ของแห้ง'`;
+    expect(cats[0]!.n).toBe(1);
+
+    // Opening stock has to say which branch it is in.
+    const bad = await s.call("POST", "/v1/ingredients", { name: "เกลือ", baseUnit: "g", openingQty: 10 });
+    expect(bad.status).toBe(422);
+    expect(bad.json.error.fields.branchId).toBeTruthy();
   });
 
   it("asks to open a shift before taking cash, with a smart default float", async () => {

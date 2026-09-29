@@ -8,25 +8,13 @@ import { DomainError } from "../demo/engine";
 import { useSabai } from "../demo/store";
 import type { Member } from "../demo/types";
 import { apiFetch, clearApiSession, setApiSession } from "./http-client";
-import { loadSlices } from "./http-context";
+import { loadShop, loadSlices } from "./http-context";
 import { kdsCommands } from "./http-kds";
 import { posCommands } from "./http-pos";
-import { mapShopBootstrap, type ShopApiResponse } from "./mappers";
+import { stockCommands } from "./http-stock";
 import type { DataSource, Slice } from "./types";
 
-/**
- * Fetches `GET /v1/shop` into the shared store. `reset` starts from an empty
- * shop first (and signs everyone out) — used when connecting; a plain refresh
- * keeps the signed-in person and whatever live data has been loaded.
- */
-export async function loadShop(opts: { reset: boolean }): Promise<void> {
-  const boot = mapShopBootstrap(await apiFetch<ShopApiResponse>("/v1/shop"));
-  const store = useSabai.getState();
-  if (opts.reset) store.reset("fresh", boot.tenant.name);
-  useSabai.getState().patch((d) => {
-    Object.assign(d, boot);
-  });
-}
+export { loadShop };
 
 interface PinSwitchResponse {
   token: string;
@@ -83,18 +71,12 @@ const implemented = {
 
   ...posCommands,
   ...kdsCommands,
+  ...stockCommands,
 } satisfies Partial<DataSource>;
 
 const NOT_YET = [
   "addMenuItem",
   "updateMenuItem",
-  "addIngredient",
-  "receiveGoods",
-  "recordWaste",
-  "startCount",
-  "recordCount",
-  "submitCount",
-  "approveCount",
   "createPurchaseOrder",
   "createPOFromSuggestions",
   "setPurchaseOrderStatus",

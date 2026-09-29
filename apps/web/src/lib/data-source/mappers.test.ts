@@ -26,6 +26,7 @@ function shopFixture(overrides: Partial<ShopApiResponse> = {}): ShopApiResponse 
         phone: "02-000-0000",
         day_cutoff: "04:00:00",
         service_charge_rate: 0.1,
+        stock_location_id: "loc-1",
         tables: [
           { id: "t-1", branch_id: "br-1", area_id: "area-1", area_name: "ระเบียง", name: "B1", seats: 4 },
           { id: "t-2", branch_id: "br-1", area_id: null, area_name: null, name: "ริมทาง", seats: 2 },
@@ -126,6 +127,7 @@ describe("mapShopBootstrap", () => {
     expect(branches[0]!.tables.map((t) => t.zone)).toEqual(["ระเบียง", "ทั่วไป"]);
     expect(branches[0]!.address).toBeUndefined();
     expect(branches[0]!.phone).toBe("02-000-0000");
+    expect(branches[0]!.stockLocationId).toBe("loc-1");
   });
 
   it("lifts kitchen stations out of their branch, keeping the route key the POS sends tickets to", () => {

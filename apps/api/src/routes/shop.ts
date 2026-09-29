@@ -31,6 +31,7 @@ export function registerShop(app: Hono<Env>, deps: Deps) {
         rolePermissions,
         members,
         membershipBranches,
+        stockLocations,
       ] = await Promise.all([
         t<{ id: string; name: string; business_type: string; vat_registered: boolean; prices_include_vat: boolean; vat_rate: string; cash_rounding: string; settings: unknown; plan_code: string | null; subscription_status: string | null; trial_ends_at: string | null }[]>`
           select tn.id, tn.name, tn.business_type, tn.vat_registered, tn.prices_include_vat, tn.vat_rate, tn.cash_rounding, tn.settings,
@@ -84,6 +85,7 @@ export function registerShop(app: Hono<Env>, deps: Deps) {
             from app.memberships m join app.roles r on r.id = m.role_id
            where m.tenant_id = ${tenantId} and m.status <> 'removed' order by r.sort, m.display_name`,
         t<{ membership_id: string; branch_id: string }[]>`select membership_id, branch_id from app.membership_branches where tenant_id = ${tenantId}`,
+        t<{ id: string; branch_id: string }[]>`select id, branch_id from app.stock_locations where tenant_id = ${tenantId} and is_default`,
       ]);
 
       const [plan] = tenant?.plan_code
@@ -113,6 +115,8 @@ export function registerShop(app: Hono<Env>, deps: Deps) {
         branches: branches.map((b) => ({
           ...b,
           service_charge_rate: num(b.service_charge_rate),
+          // Where waste, counts and opening stock are recorded for this branch.
+          stock_location_id: stockLocations.find((l) => l.branch_id === b.id)?.id ?? null,
           tables: tables.filter((tb) => tb.branch_id === b.id),
           stations: stations.filter((st) => st.branch_id === b.id),
         })),

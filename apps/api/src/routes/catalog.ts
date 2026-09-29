@@ -65,13 +65,30 @@ export function registerCatalog(app: Hono<Env>, deps: Deps) {
     async ({ tenantId, body, tx }) =>
       tx(async (t) => {
         await requirePermission(t, tenantId, "inventory.manage");
+        let categoryId = body.categoryId;
+        if (!categoryId && body.categoryName) {
+          const [existing] = await t<{ id: string }[]>`select id from app.ingredient_categories where tenant_id = ${tenantId} and lower(name) = lower(${body.categoryName})`;
+          categoryId = existing?.id ?? (await t<{ id: string }[]>`insert into app.ingredient_categories (tenant_id, name) values (${tenantId}, ${body.categoryName}) returning id`)[0]!.id;
+        }
+        // A pack with a price says what one base unit costs, until the first real purchase is recorded.
+        const standardCost = body.standardCost ?? (body.pack && body.pack.qty > 0 ? Number(body.pack.price) / body.pack.qty : undefined);
         const [row] = await t`
           insert into app.ingredients (tenant_id, name, base_unit, display_unit, kind, track_stock, category_id,
                                        reorder_point, par_level, standard_cost, storage_zone)
           values (${tenantId}, ${body.name}, ${body.baseUnit}, ${body.displayUnit ?? null}, ${body.kind}, ${body.trackStock},
-                  ${body.categoryId ?? null}, ${body.reorderPoint ?? null}, ${body.parLevel ?? null}, ${body.standardCost ?? null},
+                  ${categoryId ?? null}, ${body.reorderPoint ?? null}, ${body.parLevel ?? null}, ${standardCost ?? null},
                   ${body.storageZone ?? null})
           returning id, name, base_unit, display_unit, kind, track_stock`;
+        if (body.pack?.supplierId) {
+          await t`
+            insert into app.supplier_items (tenant_id, supplier_id, ingredient_id, pack_name, pack_qty, last_price, is_preferred)
+            values (${tenantId}, ${body.pack.supplierId}, ${row!.id}, ${body.pack.name}, ${body.pack.qty}, ${body.pack.price}, true)`;
+        }
+        if (body.openingQty) {
+          const [loc] = await t<{ id: string }[]>`select id from app.stock_locations where branch_id = ${body.branchId!} and is_default`;
+          if (!loc) throw new ApiFailure("NOT_FOUND", 404, { entity: "location" });
+          await t`select app.record_opening_stock(${loc.id}, ${row!.id}, ${body.openingQty}, ${standardCost ?? 0})`;
+        }
         return row;
       }),
   );

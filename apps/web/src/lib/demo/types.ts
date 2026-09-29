@@ -30,6 +30,8 @@ export interface Branch {
   dayCutoff: string;
   serviceChargeRate: number;
   tables: { id: ID; name: string; seats: number; zone: string }[];
+  /** API only: the branch's default stock location, where waste, counts and opening stock are recorded. */
+  stockLocationId?: ID;
 }
 
 export interface Station {

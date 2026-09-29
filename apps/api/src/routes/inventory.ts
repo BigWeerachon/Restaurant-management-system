@@ -42,7 +42,7 @@ export function registerInventory(app: Hono<Env>, deps: Deps) {
     tx(async (t) => {
       const rows = await t`
         select m.id, m.ingredient_id, i.name, i.base_unit, m.qty, m.unit_cost, m.total_cost, m.reason, m.reason_code,
-               m.business_date::text, m.occurred_at, m.note
+               m.business_date::text, m.occurred_at, m.note, m.created_by
           from app.stock_movements m join app.ingredients i on i.id = m.ingredient_id
          where m.branch_id = ${query.branchId}
            and (${query.ingredientId ?? null}::uuid is null or m.ingredient_id = ${query.ingredientId ?? null})
@@ -113,7 +113,7 @@ export function registerInventory(app: Hono<Env>, deps: Deps) {
       zone: l.storage_zone,
       counted: l.counted_qty === null ? null : num(l.counted_qty),
       // Blind count: counters never see what the system expects.
-      ...(canSeeExpected ? { expected: l.expected_qty === null ? null : num(l.expected_qty) } : {}),
+      ...(canSeeExpected ? { expected: l.expected_qty === null ? null : num(l.expected_qty), unitCost: num(l.unit_cost) } : {}),
     }));
     const summary = canSeeExpected
       ? summarizeCount(

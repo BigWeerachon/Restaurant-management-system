@@ -5,13 +5,14 @@ import { ArrowLeft, Check } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
 import Link from "next/link";
 import { useMemo, useState } from "react";
+import { LoadBanner } from "@/components/app/load-banner";
 import { PageHeader } from "@/components/app/page-header";
 import { Button } from "@/components/ui/button";
 import { EmptyState, Keypad, SuccessCheck } from "@/components/ui/feedback";
 import { Card, SearchInput, Segmented } from "@/components/ui/primitives";
-import { useAccess, useAction } from "@/hooks/use-sabai";
+import { useDsAction, useLoad } from "@/hooks/use-data-source";
+import { useAccess } from "@/hooks/use-sabai";
 import { cn } from "@/lib/cn";
-import { recordWaste } from "@/lib/demo/engine";
 import { formatBaht } from "@/lib/demo/selectors";
 import { useSabai } from "@/lib/demo/store";
 import type { Ingredient } from "@/lib/demo/types";
@@ -20,7 +21,8 @@ import type { Ingredient } from "@/lib/demo/types";
 export default function WastePage() {
   const db = useSabai((s) => s.db);
   const { branch, can } = useAccess();
-  const { exec, pending } = useAction();
+  const { exec, pending } = useDsAction();
+  const load = useLoad(["stock"]);
   const [q, setQ] = useState("");
   const [ing, setIng] = useState<Ingredient | null>(null);
   const [amount, setAmount] = useState("");
@@ -46,7 +48,7 @@ export default function WastePage() {
 
   const save = async () => {
     if (!ing) return;
-    const r = await exec((d, c) => recordWaste(d, c, ing.id, baseQty, reason));
+    const r = await exec((ds) => ds.recordWaste(ing.id, baseQty, reason));
     if (r.ok) {
       setDone({ name: ing.name, value: r.value });
       setIng(null);
@@ -58,6 +60,7 @@ export default function WastePage() {
   return (
     <div className="mx-auto max-w-3xl">
       <PageHeader eyebrow={<Link href="/inventory" className="inline-flex items-center gap-1 hover:text-ink"><ArrowLeft className="h-4 w-4" /> สต็อก</Link>} title="บันทึกของเสีย" description="ของหก ของหมดอายุ ทำเสีย — บันทึกทันทีที่เกิด ต้นทุนจริงจะแม่นขึ้นมาก" />
+      <LoadBanner state={load} className="mb-4" />
       <AnimatePresence mode="wait">
         {done ? (
           <motion.div key="done" initial={{ opacity: 0, scale: 0.97 }} animate={{ opacity: 1, scale: 1 }}>

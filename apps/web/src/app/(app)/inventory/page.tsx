@@ -6,11 +6,13 @@ import { motion } from "motion/react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { Suspense, useMemo, useState } from "react";
+import { LoadBanner } from "@/components/app/load-banner";
 import { PageHeader } from "@/components/app/page-header";
 import { LinkButton } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/feedback";
 import { TabPanel, Tabs } from "@/components/ui/overlay";
 import { Badge, Card, SearchInput, Segmented } from "@/components/ui/primitives";
+import { useLoad } from "@/hooks/use-data-source";
 import { useAccess } from "@/hooks/use-sabai";
 import { actorName } from "@/lib/demo/engine";
 import { formatBaht, stockRows, type StockRow } from "@/lib/demo/selectors";
@@ -87,6 +89,7 @@ function StockList({ rows, showValue }: { rows: StockRow[]; showValue: boolean }
 function InventoryInner() {
   const db = useSabai((s) => s.db);
   const { branch, can } = useAccess();
+  const load = useLoad(["stock"]);
   const params = useSearchParams();
   const [q, setQ] = useState(params.get("q") ?? "");
   const [filter, setFilter] = useState<"all" | "attention" | "ok">("all");
@@ -122,6 +125,7 @@ function InventoryInner() {
           </>
         }
       />
+      <LoadBanner state={load} className="mb-4" />
 
       {rows.length === 0 ? (
         <Card>

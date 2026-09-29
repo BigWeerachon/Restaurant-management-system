@@ -81,6 +81,7 @@ export interface ShopApiResponse {
     phone: string | null;
     day_cutoff: string;
     service_charge_rate: number;
+    stock_location_id: string | null;
     tables: { id: string; branch_id: string; area_id: string | null; area_name: string | null; name: string; seats: number }[];
     stations: { id: string; branch_id: string; name: string; route_key: string; color: string | null; warn_after_sec: number; late_after_sec: number }[];
   }[];
@@ -196,6 +197,7 @@ export function mapShopBootstrap(shop: ShopApiResponse): ShopBootstrap {
     phone: b.phone ?? undefined,
     dayCutoff: b.day_cutoff,
     serviceChargeRate: b.service_charge_rate,
+    stockLocationId: b.stock_location_id ?? undefined,
     tables: b.tables.map((t) => ({ id: t.id, name: t.name, seats: t.seats, zone: t.area_name ?? "ทั่วไป" })),
   }));
 

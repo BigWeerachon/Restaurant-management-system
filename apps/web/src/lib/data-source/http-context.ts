@@ -10,8 +10,48 @@ import { DomainError } from "../demo/engine";
 import { useSabai } from "../demo/store";
 import type { DemoState } from "../demo/types";
 import { apiFetch } from "./http-client";
-import { mapClosedShift, mapCurrentShift, mapOrder, mapTicket, type CurrentShiftApi, type OrderApi, type ShiftRowApi, type TicketApi } from "./live-mappers";
+import {
+  mapBalances,
+  mapClosedShift,
+  mapCount,
+  mapCurrentShift,
+  mapMovement,
+  mapOrder,
+  mapTicket,
+  type CountDetailApi,
+  type CountRowApi,
+  type CurrentShiftApi,
+  type MovementApi,
+  type OrderApi,
+  type ShiftRowApi,
+  type StockRowApi,
+  type TicketApi,
+} from "./live-mappers";
+import { mapShopBootstrap, type ShopApiResponse } from "./mappers";
 import type { Slice } from "./types";
+
+/**
+ * Fetches `GET /v1/shop` into the shared store. `reset` starts from an empty
+ * shop first (and signs everyone out) — used when connecting; a plain refresh
+ * keeps the signed-in person and whatever live data has been loaded.
+ */
+export async function loadShop(opts: { reset: boolean }): Promise<void> {
+  const boot = mapShopBootstrap(await apiFetch<ShopApiResponse>("/v1/shop"));
+  const store = useSabai.getState();
+  if (opts.reset) store.reset("fresh", boot.tenant.name);
+  useSabai.getState().patch((d) => {
+    Object.assign(d, boot);
+  });
+}
+
+/** Best effort, like `refresh`: for commands that change the shop's own data (costs, ingredients, prices). */
+export async function refreshShop(): Promise<void> {
+  try {
+    await loadShop({ reset: false });
+  } catch (e) {
+    console.warn("shop reload after command failed", e);
+  }
+}
 
 /** Amounts go to the API as baht with two decimals ("125.50"), never as floats. */
 export const baht = (satang: number): string => satangToDecimalString(satang);
@@ -52,6 +92,29 @@ const loaders: Partial<Record<Exclude<Slice, "bootstrap">, (branchId: string) =>
     const r = await apiFetch<{ tickets: TicketApi[] }>("/v1/kds/tickets", { query: { branchId } });
     return (d) => {
       d.tickets = [...d.tickets.filter((t) => t.branchId !== branchId), ...r.tickets.map((t) => mapTicket(t, branchId))];
+    };
+  },
+
+  // Quantity and average cost on hand per ingredient, and the latest movements (oldest first, like the demo keeps them).
+  async stock(branchId) {
+    const [rows, moves] = await Promise.all([
+      apiFetch<StockRowApi[]>("/v1/stock", { query: { branchId } }),
+      apiFetch<MovementApi[]>("/v1/stock-movements", { query: { branchId, limit: 200 } }),
+    ]);
+    return (d) => {
+      for (const key of Object.keys(d.balances)) if (key.startsWith(`${branchId}:`)) delete d.balances[key];
+      Object.assign(d.balances, mapBalances(rows, branchId));
+      d.movements = [...d.movements.filter((m) => m.branchId !== branchId), ...moves.map((m) => mapMovement(m, branchId)).reverse()];
+    };
+  },
+
+  // The count in progress or waiting for approval (there is at most one per branch in practice).
+  async counts(branchId) {
+    const rows = await apiFetch<CountRowApi[]>("/v1/stock-counts", { query: { branchId } });
+    const active = rows.filter((r) => r.status === "in_progress" || r.status === "submitted");
+    const details = await Promise.all(active.map((r) => apiFetch<CountDetailApi>(`/v1/stock-counts/${r.id}`)));
+    return (d) => {
+      d.counts = [...d.counts.filter((c) => c.branchId !== branchId), ...details.map((c, i) => mapCount(c, active[i]!, branchId))];
     };
   },
 

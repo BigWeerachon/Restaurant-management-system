@@ -4,7 +4,7 @@
  * as they are, snake_case becomes camelCase. Per-unit costs stay in baht.
  */
 import { toSatang } from "@sabai/domain";
-import type { MenuItem, Order, Shift, Ticket } from "../demo/types";
+import type { MenuItem, Movement, Order, Shift, StockCount, Ticket } from "../demo/types";
 
 // ---------------------------------------------------------------------------
 // Orders — GET /v1/orders?detail=full and GET /v1/orders/{id}
@@ -120,6 +120,83 @@ export function mapOrder(o: OrderApi, menuItems: Pick<MenuItem, "id" | "emoji">[
     commissionRate: o.commissionRate,
     cost: o.costTotal ?? undefined,
     shiftId: o.shiftId ?? undefined,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Stock — GET /v1/stock, GET /v1/stock-movements, GET /v1/stock-counts[/{id}]
+// ---------------------------------------------------------------------------
+export interface StockRowApi {
+  ingredient_id: string;
+  qty_on_hand: number;
+  /** Only sent to people who may see costs. */
+  unit_cost?: number;
+}
+
+/** `balances` keeps quantity and average cost (฿ per base unit) per branch and ingredient. */
+export function mapBalances(rows: StockRowApi[], branchId: string): Record<string, { qty: number; avgCost: number }> {
+  return Object.fromEntries(rows.map((r) => [`${branchId}:${r.ingredient_id}`, { qty: r.qty_on_hand, avgCost: r.unit_cost ?? 0 }]));
+}
+
+export interface MovementApi {
+  id: string;
+  ingredient_id: string;
+  qty: number;
+  unit_cost: number;
+  reason: Movement["reason"];
+  reason_code: string | null;
+  business_date: string;
+  occurred_at: string;
+  note: string | null;
+  /** The membership that recorded it; empty for movements the system made (a sale's usage, say). */
+  created_by?: string | null;
+}
+
+export function mapMovement(m: MovementApi, branchId: string): Movement {
+  return {
+    id: m.id,
+    branchId,
+    ingredientId: m.ingredient_id,
+    qty: m.qty,
+    unitCost: m.unit_cost,
+    reason: m.reason,
+    reasonCode: m.reason_code ?? undefined,
+    at: m.occurred_at,
+    by: m.created_by ?? undefined,
+    businessDate: m.business_date,
+    note: m.note ?? undefined,
+  };
+}
+
+export interface CountRowApi {
+  id: string;
+  status: "in_progress" | "submitted" | "approved" | "cancelled";
+  started_at: string;
+  submitted_at: string | null;
+  approved_at: string | null;
+}
+
+export interface CountDetailApi {
+  id: string;
+  countNo: string;
+  status: CountRowApi["status"];
+  blind: boolean;
+  /** `expected` and `unitCost` are left out while a blind count is in progress, and for people who may not adjust stock. */
+  lines: { ingredientId: string; counted: number | null; expected?: number | null; unitCost?: number }[];
+}
+
+export function mapCount(detail: CountDetailApi, row: CountRowApi, branchId: string): StockCount {
+  return {
+    id: detail.id,
+    branchId,
+    countNo: detail.countNo,
+    // The screen has no cancelled state; cancelled counts are never loaded.
+    status: detail.status === "cancelled" ? "approved" : detail.status,
+    blind: detail.blind,
+    startedAt: row.started_at,
+    submittedAt: row.submitted_at ?? undefined,
+    approvedAt: row.approved_at ?? undefined,
+    lines: detail.lines.map((l) => ({ ingredientId: l.ingredientId, counted: l.counted, expected: l.expected ?? undefined, unitCost: l.unitCost })),
   };
 }
 

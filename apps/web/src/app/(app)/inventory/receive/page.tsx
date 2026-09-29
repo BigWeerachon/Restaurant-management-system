@@ -5,13 +5,14 @@ import { ArrowLeft, ArrowRight, Camera, Minus, Plus, Store, Trash2, TrendingUp, 
 import { AnimatePresence, motion } from "motion/react";
 import Link from "next/link";
 import { useMemo, useState } from "react";
+import { LoadBanner } from "@/components/app/load-banner";
 import { PageHeader } from "@/components/app/page-header";
 import { Button, LinkButton } from "@/components/ui/button";
 import { EmptyState, Stepper, SuccessCheck } from "@/components/ui/feedback";
 import { Badge, Callout, Card, Input, SearchInput } from "@/components/ui/primitives";
-import { useAccess, useAction } from "@/hooks/use-sabai";
+import { useDsAction, useLoad } from "@/hooks/use-data-source";
+import { useAccess } from "@/hooks/use-sabai";
 import { cn } from "@/lib/cn";
-import { receiveGoods } from "@/lib/demo/engine";
 import { formatBaht } from "@/lib/demo/selectors";
 import { useSabai } from "@/lib/demo/store";
 
@@ -26,7 +27,8 @@ interface Line {
 export default function ReceivePage() {
   const db = useSabai((s) => s.db);
   const { branch } = useAccess();
-  const { exec, pending } = useAction();
+  const { exec, pending } = useDsAction();
+  const load = useLoad(["stock"]);
   const [step, setStep] = useState(0);
   const [supplierId, setSupplierId] = useState<string | null>(null);
   const [poId, setPoId] = useState<string | null>(null);
@@ -57,15 +59,13 @@ export default function ReceivePage() {
   const total = lines.reduce((s, l) => s + Math.round(l.qtyPacks * Number(l.price || 0) * 100), 0);
 
   const save = async () => {
-    const r = await exec(
-      (d, c) =>
-        receiveGoods(d, c, {
-          supplierId: supplierId ?? undefined,
-          poId: poId ?? undefined,
-          paymentMode: mode,
-          lines: lines.map((l) => ({ ingredientId: l.ingredientId, packName: l.packName, packQty: l.packQty, qtyPacks: l.qtyPacks, unitPrice: Math.round(Number(l.price || 0) * 100) })),
-        }),
-      { latencyMs: 250 },
+    const r = await exec((ds) =>
+      ds.receiveGoods({
+        supplierId: supplierId ?? undefined,
+        poId: poId ?? undefined,
+        paymentMode: mode,
+        lines: lines.map((l) => ({ ingredientId: l.ingredientId, packName: l.packName, packQty: l.packQty, qtyPacks: l.qtyPacks, unitPrice: Math.round(Number(l.price || 0) * 100) })),
+      }),
     );
     if (r.ok) setResult(r.value);
   };
@@ -108,6 +108,7 @@ export default function ReceivePage() {
   return (
     <div className="mx-auto max-w-4xl">
       <PageHeader eyebrow={<Link href="/inventory" className="inline-flex items-center gap-1 hover:text-ink"><ArrowLeft className="h-4 w-4" /> สต็อก</Link>} title="รับของเข้า" description="3 ขั้นตอน: ซื้อจากใคร → ได้อะไรมาบ้าง → จ่ายเงินยังไง ระบบจำขนาดแพ็กและราคาครั้งก่อนให้" />
+      <LoadBanner state={load} className="mb-4" />
       <Stepper steps={["ซื้อจากใคร", "รายการที่ได้รับ", "การจ่ายเงิน"]} current={step} className="mb-6" />
 
       <AnimatePresence mode="wait">
