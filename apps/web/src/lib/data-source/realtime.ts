@@ -5,7 +5,7 @@
  * the parts a mounted screen is actually showing.
  */
 import { useSyncExternalStore } from "react";
-import { apiBaseUrl, getApiSession } from "./http-client";
+import { apiBaseUrl, getApiSession, tryRenewSession } from "./http-client";
 import { createSseParser } from "./sse";
 import type { Slice } from "./types";
 
@@ -152,11 +152,13 @@ export function startRealtime(opts: RealtimeOptions): () => void {
   let attempt = 0;
   let wasDown = false;
   let retryTimer: ReturnType<typeof setTimeout> | null = null;
+  let renewedOnce = false;
   const decoder = new TextDecoder();
 
   const onMessage = (m: { event: string; data: string }) => {
     if (m.event === "ready") {
       attempt = 0;
+      renewedOnce = false;
       setStatus("live");
       if (wasDown) opts.onCatchUp();
       wasDown = false;
@@ -188,6 +190,14 @@ export function startRealtime(opts: RealtimeOptions): () => void {
       const headers: Record<string, string> = { Authorization: `Bearer ${token}`, Accept: "text/event-stream" };
       if (tenantId) headers["X-Tenant-Id"] = tenantId;
       const res = await doFetch(url, { headers, signal: mine.signal });
+      // The token may simply have run out: renew it and connect again before deciding the session is over.
+      if (res.status === 401 && !renewedOnce) {
+        renewedOnce = true;
+        if (await tryRenewSession()) {
+          retryTimer = setTimeout(connect, 0);
+          return;
+        }
+      }
       if (res.status === 401 || res.status === 403) {
         stopped = true;
         setStatus("off");

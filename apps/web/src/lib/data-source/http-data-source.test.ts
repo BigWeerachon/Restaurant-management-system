@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { useSabai } from "../demo/store";
-import { devLogin, listShops, openShop } from "./connect";
+import { resetAccountForTests, signInAccount } from "../auth/session";
+import { listShops, openShop } from "./connect";
 import { clearApiSession, getApiSession, setApiSession } from "./http-client";
 import { demoDataSource } from "./demo-data-source";
 import { httpDataSource } from "./http-data-source";
@@ -33,6 +34,7 @@ const cashier = { id: "m-2", display_name: "แพรว", nickname: null, statu
 describe("HttpDataSource", () => {
   beforeEach(() => {
     clearApiSession();
+    resetAccountForTests();
     useSabai.getState().reset("demo");
   });
   afterEach(() => {
@@ -48,7 +50,7 @@ describe("HttpDataSource", () => {
     vi.stubGlobal("fetch", fetchMock);
     expect(useSabai.getState().db.orders.length).toBeGreaterThan(0);
 
-    await devLogin("owner@sabai.dev");
+    await signInAccount("owner@sabai.dev", "");
     const shops = await listShops();
     expect(shops).toEqual([{ tenantId: "t-1", tenantName: "ร้านทดสอบ" }]);
     await openShop("t-1");

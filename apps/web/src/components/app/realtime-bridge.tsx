@@ -3,7 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useEffect } from "react";
 import { dataSourceMode } from "@/lib/data-source/config";
-import { clearApiSession } from "@/lib/data-source/http-client";
+import { recoverFromUnauthorized } from "@/lib/auth/session";
 import { refresh } from "@/lib/data-source/http-context";
 import { activeSlices, createRefresher, startRealtime } from "@/lib/data-source/realtime";
 import { useSabai } from "@/lib/demo/store";
@@ -28,9 +28,10 @@ export function RealtimeBridge() {
       onStale: (slices) => refresher.ask(slices),
       onCatchUp: () => refresher.ask(activeSlices()),
       onUnauthorized: () => {
-        clearApiSession();
-        signOut();
-        router.replace("/");
+        void recoverFromUnauthorized().then(() => {
+          signOut();
+          router.replace("/");
+        });
       },
     });
     return () => {

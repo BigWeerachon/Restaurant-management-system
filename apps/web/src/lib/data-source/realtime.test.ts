@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { clearApiSession, setApiSession } from "./http-client";
+import { clearApiSession, setApiSession, setSessionRenewer } from "./http-client";
 import { activeSlices, createRefresher, realtimeStatus, registerActiveSlices, slicesForEvent, startRealtime } from "./realtime";
 import type { Slice } from "./types";
 
@@ -249,6 +249,48 @@ describe("the live event stream", () => {
     expect(calls).toBe(1);
     expect(onUnauthorized).toHaveBeenCalledTimes(1);
     expect(realtimeStatus()).toBe("off");
+  });
+
+  it("renews a token the server refused, and connects again with the new one before giving up", async () => {
+    const onUnauthorized = vi.fn();
+    const renew = vi.fn(async () => {
+      setApiSession({ token: "renewed" });
+      return "renewed";
+    });
+    setSessionRenewer({ canRenew: () => true, shouldRenew: () => false, renew });
+    const s = stream();
+    const seen: string[] = [];
+    const fetchImpl = vi.fn(async (_u: URL, init: any) => {
+      seen.push(init.headers.Authorization);
+      return seen.length === 1 ? new Response("{}", { status: 401 }) : s.response;
+    }) as unknown as typeof fetch;
+    start({ fetchImpl, onUnauthorized });
+    await new Promise((r) => setTimeout(r, 40));
+    s.send("event: ready\ndata: {}\n\n");
+    await tick();
+    expect(renew).toHaveBeenCalledTimes(1);
+    expect(seen).toEqual(["Bearer staff-token", "Bearer renewed"]);
+    expect(onUnauthorized).not.toHaveBeenCalled();
+    expect(realtimeStatus()).toBe("live");
+    setSessionRenewer(null);
+  });
+
+  it("gives up when the renewed token is refused too, and when it cannot be renewed", async () => {
+    const onUnauthorized = vi.fn();
+    setSessionRenewer({ canRenew: () => true, shouldRenew: () => false, renew: async () => "still-bad" });
+    let calls = 0;
+    start({ fetchImpl: (async () => (calls++, new Response("{}", { status: 401 }))) as unknown as typeof fetch, onUnauthorized });
+    await new Promise((r) => setTimeout(r, 60));
+    expect(calls).toBe(2); // one refusal, one retry, then done
+    expect(onUnauthorized).toHaveBeenCalledTimes(1);
+    setSessionRenewer({ canRenew: () => true, shouldRenew: () => false, renew: async () => null });
+    const again = vi.fn();
+    let calls2 = 0;
+    start({ fetchImpl: (async () => (calls2++, new Response("{}", { status: 401 }))) as unknown as typeof fetch, onUnauthorized: again });
+    await new Promise((r) => setTimeout(r, 40));
+    expect(calls2).toBe(1);
+    expect(again).toHaveBeenCalledTimes(1);
+    setSessionRenewer(null);
   });
 
   it("closes the stream and goes quiet when stopped", async () => {

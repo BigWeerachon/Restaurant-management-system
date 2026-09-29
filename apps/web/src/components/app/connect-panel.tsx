@@ -8,8 +8,10 @@ import { Button } from "@/components/ui/button";
 import { Keypad, PinDots } from "@/components/ui/feedback";
 import { Dialog } from "@/components/ui/overlay";
 import { Field, Input } from "@/components/ui/primitives";
-import { devLogin, listShops, openShop, type ShopChoice } from "@/lib/data-source/connect";
-import { clearApiSession, getApiSession } from "@/lib/data-source/http-client";
+import { getAuthProvider } from "@/lib/auth";
+import { signInAccount, signOutAccount } from "@/lib/auth/session";
+import { listShops, openShop, type ShopChoice } from "@/lib/data-source/connect";
+import { getApiSession } from "@/lib/data-source/http-client";
 import { httpDataSource } from "@/lib/data-source/http-data-source";
 import { isDomainError, useSabai } from "@/lib/demo/store";
 import type { Member } from "@/lib/demo/types";
@@ -28,6 +30,8 @@ export function ConnectPanel() {
     return s.token && s.tenantId ? "team" : "email";
   });
   const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const auth = getAuthProvider();
   const [shops, setShops] = useState<ShopChoice[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -53,10 +57,14 @@ export function ConnectPanel() {
         setError("ใส่อีเมลก่อนนะ");
         return;
       }
-      await devLogin(email.trim());
+      if (auth.usesPassword && !password) {
+        setError("ใส่รหัสผ่านก่อนนะ");
+        return;
+      }
+      await signInAccount(email.trim(), password);
       const found = await listShops();
       if (found.length === 0) {
-        clearApiSession();
+        await signOutAccount();
         setError("บัญชีนี้ยังไม่มีร้าน");
       } else if (found.length === 1) {
         await openShop(found[0]!.tenantId);
@@ -74,8 +82,9 @@ export function ConnectPanel() {
     });
 
   const disconnect = () => {
-    clearApiSession();
+    void signOutAccount();
     setPhase("email");
+    setPassword("");
     setError(null);
   };
 
@@ -121,13 +130,18 @@ export function ConnectPanel() {
           <h2 id="enter-title" className="text-xl font-semibold text-ink">
             เชื่อมต่อร้านจริง
           </h2>
-          <p className="text-sm text-ink-3">โหมดพัฒนา: เข้าด้วยอีเมลของบัญชีที่มีร้านอยู่ในระบบ</p>
+          <p className="text-sm text-ink-3">{auth.usesPassword ? "เข้าสู่ระบบด้วยบัญชีของเจ้าของร้านหรือผู้จัดการ" : "โหมดพัฒนา: เข้าด้วยอีเมลของบัญชีที่มีร้านอยู่ในระบบ"}</p>
         </div>
-        <Field label="อีเมล" htmlFor="connect-email" error={error}>
+        <Field label="อีเมล" htmlFor="connect-email" error={auth.usesPassword ? undefined : error}>
           <Input id="connect-email" type="email" autoComplete="email" value={email} invalid={!!error} placeholder="owner@sabai.dev" onChange={(e) => setEmail(e.target.value)} />
         </Field>
+        {auth.usesPassword && (
+          <Field label="รหัสผ่าน" htmlFor="connect-password" error={error}>
+            <Input id="connect-password" type="password" autoComplete="current-password" value={password} invalid={!!error} onChange={(e) => setPassword(e.target.value)} />
+          </Field>
+        )}
         <Button type="submit" size="lg" block disabled={busy} iconRight={<ArrowRight className="h-4 w-4" />}>
-          {busy ? "กำลังเชื่อมต่อ…" : "เชื่อมต่อ"}
+          {busy ? "กำลังเชื่อมต่อ…" : auth.usesPassword ? "เข้าสู่ระบบ" : "เชื่อมต่อ"}
         </Button>
         <p className="text-xs text-ink-3">ตอนนี้โหมดนี้ทำได้เฉพาะเข้าสู่ระบบและโหลดข้อมูลร้าน หน้าอื่นๆ จะย้ายมาใช้ข้อมูลจริงทีละหน้า</p>
       </form>

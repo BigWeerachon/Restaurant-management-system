@@ -2,8 +2,9 @@
 
 import { useRouter } from "next/navigation";
 import { useEffect } from "react";
+import { installAuthRenewer, recoverFromUnauthorized } from "@/lib/auth/session";
 import { dataSourceMode } from "@/lib/data-source/config";
-import { clearApiSession, getApiSession } from "@/lib/data-source/http-client";
+import { getApiSession } from "@/lib/data-source/http-client";
 import { loadShop } from "@/lib/data-source/http-data-source";
 import { isDomainError, useSabai } from "@/lib/demo/store";
 
@@ -13,15 +14,21 @@ export function ApiBoot() {
   const signOut = useSabai((s) => s.signOut);
   const router = useRouter();
 
+  // From now on the HTTP client renews the account's token when it is about to run out, or when the server says it has.
+  useEffect(() => {
+    if (dataSourceMode() === "api") installAuthRenewer();
+  }, []);
+
   useEffect(() => {
     if (dataSourceMode() !== "api" || !hydrated) return;
     const { token, tenantId } = getApiSession();
     if (!token || !tenantId) return;
     loadShop({ reset: false }).catch((e) => {
       if (isDomainError(e) && e.code === "AUTH_REQUIRED") {
-        clearApiSession();
-        signOut();
-        router.replace("/");
+        void recoverFromUnauthorized().then(() => {
+          signOut();
+          router.replace("/");
+        });
       }
     });
   }, [hydrated, signOut, router]);

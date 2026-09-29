@@ -55,6 +55,31 @@ export function getApiSession(): Readonly<ApiSession> {
   return session;
 }
 
+/**
+ * How a signed-in account's token is renewed. The auth module installs it (`auth/session.ts`); this file only asks,
+ * so the HTTP client does not depend on which sign-in provider is in use.
+ */
+export interface SessionRenewer {
+  /** The token is one this renewer owns and is about to expire. */
+  shouldRenew(token: string): boolean;
+  /** The token is one this renewer owns (a PIN-switched staff token is not: it is replaced by signing in again). */
+  canRenew(token: string): boolean;
+  /** Resolves to the new token, or null when the person has to sign in again. */
+  renew(): Promise<string | null>;
+}
+
+let renewer: SessionRenewer | null = null;
+
+export function setSessionRenewer(next: SessionRenewer | null) {
+  renewer = next;
+}
+
+/** One try at getting a fresh token for the current session; false when there is nothing to renew or it did not work. */
+export async function tryRenewSession(): Promise<boolean> {
+  if (!session.token || !renewer?.canRenew(session.token)) return false;
+  return (await renewer.renew()) !== null;
+}
+
 export function clearApiSession() {
   session = { token: null, tenantId: null };
   saveSession();
@@ -109,11 +134,18 @@ export async function apiFetch<T = unknown>(path: string, opts: ApiFetchOptions 
   const url = new URL(path, apiBaseUrl());
   for (const [k, v] of Object.entries(opts.query ?? {})) if (v !== undefined) url.searchParams.set(k, String(v));
 
+  // A token that is about to run out is renewed first, so the request does not have to fail to find out.
+  if (session.token && renewer?.shouldRenew(session.token)) await renewer.renew().catch(() => null);
+
   const headers: Record<string, string> = {};
-  if (session.token) headers.Authorization = `Bearer ${session.token}`;
+  const setAuth = () => {
+    if (session.token) headers.Authorization = `Bearer ${session.token}`;
+  };
+  setAuth();
   if ((opts.tenant ?? true) && session.tenantId) headers["X-Tenant-Id"] = session.tenantId;
   if (opts.body !== undefined) headers["Content-Type"] = "application/json";
   if (method === "POST") headers["Idempotency-Key"] = opts.idempotencyKey ?? newIdempotencyKey();
+  let renewedAfter401 = false;
 
   let lastNetworkError: unknown;
   for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
@@ -133,6 +165,15 @@ export async function apiFetch<T = unknown>(path: string, opts: ApiFetchOptions 
       return (text ? JSON.parse(text) : undefined) as T;
     } catch (err) {
       clearTimeout(timeout);
+      // The server said the token is no good: if it is one that can be renewed, renew it and send the same request again (once).
+      if (err instanceof DomainError && err.code === "AUTH_REQUIRED" && !renewedAfter401 && session.token && renewer?.canRenew(session.token)) {
+        renewedAfter401 = true;
+        if (await renewer.renew().catch(() => null)) {
+          setAuth();
+          attempt--; // this was not a network failure: it does not use up a retry
+          continue;
+        }
+      }
       // A DomainError means the server answered (with an error) — never retry that, it'll fail the same way again.
       if (err instanceof DomainError) throw err;
       lastNetworkError = err;

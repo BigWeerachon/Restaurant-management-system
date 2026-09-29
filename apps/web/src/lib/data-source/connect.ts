@@ -1,7 +1,5 @@
 /**
- * "Connect to a real shop" steps for the welcome page. Until real sign-in
- * lands (checklist phase 6) the only way in is the API's development login,
- * which the API does not expose in production.
+ * "Connect to a real shop" steps for the welcome page: sign in the account (see `lib/auth`), list its shops, open one.
  */
 import { apiFetch, setApiSession } from "./http-client";
 import { loadShop } from "./http-data-source";
@@ -9,11 +7,6 @@ import { loadShop } from "./http-data-source";
 export interface ShopChoice {
   tenantId: string;
   tenantName: string;
-}
-
-export async function devLogin(email: string): Promise<void> {
-  const r = await apiFetch<{ token: string }>("/v1/dev/login", { method: "POST", body: { email }, tenant: false });
-  setApiSession({ token: r.token, tenantId: null });
 }
 
 export async function listShops(): Promise<ShopChoice[]> {
