@@ -6,6 +6,7 @@ import { Toaster } from "sonner";
 import { TooltipProvider } from "@/components/ui/overlay";
 import { ApiBoot } from "./api-boot";
 import { ApprovalDialog } from "./approval-dialog";
+import { OfflineBridge } from "./offline-bridge";
 import { RealtimeBridge } from "./realtime-bridge";
 import { SwitchUserDialog } from "./switch-user-dialog";
 
@@ -16,6 +17,7 @@ export function Providers({ children }: { children: ReactNode }) {
         {children}
         <ApiBoot />
         <RealtimeBridge />
+        <OfflineBridge />
         <ApprovalDialog />
         <SwitchUserDialog />
         <Toaster

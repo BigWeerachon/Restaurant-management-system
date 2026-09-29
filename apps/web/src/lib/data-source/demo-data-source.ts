@@ -50,12 +50,14 @@ export const demoDataSource: DataSource = {
   closeShift: (counted) => run((d, c) => engine.closeShift(d, c, counted)),
   async submitOrder(input) {
     await run((d, c) => engine.submitOrder(d, c, input));
+    return { queued: false };
   },
   applyDiscount: (orderId, type, value, reason, approval) => run((d, c) => engine.applyDiscount(d, c, orderId, type, value, reason, approval?.value)),
   voidItem: (orderId, itemId, reason, approval) => run((d, c) => engine.voidItem(d, c, orderId, itemId, reason, approval?.value)),
   voidOrder: (orderId, reason, approval) => run((d, c) => engine.voidOrder(d, c, orderId, reason, approval?.value)),
   async payOrder(orderId, payments) {
     await run((d, c) => engine.payOrder(d, c, orderId, payments));
+    return { queued: false };
   },
   refundOrder: (orderId, reason, restock, approval) => run((d, c) => engine.refundOrder(d, c, orderId, reason, restock, approval?.value)),
 

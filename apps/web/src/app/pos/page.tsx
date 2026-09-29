@@ -17,7 +17,7 @@ import { Dialog } from "@/components/ui/overlay";
 import { Avatar, Badge, SearchInput } from "@/components/ui/primitives";
 import { useAccess, useUi } from "@/hooks/use-sabai";
 import { cn } from "@/lib/cn";
-import { ConnectionBadge, ConnectionBanner } from "@/components/app/connection-badge";
+import { ConnectionBadge, ConnectionBanner, QueueBanner } from "@/components/app/connection-badge";
 import { LoadBanner } from "@/components/app/load-banner";
 import { useDsAction, useLoad } from "@/hooks/use-data-source";
 import { newClientId } from "@/lib/data-source/ids";
@@ -110,7 +110,10 @@ function PosScreen() {
           guestCount: pos.guestCount,
           items: pos.lines.map((l) => ({ id: l.id, menuItemId: l.menuItemId, qty: l.qty, note: l.note, modifierOptionIds: l.modifierOptionIds })),
         }),
-      { success: thenPay ? undefined : "ส่งเข้าครัวแล้ว", successDetail: thenPay ? undefined : "ออเดอร์ขึ้นจอครัวเรียบร้อย" },
+      {
+        success: thenPay ? undefined : (r) => (r.queued ? "บันทึกออเดอร์ไว้ในเครื่องแล้ว" : "ส่งเข้าครัวแล้ว"),
+        successDetail: thenPay ? undefined : (r) => (r.queued ? "ยังไม่ขึ้นจอครัว ระบบจะส่งให้เองเมื่อกลับมาออนไลน์" : "ออเดอร์ขึ้นจอครัวเรียบร้อย"),
+      },
     );
     if (!res.ok) return null;
     if (thenPay) {
@@ -349,7 +352,8 @@ function PosScreen() {
       </header>
 
       <LoadBanner state={load} className="mx-3 mt-2 shrink-0" />
-      <ConnectionBanner className="mx-3 mt-2 shrink-0">ยอดของเครื่องอื่นอาจยังไม่ขึ้นบนหน้านี้</ConnectionBanner>
+      <ConnectionBanner className="mx-3 mt-2 shrink-0">ขายต่อได้ตามปกติ ระบบเก็บไว้ในเครื่องแล้วส่งให้เองเมื่อออนไลน์</ConnectionBanner>
+      <QueueBanner className="mx-3 mt-2 shrink-0" />
 
       <div className="flex min-h-0 flex-1">
         {/* Categories */}
@@ -398,10 +402,10 @@ function PosScreen() {
                       <motion.button
                         whileTap={{ scale: 0.95 }}
                         onClick={() => tap(m)}
-                        className={cn("glass-soft group relative flex h-full w-full flex-col overflow-hidden rounded-2xl text-left transition-[box-shadow,border-color]", out ? "opacity-55" : "hover:border-brand/50 hover:shadow-md", inCart && "border-brand ring-2 ring-brand/25")}
+                        className={cn("glass-soft group relative flex h-full w-full flex-col overflow-hidden rounded-2xl text-left transition-[box-shadow,border-color]", out ? "" : "hover:border-brand/50 hover:shadow-md", inCart && "border-brand ring-2 ring-brand/25")}
                       >
                         <span
-                          className="grid h-24 place-items-center text-5xl sm:h-28"
+                          className={cn("grid h-24 place-items-center text-5xl sm:h-28", out && "opacity-40 grayscale")}
                           style={{
                             background: `radial-gradient(circle at 50% 32%, color-mix(in srgb, white 18%, transparent), transparent 70%), color-mix(in oklab, ${cat?.color ?? "#13784f"} var(--cat-tint), var(--tile-surface))`,
                           }}
@@ -410,7 +414,7 @@ function PosScreen() {
                           <motion.span whileHover={{ scale: 1.08, rotate: -3 }}>{m.emoji}</motion.span>
                         </span>
                         <span className="flex flex-1 flex-col gap-0.5 p-3">
-                          <span className="line-clamp-2 text-[15px] font-semibold leading-snug text-ink">{m.name}</span>
+                          <span className={cn("line-clamp-2 text-[15px] font-semibold leading-snug", out ? "text-ink-2 line-through" : "text-ink")}>{m.name}</span>
                           <span className="mt-auto text-[15px] font-semibold tabular text-ink-2">{formatBaht(priceFor(m, channel), { compact: true })}</span>
                         </span>
                         {out && <span className="absolute left-2 top-2 rounded-full bg-ink px-2 py-0.5 text-xs font-semibold text-ink-inverse">หมด</span>}

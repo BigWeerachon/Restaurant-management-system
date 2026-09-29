@@ -2,7 +2,7 @@
 
 import { changeDue, suggestTenders, type Satang } from "@sabai/domain";
 import { PromptPayQr } from "@/components/app/promptpay-qr";
-import { Banknote, Bike, CreditCard, Printer, QrCode, Receipt } from "lucide-react";
+import { Banknote, Bike, CloudOff, CreditCard, Printer, QrCode, Receipt } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
 import { useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
@@ -30,6 +30,8 @@ export function PaymentDialog({ order, open, onClose, onPaid }: { order: Order |
   const [tendered, setTendered] = useState<string>("");
   const [reference, setReference] = useState("");
   const [done, setDone] = useState<Order | null>(null);
+  /** The line was down: the payment is kept on this device and will be sent by itself. */
+  const [queued, setQueued] = useState(false);
   const total = order?.totals.total ?? 0;
 
   useEffect(() => {
@@ -38,6 +40,7 @@ export function PaymentDialog({ order, open, onClose, onPaid }: { order: Order |
       setTendered("");
       setReference("");
       setDone(null);
+      setQueued(false);
     }
   }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -61,6 +64,7 @@ export function PaymentDialog({ order, open, onClose, onPaid }: { order: Order |
       // The paid order (change, receipt number) is in the store once the command has finished, in either mode.
       const paid = useSabai.getState().db.orders.find((o) => o.id === order.id) ?? order;
       setDone(paid);
+      setQueued(res.value.queued);
       onPaid(paid);
     }
   };
@@ -87,9 +91,19 @@ export function PaymentDialog({ order, open, onClose, onPaid }: { order: Order |
             ) : (
               <p className="text-3xl font-bold text-ink">{formatBaht(done.totals.total)}</p>
             )}
-            <p className="flex items-center gap-1.5 text-sm text-ink-3">
-              <Receipt className="h-4 w-4" aria-hidden="true" /> ใบเสร็จ {done.receiptNo} · ตัดสต็อกให้อัตโนมัติแล้ว
-            </p>
+            {queued ? (
+              <p role="status" className="flex max-w-sm items-start gap-2 rounded-2xl bg-warning-soft px-4 py-3 text-left text-sm font-medium text-warning">
+                <CloudOff className="mt-0.5 h-5 w-5 shrink-0" aria-hidden="true" />
+                <span>
+                  บันทึกไว้ในเครื่องแล้ว รอส่งเข้าระบบ
+                  <span className="block font-normal text-ink-2">อินเทอร์เน็ตหลุดอยู่ ระบบจะส่งให้เองเมื่อกลับมาออนไลน์ เลขใบเสร็จจะออกตอนนั้น</span>
+                </span>
+              </p>
+            ) : (
+              <p className="flex items-center gap-1.5 text-sm text-ink-3">
+                <Receipt className="h-4 w-4" aria-hidden="true" /> ใบเสร็จ {done.receiptNo} · ตัดสต็อกให้อัตโนมัติแล้ว
+              </p>
+            )}
             <div className="mt-3 flex w-full flex-col gap-2 sm:flex-row">
               <Button variant="secondary" size="lg" className="flex-1" icon={<Printer className="h-5 w-5" />} onClick={() => window.print()}>
                 พิมพ์ใบเสร็จ

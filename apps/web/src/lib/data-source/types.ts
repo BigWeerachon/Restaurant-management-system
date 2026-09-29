@@ -95,11 +95,12 @@ export interface DataSource {
   openShift(openingFloat: Satang): Promise<string>;
   cashMove(kind: "pay_in" | "pay_out", amount: Satang, reason: string): Promise<void>;
   closeShift(counted: Satang): Promise<{ expected: Satang; counted: Satang; variance: Satang }>;
-  submitOrder(input: SubmitOrderInput): Promise<void>;
+  /** `queued: true` means the line was down: the order is kept on this device and will be sent by itself (checklist 5.2). */
+  submitOrder(input: SubmitOrderInput): Promise<{ queued: boolean }>;
   applyDiscount(orderId: string, type: "percent" | "amount", value: number, reason: string, approval?: ApprovalToken): Promise<void>;
   voidItem(orderId: string, itemId: string, reason: string, approval?: ApprovalToken): Promise<void>;
   voidOrder(orderId: string, reason: string, approval?: ApprovalToken): Promise<void>;
-  payOrder(orderId: string, payments: PaymentInput[]): Promise<void>;
+  payOrder(orderId: string, payments: PaymentInput[]): Promise<{ queued: boolean }>;
   refundOrder(orderId: string, reason: string, restock: boolean, approval?: ApprovalToken): Promise<void>;
 
   // ------------------------------------------------------------- kitchen

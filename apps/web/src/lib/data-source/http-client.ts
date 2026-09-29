@@ -60,7 +60,7 @@ export function clearApiSession() {
   saveSession();
 }
 
-function newIdempotencyKey(): string {
+export function newIdempotencyKey(): string {
   return typeof crypto !== "undefined" && "randomUUID" in crypto ? crypto.randomUUID() : `idem-${Date.now()}-${Math.random().toString(16).slice(2)}`;
 }
 
@@ -90,6 +90,12 @@ export interface ApiFetchOptions {
   /** Attach X-Tenant-Id. Defaults to true — nearly every endpoint needs it once signed in. */
   tenant?: boolean;
   timeoutMs?: number;
+  /**
+   * The Idempotency-Key to send with a POST. Left out, a fresh one is made per call. A command that may have to be
+   * sent again later (the offline queue) makes its key first and keeps it, so the server answers a repeat with the
+   * first answer instead of doing the work twice.
+   */
+  idempotencyKey?: string;
 }
 
 /**
@@ -107,7 +113,7 @@ export async function apiFetch<T = unknown>(path: string, opts: ApiFetchOptions 
   if (session.token) headers.Authorization = `Bearer ${session.token}`;
   if ((opts.tenant ?? true) && session.tenantId) headers["X-Tenant-Id"] = session.tenantId;
   if (opts.body !== undefined) headers["Content-Type"] = "application/json";
-  if (method === "POST") headers["Idempotency-Key"] = newIdempotencyKey();
+  if (method === "POST") headers["Idempotency-Key"] = opts.idempotencyKey ?? newIdempotencyKey();
 
   let lastNetworkError: unknown;
   for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {

@@ -42,6 +42,7 @@ import {
   type TicketApi,
 } from "./live-mappers";
 import { mapShopBootstrap, type ShopApiResponse } from "./mappers";
+import { queuedOrderIds } from "./offline";
 import type { Slice } from "./types";
 
 /**
@@ -99,8 +100,10 @@ const loaders: Partial<Record<Exclude<Slice, "bootstrap">, (branchId: string) =>
   async orders(branchId) {
     const rows = await apiFetch<OrderApi[]>("/v1/orders", { query: { branchId, detail: "full" } });
     return (d) => {
-      const mapped = rows.map((o) => mapOrder(o, d.menuItems)).reverse();
-      d.orders = [...d.orders.filter((o) => o.branchId !== branchId), ...mapped];
+      // An order with something still waiting to be sent keeps the version made on this device: it is newer than the server's.
+      const held = queuedOrderIds();
+      const mapped = rows.filter((o) => !held.has(o.id)).map((o) => mapOrder(o, d.menuItems)).reverse();
+      d.orders = [...d.orders.filter((o) => o.branchId !== branchId || held.has(o.id)), ...mapped];
     };
   },
 

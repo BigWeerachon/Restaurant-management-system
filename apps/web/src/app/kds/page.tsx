@@ -7,7 +7,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Gate, RouteGuard } from "@/components/app/gate";
-import { ConnectionBadge, ConnectionBanner } from "@/components/app/connection-badge";
+import { ConnectionBadge, ConnectionBanner, QueueBanner } from "@/components/app/connection-badge";
 import { LoadBanner } from "@/components/app/load-banner";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/feedback";
@@ -256,6 +256,7 @@ function KdsScreen() {
 
       <LoadBanner state={load} className="mx-4 mt-2 shrink-0" />
       <ConnectionBanner className="mx-4 mt-2 shrink-0">ออเดอร์ใหม่อาจยังไม่ขึ้นบนจอนี้ จะอัปเดตทันทีที่ต่อได้</ConnectionBanner>
+      <QueueBanner className="mx-4 mt-2 shrink-0" />
 
       {counts.length > 0 && (
         <div className="no-scrollbar flex shrink-0 items-center gap-2 overflow-x-auto border-b border-line bg-surface px-4 py-2 outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring" role="region" tabIndex={0} aria-label="รวมทุกออเดอร์ที่ต้องทำ">

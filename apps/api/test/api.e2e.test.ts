@@ -439,16 +439,24 @@ describe("a café's first day, through the API", () => {
     expect(wrong.status).toBe(422);
     expect(wrong.json.error.message).toContain("฿185.00");
 
-    const paid = await s.call("POST", `/v1/orders/${s.order}/pay`, { payments: [{ methodId: s.cash, amount: 185, tendered: 500 }] });
+    // The till's offline queue sends a payment again with the key it first used (checklist 5.2): if the first try got through
+    // and only the answer was lost, the repeat must be answered with the first result, not take the payment twice.
+    const payKey = `pay-${s.order}`;
+    const payBody = { payments: [{ methodId: s.cash, amount: 185, tendered: 500 }] };
+    const paid = await s.call("POST", `/v1/orders/${s.order}/pay`, payBody, { "idempotency-key": payKey });
     expect(paid.json.status).toBe("paid");
     expect(paid.json.change).toBe("315.00");
     expect(paid.json.receiptNo).toMatch(/^HQ-\d{4}-00001$/);
+    const paidAgain = await s.call("POST", `/v1/orders/${s.order}/pay`, payBody, { "idempotency-key": payKey });
+    expect(paidAgain.headers.get("idempotent-replayed")).toBe("true");
+    expect(paidAgain.json).toEqual(paid.json);
 
     const again = await s.call("POST", `/v1/orders/${s.order}/pay`, { payments: [{ methodId: s.cash, amount: 185 }] });
     expect(again.json.status).toBe("paid");
 
     const detail = await s.call("GET", `/v1/orders/${s.order}`);
     expect(detail.json.items).toHaveLength(2);
+    expect(detail.json.payments).toHaveLength(1); // however many times it was sent
     expect(detail.json.payments[0].change_given).toBe("315.00");
     // business_date is a plain calendar date, never a full ISO datetime.
     expect(detail.json.businessDate).toMatch(/^\d{4}-\d{2}-\d{2}$/);
