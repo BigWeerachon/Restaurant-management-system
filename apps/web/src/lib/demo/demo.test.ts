@@ -25,15 +25,27 @@ describe("demo shop", () => {
     expect(s.statementLines.length).toBe(5);
   });
 
-  it("compares today with the same weekday last week fairly, at any time of day", () => {
+  it("compares today with the same weekday last week without bias, at any time of day", { timeout: 30_000 }, () => {
+    // A single morning has only ~20 orders, so one day swings by more than 100% either way (the generators are
+    // seeded by date). What must hold is that there is no systematic skew — e.g. today's partial day compared
+    // with last week's whole day would read about -50% or worse — so measure it over fixed dates: the result
+    // never depends on which day the suite happens to run.
+    const dates = Array.from({ length: 14 }, (_, i) => addDays("2026-03-02", i));
     // 09:15, 13:40 and 20:05 in Bangkok, whatever the machine's own time zone.
     for (const iso of ["T02:15:00Z", "T06:40:00Z", "T13:05:00Z"]) {
-      const at = new Date(`${today}${iso}`);
-      const base = sampleState(today);
-      const s = produce(base, (d) => seedLive(d, at, today, generateHistory(base, today)));
-      const t = todayStats(s, generateHistory(s, today), "br-ari", at);
-      const change = t.sales / t.lastWeekSales - 1;
-      expect(Math.abs(change), `${iso}: ${(change * 100).toFixed(0)}%`).toBeLessThan(0.3);
+      let sales = 0;
+      let lastWeekSales = 0;
+      for (const date of dates) {
+        const at = new Date(`${date}${iso}`);
+        const base = sampleState(date);
+        const history = generateHistory(base, date);
+        const s = produce(base, (d) => seedLive(d, at, date, history));
+        const t = todayStats(s, history, "br-ari", at);
+        sales += t.sales;
+        lastWeekSales += t.lastWeekSales;
+      }
+      const bias = sales / lastWeekSales - 1;
+      expect(Math.abs(bias), `${iso}: ${(bias * 100).toFixed(1)}%`).toBeLessThan(0.2);
     }
   });
 
