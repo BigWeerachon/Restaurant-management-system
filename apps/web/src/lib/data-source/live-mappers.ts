@@ -3,7 +3,8 @@
  * availability, ...). Same rules as `mappers.ts`: money becomes satang, ids stay
  * as they are, snake_case becomes camelCase. Per-unit costs stay in baht.
  */
-import { toSatang } from "@sabai/domain";
+import { addDays, profitWaterfall, toSatang, type MenuClass } from "@sabai/domain";
+import type { ReportFilter, ReportSummary, TodayStats } from "./types";
 import type { Bill, DayClose, ExpectedReceipt, Expense, MenuItem, Movement, Order, PurchaseOrder, Shift, StatementLine, StockCount, Ticket } from "../demo/types";
 
 // ---------------------------------------------------------------------------
@@ -442,5 +443,121 @@ export function mapDayClose(r: DayCloseApi, branchId: string): DayClose {
     businessDate: r.business_date,
     closedAt: r.closed_at ?? r.business_date,
     summary: { orders: r.summary?.orders ?? 0, total, netSales: total - vat, vat, byChannel: [], byMethod: [], cashVariance: 0 },
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Reports — GET /v1/reports/summary and GET /v1/reports/today
+// ---------------------------------------------------------------------------
+/** Money is baht strings, shares are percents with one decimal; profit fields only come to people who may see profit. */
+export interface ReportSummaryApi {
+  totals: { orders: number; netSales: string; avgTicket: string; cost?: string; commission?: string; fees?: string; waste?: string; variance?: string; expenses?: string };
+  waterfall?: { key: ReportSummary["waterfall"][number]["key"]; label: string; labelEn: string; value: string; running: string; kind: "start" | "minus" | "end"; pctOfSales: number; explain: string }[];
+  days: { date: string; orders: number; netSales: string; profit?: string }[];
+  hours: number[];
+  branches: { id: string; name: string; orders: number; netSales: string; profit?: string }[];
+  channels: { channelId: string; name: string; orders: number; netSales: string; avgTicket: string; shareOfSales: number; cost?: string; commission?: string; paymentFees?: string; contribution?: string; marginPct?: number; shareOfContribution?: number }[];
+  items: { menuItemId: string; name: string; qty: number; sales: string; cost?: string; contributionPerItem?: string; mixPct?: number; class?: MenuClass }[];
+}
+
+const zeroWaterfall = (netSales: number) => profitWaterfall({ netSales, cogs: 0, waste: 0, stockVariance: 0, commission: 0, paymentFees: 0, expenses: 0 });
+
+/** Every day of the range, with zeros for days nothing was sold — the trend chart expects them all. */
+function daysOf(f: Pick<ReportFilter, "from" | "to">, rows: ReportSummaryApi["days"]): ReportSummary["days"] {
+  const byDate = new Map(rows.map((d) => [d.date, d]));
+  const out: ReportSummary["days"] = [];
+  for (let d = f.from; d <= f.to; d = addDays(d, 1)) {
+    const row = byDate.get(d);
+    out.push({ date: d, netSales: row ? toSatang(row.netSales) : 0, contribution: row?.profit ? toSatang(row.profit) : 0, orders: row?.orders ?? 0 });
+  }
+  return out;
+}
+
+/** What the screen shows before anything has been sold, or before the first answer arrives. */
+export function emptyReportSummary(f: Pick<ReportFilter, "from" | "to">): ReportSummary {
+  return {
+    totals: { orders: 0, netSales: 0, cost: 0, commission: 0, fees: 0, waste: 0, variance: 0, expenses: 0, avgTicket: 0 },
+    waterfall: zeroWaterfall(0),
+    channels: [],
+    items: [],
+    days: daysOf(f, []),
+    hours: new Array(24).fill(0) as number[],
+    branches: [],
+  };
+}
+
+export function mapReportSummary(r: ReportSummaryApi, f: Pick<ReportFilter, "from" | "to">): ReportSummary {
+  const sat = (v: string | undefined) => (v === undefined ? 0 : toSatang(v));
+  const fraction = (percent: number | undefined) => (percent === undefined ? 0 : percent / 100);
+  const netSales = sat(r.totals.netSales);
+  return {
+    totals: {
+      orders: r.totals.orders,
+      netSales,
+      cost: sat(r.totals.cost),
+      commission: sat(r.totals.commission),
+      fees: sat(r.totals.fees),
+      waste: sat(r.totals.waste),
+      variance: sat(r.totals.variance),
+      expenses: sat(r.totals.expenses),
+      avgTicket: sat(r.totals.avgTicket),
+    },
+    // Without the right to see profit the server sends no costs; the screen does not draw this part for those people.
+    waterfall: r.waterfall ? r.waterfall.map((w) => ({ ...w, value: toSatang(w.value), running: toSatang(w.running) })) : zeroWaterfall(netSales),
+    channels: r.channels.map((c) => ({
+      channelId: c.channelId,
+      name: c.name,
+      orders: c.orders,
+      netSales: sat(c.netSales),
+      cost: sat(c.cost),
+      commission: sat(c.commission),
+      paymentFees: sat(c.paymentFees),
+      contribution: sat(c.contribution),
+      marginPct: fraction(c.marginPct),
+      avgTicket: sat(c.avgTicket),
+      shareOfSales: fraction(c.shareOfSales),
+      shareOfContribution: fraction(c.shareOfContribution),
+    })),
+    items: r.items.map((i) => ({
+      menuItemId: i.menuItemId,
+      name: i.name,
+      qty: i.qty,
+      sales: sat(i.sales),
+      cost: sat(i.cost),
+      contributionPerItem: sat(i.contributionPerItem),
+      mixPct: fraction(i.mixPct),
+      class: i.class ?? "plowhorse",
+    })),
+    days: daysOf(f, r.days),
+    hours: r.hours,
+    branches: r.branches.map((b) => ({ id: b.id, name: b.name, netSales: sat(b.netSales), orders: b.orders, contribution: sat(b.profit) })),
+  };
+}
+
+export interface TodayStatsApi {
+  today: string;
+  sales: string;
+  orders: number;
+  avgTicket: string;
+  keep: string;
+  keepPct: number;
+  lastWeekSales: string;
+  lastWeekOrders: number;
+  spark: string[];
+  open: number;
+}
+
+export function mapTodayStats(t: TodayStatsApi): TodayStats {
+  return {
+    today: t.today,
+    sales: toSatang(t.sales),
+    orders: t.orders,
+    avgTicket: toSatang(t.avgTicket),
+    keep: toSatang(t.keep),
+    keepPct: t.keepPct,
+    lastWeekSales: toSatang(t.lastWeekSales),
+    lastWeekOrders: t.lastWeekOrders,
+    spark: t.spark.map(toSatang),
+    open: t.open,
   };
 }

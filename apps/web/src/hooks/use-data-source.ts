@@ -1,11 +1,12 @@
 "use client";
 
 import type { Permission } from "@sabai/domain";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { dataSourceMode, getDataSource } from "@/lib/data-source";
-import type { ApprovalToken, DataSource, Slice } from "@/lib/data-source/types";
-import { isDomainError, useSabai } from "@/lib/demo/store";
+import type { ApprovalToken, DataSource, ReportFilter, ReportSummary, Slice, TodayStats } from "@/lib/data-source/types";
+import { reportSummary as selectReportSummary, todayStats as selectTodayStats } from "@/lib/demo/selectors";
+import { getHistory, isDomainError, useSabai } from "@/lib/demo/store";
 import { showError, useUi } from "./use-sabai";
 
 interface ExecOptions<T> {
@@ -108,4 +109,74 @@ export function useLoad(slices: Slice[], opts: { everyMs?: number } = {}): LoadS
   }, [api, hydrated, memberId, branchId, run, opts.everyMs]);
 
   return { ...state, reload: () => run() };
+}
+
+export interface QueryState<T> extends LoadState {
+  data: T | undefined;
+}
+
+/**
+ * One question put to the API (a report, today's numbers). Runs when `key` changes — a `null` key asks nothing —
+ * and every `everyMs` if given. The answer to a different question is dropped rather than shown under the new
+ * heading; a refresh of the same question keeps what is on screen until the new answer arrives.
+ */
+function useApiQuery<T>(key: string | null, fetcher: () => Promise<T>, opts: { everyMs?: number } = {}): QueryState<T> {
+  const hydrated = useSabai((s) => s.hydrated);
+  const memberId = useSabai((s) => s.session.memberId);
+  const branchId = useSabai((s) => s.session.branchId);
+  const [state, setState] = useState<{ key: string | null; data: T | undefined; loading: boolean; error: unknown }>({ key, data: undefined, loading: key !== null, error: null });
+  const latest = useRef(fetcher);
+  latest.current = fetcher;
+  const asked = useRef(0);
+
+  const run = useCallback(
+    async (silent = false) => {
+      if (key === null) return;
+      const n = ++asked.current;
+      if (!silent) setState((s) => ({ key, data: s.key === key ? s.data : undefined, loading: true, error: null }));
+      try {
+        const data = await latest.current();
+        if (n === asked.current) setState({ key, data, loading: false, error: null });
+      } catch (error) {
+        // A poll that fails once is not worth a banner; the next one will retry.
+        if (n === asked.current && !silent) setState((s) => ({ key, data: s.key === key ? s.data : undefined, loading: false, error }));
+      }
+    },
+    [key],
+  );
+
+  useEffect(() => {
+    if (key === null || !hydrated || !memberId) return;
+    void run();
+    if (!opts.everyMs) return;
+    const id = setInterval(() => void run(true), opts.everyMs);
+    return () => clearInterval(id);
+  }, [key, hydrated, memberId, branchId, run, opts.everyMs]);
+
+  // Until the effect has started for a new key, what is in `state` still answers the old one.
+  return { data: state.key === key ? state.data : undefined, loading: key !== null && (state.key !== key || state.loading), error: state.key === key ? state.error : null, reload: () => run() };
+}
+
+const NOT_ASKED: QueryState<never> = { data: undefined, loading: false, error: null, reload: async () => {} };
+
+/**
+ * The report for a period (`null` asks nothing). API mode asks the server; demo mode has all the data in memory
+ * and works it out on the spot, so it also stays current as the demo shop trades.
+ */
+export function useReportSummary(filter: ReportFilter | null): QueryState<ReportSummary> {
+  const api = dataSourceMode() === "api";
+  const db = useSabai((s) => s.db);
+  const key = filter ? `${filter.from}|${filter.to}|${filter.branchId ?? ""}` : null;
+  const local = useMemo(() => (!api && filter ? selectReportSummary(db, getHistory(db), filter) : undefined), [api, db, key]); // eslint-disable-line react-hooks/exhaustive-deps
+  const remote = useApiQuery(api ? key : null, () => getDataSource().reportSummary(filter!));
+  return api ? remote : { ...NOT_ASKED, data: local };
+}
+
+/** Today's numbers for one branch, refreshed every 30 seconds in API mode; `now` matters only to the demo, which counts up to this minute. */
+export function useTodayStats(branchId: string, now: Date): QueryState<TodayStats> {
+  const api = dataSourceMode() === "api";
+  const db = useSabai((s) => s.db);
+  const local = useMemo(() => (api ? undefined : selectTodayStats(db, getHistory(db), branchId, now)), [api, db, branchId, now]);
+  const remote = useApiQuery(api ? `today|${branchId}` : null, () => getDataSource().today(branchId), { everyMs: 30_000 });
+  return api ? remote : { ...NOT_ASKED, data: local };
 }

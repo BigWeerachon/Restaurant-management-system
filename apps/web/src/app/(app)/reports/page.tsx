@@ -4,17 +4,20 @@ import { addDays, formatThaiDate, MENU_CLASS_COPY, percentChange, type MenuClass
 import { Download, Lightbulb, TrendingDown, TrendingUp } from "lucide-react";
 import { motion } from "motion/react";
 import { useMemo, useState } from "react";
+import { LoadBanner } from "@/components/app/load-banner";
 import { PageHeader } from "@/components/app/page-header";
 import { CHANNEL_SEGMENTS, ChannelMix, HourColumns, RankBars, Waterfall } from "@/components/charts/bars";
 import { ChartCard, DataTable, Legend } from "@/components/charts/chart-kit";
 import { MenuMatrix } from "@/components/charts/menu-matrix";
 import { TrendChart } from "@/components/charts/trend-chart";
 import { Button } from "@/components/ui/button";
-import { AnimatedNumber, EmptyState } from "@/components/ui/feedback";
+import { AnimatedNumber, EmptyState, Skeleton } from "@/components/ui/feedback";
 import { Card, Segmented } from "@/components/ui/primitives";
-import { useAccess, useBusinessDate, useHistory } from "@/hooks/use-sabai";
+import { useReportSummary } from "@/hooks/use-data-source";
+import { useAccess, useBusinessDate } from "@/hooks/use-sabai";
 import { cn } from "@/lib/cn";
-import { formatBaht, reportSummary } from "@/lib/demo/selectors";
+import { emptyReportSummary } from "@/lib/data-source/live-mappers";
+import { formatBaht } from "@/lib/demo/selectors";
 import { useSabai } from "@/lib/demo/store";
 
 type Preset = "today" | "7d" | "30d";
@@ -71,7 +74,6 @@ function downloadCsv(name: string, rows: (string | number)[][]) {
 
 export default function ReportsPage() {
   const db = useSabai((s) => s.db);
-  const history = useHistory();
   const { can, branches } = useAccess();
   const today = useBusinessDate();
   const [preset, setPreset] = useState<Preset>(db.mode === "fresh" ? "today" : "7d");
@@ -86,9 +88,12 @@ export default function ReportsPage() {
     return { from: addDays(today, -days), to: addDays(today, -1), days };
   }, [preset, today]);
   const bid = branchId === "all" ? null : branchId;
-  const r = useMemo(() => reportSummary(db, history, { ...range, branchId: bid }), [db, history, range, bid]);
+  const query = useReportSummary({ from: range.from, to: range.to, branchId: bid ?? undefined });
   // Previous period only where the history fully covers it (a fair comparison).
-  const prev = useMemo(() => (preset === "7d" ? reportSummary(db, history, { from: addDays(range.from, -7), to: addDays(range.to, -7), branchId: bid }) : null), [db, history, preset, range, bid]);
+  const prevQuery = useReportSummary(preset === "7d" ? { from: addDays(range.from, -7), to: addDays(range.to, -7), branchId: bid ?? undefined } : null);
+  const prev = prevQuery.data ?? null;
+  // Until the first answer arrives the page is laid out with an empty report, and says it is still loading.
+  const r = useMemo(() => query.data ?? emptyReportSummary(range), [query.data, range]);
 
   const profit = r.waterfall[r.waterfall.length - 1]!;
   const foodPct = r.totals.netSales ? r.totals.cost / r.totals.netSales : 0;
@@ -98,6 +103,7 @@ export default function ReportsPage() {
   const byClass = (cls: MenuClass) => r.items.filter((i) => i.class === cls);
   const rangeLabel = preset === "today" ? formatThaiDate(today) : `${formatThaiDate(range.from, false)} – ${formatThaiDate(range.to, false)}`;
   const empty = r.totals.orders === 0;
+  const waiting = !query.data;
 
   return (
     <div className="space-y-10">
@@ -141,7 +147,14 @@ export default function ReportsPage() {
         </p>
       </div>
 
-      {empty ? (
+      <LoadBanner state={query} />
+
+      {waiting ? (
+        <Card className="space-y-4 p-6" aria-busy={query.loading}>
+          <Skeleton className="h-8 w-1/3" />
+          <Skeleton className="h-40 w-full" />
+        </Card>
+      ) : empty ? (
         <Card>
           <EmptyState
             emoji="📊"

@@ -36,6 +36,7 @@ import type {
   SubmitOrderInput,
 } from "../demo/engine";
 import type { PlanCode, Recipe, Satang } from "@sabai/domain";
+import type { reportSummary, todayStats } from "../demo/selectors";
 
 /** Opaque approval proof: a member id in demo mode, a one-time `approvalId` from the API in API mode. */
 export interface ApprovalToken {
@@ -68,30 +69,11 @@ export interface ReportFilter {
   branchId?: string;
 }
 
-/** Same shape as `apps/web/src/lib/demo/selectors.ts`'s `reportSummary()` and the API's `GET /v1/reports/summary`. */
-export interface ReportSummary {
-  totals: { orders: number; netSales: number; cost: number; commission: number; fees: number; waste: number; variance: number; expenses: number; avgTicket: number };
-  waterfall: { key: string; label: string; value: number; running: number }[];
-  channels: { channelId: string; name: string; orders: number; netSales: number; avgTicket: number; shareOfSales: number; contribution: number; marginPct: number; commission: number }[];
-  items: { menuItemId: string; name: string; qty: number; sales: number; contributionPerItem: number; class: string }[];
-  days: { date: string; netSales: number; contribution: number; orders: number }[];
-  hours: number[];
-  branches: { id: string; name: string; netSales: number; orders: number; contribution: number }[];
-}
+/** What the report screen draws — whatever `selectors.ts`'s `reportSummary()` produces, so the two can never drift apart. */
+export type ReportSummary = ReturnType<typeof reportSummary>;
 
-/** Same shape as `selectors.ts`'s `todayStats()` and the API's `GET /v1/reports/today`. */
-export interface TodayStats {
-  today: string;
-  sales: Satang;
-  orders: number;
-  avgTicket: Satang;
-  keep: Satang;
-  keepPct: number;
-  lastWeekSales: Satang;
-  lastWeekOrders: number;
-  spark: Satang[];
-  open: number;
-}
+/** The numbers on the "today" screen — whatever `selectors.ts`'s `todayStats()` produces. */
+export type TodayStats = ReturnType<typeof todayStats>;
 
 export interface DataSource {
   // ------------------------------------------------------------- loaders

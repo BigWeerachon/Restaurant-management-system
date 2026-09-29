@@ -14,6 +14,7 @@ import { kdsCommands } from "./http-kds";
 import { menuCommands } from "./http-menu";
 import { posCommands } from "./http-pos";
 import { purchasingCommands } from "./http-purchasing";
+import { reportQueries } from "./http-reports";
 import { stockCommands } from "./http-stock";
 import type { DataSource, Slice } from "./types";
 
@@ -78,6 +79,7 @@ const implemented = {
   ...menuCommands,
   ...purchasingCommands,
   ...financeCommands,
+  ...reportQueries,
 } satisfies Partial<DataSource>;
 
 const NOT_YET = [
@@ -94,8 +96,6 @@ const NOT_YET = [
   "skipOnboardingStep",
   "confirmCashOnly",
   "changePlan",
-  "reportSummary",
-  "today",
 ] as const satisfies readonly Exclude<keyof DataSource, keyof typeof implemented>[];
 
 const notYet = Object.fromEntries(

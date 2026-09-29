@@ -137,14 +137,23 @@ export function registerReports(app: Hono<Env>, deps: Deps) {
             netSales: baht(c.netSales),
             avgTicket: baht(c.avgTicket),
             shareOfSales: Math.round(c.shareOfSales * 1000) / 10,
-            ...(showProfit ? { contribution: baht(c.contribution), marginPct: Math.round(c.marginPct * 1000) / 10, commission: baht(c.commission) } : {}),
+            ...(showProfit
+              ? {
+                  cost: baht(c.cost),
+                  commission: baht(c.commission),
+                  paymentFees: baht(c.paymentFees),
+                  contribution: baht(c.contribution),
+                  marginPct: Math.round(c.marginPct * 1000) / 10,
+                  shareOfContribution: Math.round(c.shareOfContribution * 1000) / 10,
+                }
+              : {}),
           })),
           items: engineered.map((i) => ({
             menuItemId: i.menuItemId,
             name: i.name,
             qty: i.qty,
             sales: baht(i.sales),
-            ...(showProfit ? { contributionPerItem: baht(i.contributionPerItem), class: i.class } : {}),
+            ...(showProfit ? { cost: baht(i.cost), contributionPerItem: baht(i.contributionPerItem), mixPct: Math.round(i.mixPct * 1000) / 10, class: i.class } : {}),
           })),
         };
       }),
@@ -231,7 +240,7 @@ export function registerReports(app: Hono<Env>, deps: Deps) {
 
   route(app, deps, { method: "GET", path: "/v1/activity", tag: "Insights", summary: "ใครทำอะไร เมื่อไร (ยกเลิก ส่วนลด คืนเงิน ปรับสต็อก)", tenant: true, query: z.object({ limit: z.coerce.number().int().min(1).max(200).default(50) }), permission: "audit.view" }, async ({ tenantId, query, tx }) =>
     tx((t) => t`
-      select e.id, e.event_type as type, e.occurred_at, e.payload, e.branch_id, m.display_name as actor
+      select e.id, e.event_type as type, e.occurred_at, e.payload, e.branch_id, e.actor_id, e.aggregate_type as entity_type, e.aggregate_id as entity_id, m.display_name as actor
         from app.domain_events e left join app.memberships m on m.id = e.actor_id
        where e.tenant_id = ${tenantId}
        order by e.occurred_at desc limit ${query.limit}`),

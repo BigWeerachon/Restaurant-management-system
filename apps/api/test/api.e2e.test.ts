@@ -709,6 +709,10 @@ describe("closing the day and reading the numbers", () => {
     expect(Number(profit.value)).toBeGreaterThan(0);
     expect(r.json.items[0].name).toBe("ลาเต้เย็น");
     expect(r.json.channels[0].name).toBe("ทานที่ร้าน");
+    // Everything the report screen draws comes back in one answer: costs and fees per channel, cost and mix per item.
+    expect(r.json.channels[0]).toEqual(expect.objectContaining({ cost: expect.any(String), commission: expect.any(String), paymentFees: expect.any(String), contribution: expect.any(String), marginPct: expect.any(Number), shareOfContribution: 100 }));
+    expect(r.json.items[0]).toEqual(expect.objectContaining({ cost: expect.any(String), contributionPerItem: expect.any(String), mixPct: expect.any(Number), class: expect.any(String) }));
+    expect(r.json.days[0]).toEqual(expect.objectContaining({ date: s.date, profit: expect.any(String) }));
     // One order at 172.90 net sales, opened this hour — appears once in the 24-hour trend.
     expect(r.json.hours.reduce((a: number, b: number) => a + b, 0)).toBe(1);
     expect(r.json.hours).toHaveLength(24);
@@ -738,6 +742,8 @@ describe("closing the day and reading the numbers", () => {
     const r = await s.call("GET", "/v1/activity?limit=100");
     const types = r.json.map((e: any) => e.type);
     expect(types).toContain("order.paid");
+    // Who did it and what it was about, so the screen can say "คุณปิยะ ..." and link a price rise to its ingredient.
+    expect(r.json.find((e: any) => e.type === "order.paid")).toEqual(expect.objectContaining({ actor: expect.any(String), actor_id: expect.any(String), entity_type: "order", entity_id: expect.any(String) }));
     expect(types).toContain("order.discounted");
     expect(types).toContain("finance.day_closed");
   });

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { orderApi, ticketApi } from "./fixtures";
-import { mapBalances, mapBill, mapClosedShift, mapCount, mapCurrentShift, mapDayClose, mapExpected, mapExpense, mapMovement, mapOrder, mapPurchaseOrder, mapStatementLine, mapTicket } from "./live-mappers";
+import { emptyReportSummary, mapBalances, mapBill, mapClosedShift, mapCount, mapCurrentShift, mapDayClose, mapExpected, mapExpense, mapMovement, mapOrder, mapPurchaseOrder, mapReportSummary, mapStatementLine, mapTicket, mapTodayStats, type ReportSummaryApi } from "./live-mappers";
 
 const menu = [{ id: "mi-latte", emoji: "🥤" }];
 
@@ -219,5 +219,91 @@ describe("finance mappers", () => {
     expect(c).toEqual({ branchId: "br-1", businessDate: "2026-09-28", closedAt: "2026-09-29T02:00:00.000Z", summary: { orders: 12, total: 321000, netSales: 300000, vat: 21000, byChannel: [], byMethod: [], cashVariance: 0 } });
     // A row with no summary yet still maps.
     expect(mapDayClose({ business_date: "2026-09-27", status: "closed", closed_at: null, summary: null }, "br-1").summary.total).toBe(0);
+  });
+});
+
+describe("mapReportSummary", () => {
+  const waterfall = [
+    { key: "net_sales" as const, label: "ยอดขายสุทธิ", labelEn: "Net sales", value: "1000.00", running: "1000.00", kind: "start" as const, pctOfSales: 1, explain: "" },
+    { key: "cogs" as const, label: "ต้นทุนวัตถุดิบ", labelEn: "Ingredients", value: "-300.00", running: "700.00", kind: "minus" as const, pctOfSales: 0.3, explain: "" },
+    { key: "profit" as const, label: "เหลือจริง", labelEn: "Profit", value: "700.00", running: "700.00", kind: "end" as const, pctOfSales: 0.7, explain: "" },
+  ];
+  const full: ReportSummaryApi = {
+    totals: { orders: 10, netSales: "1000.00", avgTicket: "100.00", cost: "300.00", commission: "50.50", fees: "10.00", waste: "20.00", variance: "5.00", expenses: "100.00" },
+    waterfall,
+    days: [
+      { date: "2026-09-27", orders: 4, netSales: "400.00", profit: "250.00" },
+      { date: "2026-09-29", orders: 6, netSales: "600.00", profit: "450.00" },
+    ],
+    hours: new Array(24).fill(0),
+    branches: [{ id: "br-1", name: "อารีย์", orders: 10, netSales: "1000.00", profit: "700.00" }],
+    channels: [{ channelId: "ch-1", name: "ทานที่ร้าน", orders: 10, netSales: "1000.00", avgTicket: "100.00", shareOfSales: 100, cost: "300.00", commission: "50.50", paymentFees: "10.00", contribution: "639.50", marginPct: 63.9, shareOfContribution: 100 }],
+    items: [{ menuItemId: "mi-1", name: "ลาเต้เย็น", qty: 20, sales: "1300.00", cost: "324.00", contributionPerItem: "48.80", mixPct: 45.5, class: "star" }],
+  };
+  const range = { from: "2026-09-27", to: "2026-09-29" };
+
+  it("turns baht into satang and percents into fractions, so the screen gets exactly what the demo's report gives it", () => {
+    const r = mapReportSummary(full, range);
+    expect(r.totals).toEqual({ orders: 10, netSales: 100000, avgTicket: 10000, cost: 30000, commission: 5050, fees: 1000, waste: 2000, variance: 500, expenses: 10000 });
+    expect(r.waterfall.map((w) => [w.key, w.value, w.running, w.kind])).toEqual([["net_sales", 100000, 100000, "start"], ["cogs", -30000, 70000, "minus"], ["profit", 70000, 70000, "end"]]);
+    expect(r.channels[0]).toEqual({ channelId: "ch-1", name: "ทานที่ร้าน", orders: 10, netSales: 100000, cost: 30000, commission: 5050, paymentFees: 1000, contribution: 63950, marginPct: 0.639, avgTicket: 10000, shareOfSales: 1, shareOfContribution: 1 });
+    expect(r.items[0]).toEqual({ menuItemId: "mi-1", name: "ลาเต้เย็น", qty: 20, sales: 130000, cost: 32400, contributionPerItem: 4880, mixPct: 0.455, class: "star" });
+    expect(r.branches[0]).toEqual({ id: "br-1", name: "อารีย์", netSales: 100000, orders: 10, contribution: 70000 });
+  });
+
+  it("gives every day of the range, with zeros for the days nothing was sold", () => {
+    const r = mapReportSummary(full, range);
+    expect(r.days).toEqual([
+      { date: "2026-09-27", netSales: 40000, contribution: 25000, orders: 4 },
+      { date: "2026-09-28", netSales: 0, contribution: 0, orders: 0 },
+      { date: "2026-09-29", netSales: 60000, contribution: 45000, orders: 6 },
+    ]);
+  });
+
+  it("copes with a report that has no profit figures, as the server sends to people who may not see profit", () => {
+    const { waterfall: _w, ...rest } = full;
+    const r = mapReportSummary(
+      {
+        ...rest,
+        totals: { orders: 10, netSales: "1000.00", avgTicket: "100.00" },
+        days: [{ date: "2026-09-29", orders: 6, netSales: "600.00" }],
+        branches: [{ id: "br-1", name: "อารีย์", orders: 10, netSales: "1000.00" }],
+        channels: [{ channelId: "ch-1", name: "ทานที่ร้าน", orders: 10, netSales: "1000.00", avgTicket: "100.00", shareOfSales: 100 }],
+        items: [{ menuItemId: "mi-1", name: "ลาเต้เย็น", qty: 20, sales: "1300.00" }],
+      },
+      range,
+    );
+    expect(r.totals).toMatchObject({ netSales: 100000, cost: 0, expenses: 0 });
+    // Never undefined: the screen reads the last step of the waterfall without checking.
+    expect(r.waterfall.at(-1)!.key).toBe("profit");
+    expect(r.waterfall[0]).toMatchObject({ key: "net_sales", value: 100000 });
+    expect(r.channels[0]).toMatchObject({ cost: 0, contribution: 0, marginPct: 0, shareOfSales: 1 });
+    expect(r.items[0]).toMatchObject({ contributionPerItem: 0, mixPct: 0 });
+    expect(r.days.find((d) => d.date === "2026-09-29")).toMatchObject({ netSales: 60000, contribution: 0 });
+  });
+
+  it("has an empty report for the moment before the first answer, with the whole range and 24 hours", () => {
+    const r = emptyReportSummary({ from: "2026-09-29", to: "2026-09-29" });
+    expect(r.totals.orders).toBe(0);
+    expect(r.days).toEqual([{ date: "2026-09-29", netSales: 0, contribution: 0, orders: 0 }]);
+    expect(r.hours).toHaveLength(24);
+    expect(r.waterfall.at(-1)!.key).toBe("profit");
+  });
+});
+
+describe("mapTodayStats", () => {
+  it("turns today's figures into satang and keeps the share as a fraction", () => {
+    expect(mapTodayStats({ today: "2026-09-29", sales: "1234.50", orders: 12, avgTicket: "102.88", keep: "500.00", keepPct: 0.412, lastWeekSales: "1000.00", lastWeekOrders: 10, spark: ["100.00", "0.00", "1234.50"], open: 2 })).toEqual({
+      today: "2026-09-29",
+      sales: 123450,
+      orders: 12,
+      avgTicket: 10288,
+      keep: 50000,
+      keepPct: 0.412,
+      lastWeekSales: 100000,
+      lastWeekOrders: 10,
+      spark: [10000, 0, 123450],
+      open: 2,
+    });
   });
 });
