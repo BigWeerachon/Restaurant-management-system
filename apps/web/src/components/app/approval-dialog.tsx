@@ -7,7 +7,8 @@ import { Avatar } from "@/components/ui/primitives";
 import { Keypad, PinDots } from "@/components/ui/feedback";
 import { Dialog } from "@/components/ui/overlay";
 import { useUi } from "@/hooks/use-sabai";
-import { approverByPin, memberCan } from "@/lib/demo/engine";
+import { dataSourceMode, getDataSource } from "@/lib/data-source";
+import { memberCan } from "@/lib/demo/engine";
 import { isDomainError, useSabai } from "@/lib/demo/store";
 
 /**
@@ -21,6 +22,7 @@ export function ApprovalDialog() {
   const branchId = useSabai((s) => s.session.branchId) ?? db.branches[0]?.id ?? "";
   const [pin, setPin] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [checking, setChecking] = useState(false);
 
   useEffect(() => {
     setPin("");
@@ -29,15 +31,19 @@ export function ApprovalDialog() {
 
   const approvers = approval ? db.members.filter((m) => m.active && memberCan(db, m.id, approval.permission, branchId)) : [];
 
-  const submit = (value: string) => {
-    if (!approval) return;
+  const submit = async (value: string) => {
+    if (!approval || checking) return;
+    setChecking(true);
     try {
-      const m = approverByPin(db, value, approval.permission, branchId);
-      close(m.id);
+      // Demo: the approver's member id. API: a one-time approval id the command then carries.
+      const token = await getDataSource().approve(approval.permission, value);
+      close(token.value);
     } catch (e) {
       const h = humanizeError(isDomainError(e) ? e.code : "INTERNAL");
       setError(h.message);
       setPin("");
+    } finally {
+      setChecking(false);
     }
   };
 
@@ -70,7 +76,7 @@ export function ApprovalDialog() {
           </p>
         </div>
         <Keypad onKey={onKey} onBackspace={() => setPin((p) => p.slice(0, -1))} onClear={() => setPin("")} />
-        <p className="text-center text-xs text-ink-3">ตัวอย่าง: พี่นิด (ผู้จัดการ) PIN 2222 · คุณปิยะ (เจ้าของ) PIN 1234</p>
+        {dataSourceMode() === "demo" && <p className="text-center text-xs text-ink-3">ตัวอย่าง: พี่นิด (ผู้จัดการ) PIN 2222 · คุณปิยะ (เจ้าของ) PIN 1234</p>}
       </div>
     </Dialog>
   );

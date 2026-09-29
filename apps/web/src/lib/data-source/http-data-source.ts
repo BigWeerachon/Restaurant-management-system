@@ -67,10 +67,20 @@ const implemented = {
     useSabai.getState().signIn(member.id, branchId);
     return member;
   },
+
+  async approve(permission: string, pin: string, target?: { type: string; id: string }, reason?: string) {
+    const { db, session } = useSabai.getState();
+    const branchId = session.branchId ?? db.branches[0]!.id;
+    // The API checks the PIN against people who hold this permission and returns a one-time id for the command to carry.
+    const r = await apiFetch<{ approvalId: string; expiresAt: string }>("/v1/approvals", {
+      method: "POST",
+      body: { branchId, permission, pin, targetType: target?.type, targetId: target?.id, reason },
+    });
+    return { value: r.approvalId };
+  },
 } satisfies Partial<DataSource>;
 
 const NOT_YET = [
-  "approve",
   "openShift",
   "cashMove",
   "closeShift",

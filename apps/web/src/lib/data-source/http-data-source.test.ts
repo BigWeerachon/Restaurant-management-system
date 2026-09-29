@@ -99,6 +99,30 @@ describe("HttpDataSource", () => {
     expect(getApiSession().token).toBe("user-token");
   });
 
+  it("asks the API to approve a sensitive action by manager PIN and hands back the one-time approval id", async () => {
+    setApiSession({ token: "staff-token", tenantId: "t-1" });
+    const fetchMock = vi.fn().mockResolvedValue(json(201, { approvalId: "ap-1", expiresAt: "2026-09-29T06:00:00Z" }));
+    vi.stubGlobal("fetch", fetchMock);
+    const branchId = useSabai.getState().db.branches[0]!.id;
+    useSabai.getState().setBranch(branchId);
+
+    const token = await httpDataSource.approve("pos.discount", "2222", { type: "order", id: "o-1" }, "ลูกค้าประจำ");
+
+    expect(token).toEqual({ value: "ap-1" });
+    const [url, init] = fetchMock.mock.calls[0]!;
+    expect(String(url)).toContain("/v1/approvals");
+    expect(JSON.parse(init.body)).toEqual({ branchId, permission: "pos.discount", pin: "2222", targetType: "order", targetId: "o-1", reason: "ลูกค้าประจำ" });
+    expect(init.headers["Idempotency-Key"]).toBeTruthy();
+  });
+
+  it("shows the API's reason when the manager PIN is wrong or the approver may not approve this", async () => {
+    setApiSession({ token: "staff-token", tenantId: "t-1" });
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(json(422, { error: { code: "APPROVAL_PIN_INVALID" } })));
+    await expect(httpDataSource.approve("pos.void", "0000")).rejects.toMatchObject({ code: "APPROVAL_PIN_INVALID" });
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(json(403, { error: { code: "APPROVER_NOT_ALLOWED", details: { permission: "pos.refund" } } })));
+    await expect(httpDataSource.approve("pos.refund", "3333")).rejects.toMatchObject({ code: "APPROVER_NOT_ALLOWED", params: { permission: "pos.refund" } });
+  });
+
   it("signs out completely: the token is forgotten, not just the local session", async () => {
     setApiSession({ token: "staff-token", tenantId: "t-1" });
     await httpDataSource.signOut();
