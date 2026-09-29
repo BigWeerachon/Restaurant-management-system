@@ -306,6 +306,7 @@ export function mapShopBootstrap(shop: ShopApiResponse): ShopBootstrap {
   }));
 
   const roles: Role[] = shop.roles.map((r) => ({
+    id: r.id,
     key: r.key,
     name: r.name,
     description: r.description ?? "",

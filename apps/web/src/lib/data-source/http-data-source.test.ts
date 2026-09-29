@@ -131,9 +131,9 @@ describe("HttpDataSource", () => {
 
   it("refuses commands that are not wired to the API yet instead of changing only the local copy", async () => {
     const ds = httpDataSource;
-    await expect(ds.resetMemberPin("m-1", "1234")).rejects.toBeInstanceOf(DomainError);
-    await expect(ds.resetMemberPin("m-1", "1234")).rejects.toMatchObject({ code: "INTERNAL", params: { feature: "resetMemberPin" } });
-    await expect(ds.load(["team"])).rejects.toMatchObject({ code: "INTERNAL", params: { feature: "load(team)" } });
+    await expect(ds.updateTenant({ name: "x" })).rejects.toBeInstanceOf(DomainError);
+    await expect(ds.updateTenant({ name: "x" })).rejects.toMatchObject({ code: "INTERNAL", params: { feature: "updateTenant" } });
+    await expect(ds.load(["settings"])).rejects.toMatchObject({ code: "INTERNAL", params: { feature: "load(settings)" } });
     await expect(ds.signIn("m-1")).rejects.toMatchObject({ code: "AUTH_REQUIRED" });
   });
 });

@@ -141,8 +141,20 @@ export function registerIdentity(app: Hono<Env>, deps: Deps) {
 
   route(app, deps, { method: "PATCH", path: "/v1/members/{id}", tag: "Team", summary: "แก้พนักงาน (ชื่อ ตำแหน่ง สาขา วงเงินส่วนลด) หรือปิด/เปิดใช้งาน", tenant: true, body: UpdateMemberBody, permission: "staff.manage" }, async ({ tenantId, params, body, tx }) =>
     tx(async (t) => {
-      const [existing] = await t<{ id: string }[]>`select id from app.memberships where id = ${params.id} and tenant_id = ${tenantId} and status <> 'removed'`;
+      const [existing] = await t<{ id: string; status: string }[]>`select id, status from app.memberships where id = ${params.id} and tenant_id = ${tenantId} and status <> 'removed'`;
       if (!existing) throw new ApiFailure("NOT_FOUND", 404, { entity: "member" });
+
+      // Two rules the database cannot know: you may not lock yourself out, and bringing someone back counts as adding them.
+      if (body.status === "suspended") {
+        const [me] = await t<{ id: string | null }[]>`select app.actor_membership_id(${tenantId}) as id`;
+        if (me?.id === params.id) throw new ApiFailure("CANNOT_DEACTIVATE_SELF");
+      }
+      if (body.status === "active" && existing.status !== "active") {
+        const [lim] = await t<{ limit: number | null; used: string }[]>`
+          select app.plan_limit(${tenantId}, 'staff') as limit,
+                 (select count(*) from app.memberships where tenant_id = ${tenantId} and status in ('active','invited')) as used`;
+        if (lim && lim.limit !== null && Number(lim.used) >= lim.limit) throw new ApiFailure("PLAN_LIMIT_REACHED", 402, { metric: "staff", limit: lim.limit });
+      }
 
       let roleId: string | null = null;
       if (body.roleKey !== undefined) {
@@ -186,8 +198,10 @@ export function registerIdentity(app: Hono<Env>, deps: Deps) {
 
   route(app, deps, { method: "PUT", path: "/v1/roles/{id}/permissions", tag: "Team", summary: "ตั้งสิทธิ์ของตำแหน่ง (แทนที่ชุดเดิมทั้งหมด)", tenant: true, body: SetRolePermissionsBody, permission: "staff.manage" }, async ({ tenantId, params, body, tx }) =>
     tx(async (t) => {
-      const [role] = await t<{ id: string }[]>`select id from app.roles where id = ${params.id} and tenant_id = ${tenantId}`;
+      const [role] = await t<{ id: string; grants_all: boolean }[]>`select id, grants_all from app.roles where id = ${params.id} and tenant_id = ${tenantId}`;
       if (!role) throw new ApiFailure("NOT_FOUND", 404, { entity: "role" });
+      // The owner role has every right by definition; there is nothing to edit.
+      if (role.grants_all) throw new ApiFailure("PERMISSION_DENIED", 403, { permission: "roles.edit_owner" });
       await t`delete from app.role_permissions where tenant_id = ${tenantId} and role_id = ${params.id}`;
       for (const key of body.permissions) {
         await t`insert into app.role_permissions (tenant_id, role_id, permission_key) values (${tenantId}, ${params.id}, ${key}) on conflict do nothing`;

@@ -16,6 +16,7 @@ import { posCommands } from "./http-pos";
 import { purchasingCommands } from "./http-purchasing";
 import { reportQueries } from "./http-reports";
 import { stockCommands } from "./http-stock";
+import { teamCommands } from "./http-team";
 import type { DataSource, Slice } from "./types";
 
 export { loadShop };
@@ -80,13 +81,10 @@ const implemented = {
   ...purchasingCommands,
   ...financeCommands,
   ...reportQueries,
+  ...teamCommands,
 } satisfies Partial<DataSource>;
 
 const NOT_YET = [
-  "addMember",
-  "updateMember",
-  "resetMemberPin",
-  "setRolePermissions",
   "updateTenant",
   "addBranch",
   "updateBranch",

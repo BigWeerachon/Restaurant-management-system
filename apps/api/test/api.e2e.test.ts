@@ -622,6 +622,49 @@ describe("staff on a shared device", () => {
     expect(empty.status).toBe(422);
   });
 
+  it("will not let someone lock themselves out, remove the last owner, or reuse a PIN", async () => {
+    // The owner is signed in as themself here: suspending yourself is refused with a reason.
+    const me = await s.call("GET", "/v1/members");
+    const owner = me.json.find((m: any) => m.role_key === "owner");
+    const self = await s.call("PATCH", `/v1/members/${owner.id}`, { status: "suspended" });
+    expect(self.status).toBe(422);
+    expect(self.json.error.code).toBe("CANNOT_DEACTIVATE_SELF");
+    const demoted = await s.call("PATCH", `/v1/members/${owner.id}`, { roleKey: "manager" });
+    expect(demoted.json.error.code).toBe("LAST_OWNER");
+
+    // Two people cannot share a PIN: the shared-device screen could not tell them apart.
+    const twin = await s.call("POST", "/v1/members", { displayName: "ซ้ำ", roleKey: "waiter", pin: "9999" });
+    expect(twin.json.error.code).toBe("PIN_IN_USE");
+    const after = await s.call("GET", "/v1/members");
+    expect(after.json.map((m: any) => m.display_name)).not.toContain("ซ้ำ");
+  });
+
+  it("counts bringing a suspended person back against the plan's staff limit", async () => {
+    const add = await s.call("POST", "/v1/members", { displayName: "ชั่วคราว", roleKey: "waiter", pin: "8765" });
+    expect(add.status).toBe(201);
+    await s.call("PATCH", `/v1/members/${add.json.id}`, { status: "suspended" });
+    const [sub] = await ctx.sql<{ addons: unknown }[]>`select addons from app.subscriptions where tenant_id = ${s.tenantId}`;
+    const [active] = await ctx.sql<{ n: string }[]>`select count(*) as n from app.memberships where tenant_id = ${s.tenantId} and status in ('active','invited')`;
+    const n = active!.n;
+    // Allow exactly the people who are active now, so one more is over the limit.
+    await ctx.sql`update app.subscriptions set addons = ${ctx.sql.json({ limits: { staff: Number(n) } })} where tenant_id = ${s.tenantId}`;
+    try {
+      const back = await s.call("PATCH", `/v1/members/${add.json.id}`, { status: "active" });
+      expect(back.status).toBe(402);
+      expect(back.json.error.code).toBe("PLAN_LIMIT_REACHED");
+    } finally {
+      await ctx.sql`update app.subscriptions set addons = ${ctx.sql.json((sub?.addons ?? {}) as never)} where tenant_id = ${s.tenantId}`;
+    }
+    const ok = await s.call("PATCH", `/v1/members/${add.json.id}`, { status: "active" });
+    expect(ok.status).toBe(200);
+  });
+
+  it("does not edit the owner's rights: they have all of them by definition", async () => {
+    const [ownerRole] = await ctx.sql<{ id: string }[]>`select id from app.roles where tenant_id = ${s.tenantId} and key = 'owner'`;
+    const r = await s.call("PUT", `/v1/roles/${ownerRole!.id}/permissions`, { permissions: ["pos.order"] });
+    expect(r.status).toBe(403);
+  });
+
   it("changes what a role is allowed to do", async () => {
     const [waiterRole] = await ctx.sql<{ id: string }[]>`select id from app.roles where tenant_id = ${s.tenantId} and key = 'waiter'`;
     const set = await s.call("PUT", `/v1/roles/${waiterRole!.id}/permissions`, { permissions: ["pos.order", "pos.discount"] });

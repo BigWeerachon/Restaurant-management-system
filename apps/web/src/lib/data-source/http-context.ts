@@ -50,7 +50,7 @@ import type { Slice } from "./types";
  * keeps the signed-in person and whatever live data has been loaded.
  */
 export async function loadShop(opts: { reset: boolean }): Promise<void> {
-  const boot = mapShopBootstrap(await apiFetch<ShopApiResponse>("/v1/shop"));
+  const boot = await fetchShop();
   const store = useSabai.getState();
   if (opts.reset) store.reset("fresh", boot.tenant.name);
   useSabai.getState().patch((d) => {
@@ -60,6 +60,8 @@ export async function loadShop(opts: { reset: boolean }): Promise<void> {
     for (const m of d.menuItems) m.soldOut = soldOut.get(m.id) ?? {};
   });
 }
+
+const fetchShop = async () => mapShopBootstrap(await apiFetch<ShopApiResponse>("/v1/shop"));
 
 /** Best effort, like `refresh`: for commands that change the shop's own data (costs, ingredients, prices). */
 export async function refreshShop(): Promise<void> {
@@ -180,6 +182,15 @@ const loaders: Partial<Record<Exclude<Slice, "bootstrap">, (branchId: string) =>
       const name = (id: string) => d.ingredients.find((i) => i.id === id)?.name;
       // The feed is the shop's, not one branch's: the page picks out this branch's own events.
       d.activity = mapActivity(rows, name);
+    };
+  },
+
+  // The people who work here and what each role may do (they come with the shop's own data).
+  async team() {
+    const { members, roles } = await fetchShop();
+    return (d) => {
+      d.members = members;
+      d.roles = roles;
     };
   },
 

@@ -143,6 +143,8 @@ export interface MenuItem {
 }
 
 export interface Role {
+  /** Only known when the role comes from the API: editing a role's rights names it by id. */
+  id?: ID;
   key: RoleKey | string;
   name: string;
   description: string;

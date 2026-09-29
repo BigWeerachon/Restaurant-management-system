@@ -4,14 +4,15 @@ import { accessFromRole, navigationFor, PERMISSION_MODULES, PERMISSIONS, planLim
 import { ArrowLeft, ArrowRight, Check, KeyRound, Lock, MoreHorizontal, RotateCcw, Shuffle, UserPlus } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
 import { useMemo, useState } from "react";
+import { LoadBanner } from "@/components/app/load-banner";
 import { PageHeader } from "@/components/app/page-header";
 import { Button } from "@/components/ui/button";
 import { Keypad, PinDots, ProgressBar, Stepper, SuccessCheck } from "@/components/ui/feedback";
 import { Dialog, Switch, TabPanel, Tabs } from "@/components/ui/overlay";
 import { Avatar, Badge, Callout, Card, Field, Input, Segmented } from "@/components/ui/primitives";
-import { useAccess, useAction } from "@/hooks/use-sabai";
+import { useDsAction, useLoad } from "@/hooks/use-data-source";
+import { useAccess } from "@/hooks/use-sabai";
 import { cn } from "@/lib/cn";
-import { addMember, resetMemberPin, setRolePermissions, updateMember } from "@/lib/demo/engine";
 import { useSabai } from "@/lib/demo/store";
 import type { Member, Role } from "@/lib/demo/types";
 
@@ -43,7 +44,7 @@ function roleNavSummary(role: Role) {
 // ---------------------------------------------------------------------------
 function AddStaffDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
   const db = useSabai((s) => s.db);
-  const { exec, pending } = useAction();
+  const { exec, pending } = useDsAction();
   const [step, setStep] = useState(0);
   const [name, setName] = useState("");
   const [roleKey, setRoleKey] = useState("cashier");
@@ -73,7 +74,7 @@ function AddStaffDialog({ open, onClose }: { open: boolean; onClose: () => void 
     setStep(step + 1);
   };
   const save = async () => {
-    const r = await exec((d, c) => addMember(d, c, { name, roleKey, pin, branchIds }), { success: "เพิ่มพนักงานแล้ว" });
+    const r = await exec((ds) => ds.addMember({ name, roleKey, pin, branchIds }), { success: "เพิ่มพนักงานแล้ว" });
     if (r.ok) setDone(r.value);
   };
 
@@ -168,7 +169,7 @@ function AddStaffDialog({ open, onClose }: { open: boolean; onClose: () => void 
 function EditMemberDialog({ member, onClose }: { member: Member | null; onClose: () => void }) {
   const db = useSabai((s) => s.db);
   const { member: me } = useAccess();
-  const { exec, pending } = useAction();
+  const { exec, pending } = useDsAction();
   const [mode, setMode] = useState<"edit" | "pin">("edit");
   const [roleKey, setRoleKey] = useState(member?.roleKey ?? "");
   const [discount, setDiscount] = useState(String(Math.round((member?.maxDiscountRate ?? 0) * 100)));
@@ -183,15 +184,15 @@ function EditMemberDialog({ member, onClose }: { member: Member | null; onClose:
   }
   if (!member) return null;
   const save = async () => {
-    const r = await exec((d, c) => updateMember(d, c, member.id, { roleKey, maxDiscountRate: Number(discount) / 100 }), { success: "บันทึกแล้ว" });
+    const r = await exec((ds) => ds.updateMember(member.id, { roleKey, maxDiscountRate: Number(discount) / 100 }), { success: "บันทึกแล้ว" });
     if (r.ok) onClose();
   };
   const savePin = async () => {
-    const r = await exec((d, c) => resetMemberPin(d, c, member.id, pin), { success: "ตั้ง PIN ใหม่แล้ว", successDetail: `PIN ใหม่ของ${member.name}: ${pin}` });
+    const r = await exec((ds) => ds.resetMemberPin(member.id, pin), { success: "ตั้ง PIN ใหม่แล้ว", successDetail: `PIN ใหม่ของ${member.name}: ${pin}` });
     if (r.ok) onClose();
   };
   const deactivate = async () => {
-    const r = await exec((d, c) => updateMember(d, c, member.id, { active: false }), { success: `ปิดการใช้งาน ${member.name} แล้ว`, successDetail: "ประวัติการทำงานยังเก็บไว้ครบ" });
+    const r = await exec((ds) => ds.updateMember(member.id, { active: false }), { success: `ปิดการใช้งาน ${member.name} แล้ว`, successDetail: "ประวัติการทำงานยังเก็บไว้ครบ" });
     if (r.ok) onClose();
   };
   return (
@@ -257,7 +258,7 @@ function EditMemberDialog({ member, onClose }: { member: Member | null; onClose:
 // ---------------------------------------------------------------------------
 function Roles() {
   const db = useSabai((s) => s.db);
-  const { exec, pending } = useAction();
+  const { exec, pending } = useDsAction();
   const [roleKey, setRoleKey] = useState(db.roles.find((r) => !r.grantsAll)?.key ?? "");
   const role = db.roles.find((r) => r.key === roleKey)!;
   const [draft, setDraft] = useState<Set<string>>(() => new Set(role?.permissions));
@@ -297,7 +298,7 @@ function Roles() {
               <Button variant="ghost" size="sm" disabled={!changed} icon={<RotateCcw className="h-4 w-4" />} onClick={() => setDraft(new Set(role.permissions))}>
                 คืนค่า
               </Button>
-              <Button size="sm" disabled={!changed} loading={pending} onClick={() => exec((d, c) => setRolePermissions(d, c, role.key, [...draft]), { success: `บันทึกสิทธิ์ ${role.name} แล้ว`, successDetail: `มีผลกับพนักงาน ${people} คนทันที` })}>
+              <Button size="sm" disabled={!changed} loading={pending} onClick={() => exec((ds) => ds.setRolePermissions(role.key, [...draft]), { success: `บันทึกสิทธิ์ ${role.name} แล้ว`, successDetail: `มีผลกับพนักงาน ${people} คนทันที` })}>
                 บันทึก{changed ? ` (${changed})` : ""}
               </Button>
             </div>
@@ -360,18 +361,20 @@ function Roles() {
 
 export default function TeamPage() {
   const db = useSabai((s) => s.db);
+  const load = useLoad(["team"]);
   const [tab, setTab] = useState("people");
   const [adding, setAdding] = useState(false);
   const [editing, setEditing] = useState<Member | null>(null);
   const active = db.members.filter((m) => m.active);
   const inactive = db.members.filter((m) => !m.active);
-  const { exec } = useAction();
+  const { exec } = useDsAction();
   const limit = planLimit(db.tenant.plan, "staff");
   const branchName = (m: Member) => (m.branchIds === "all" ? "ทุกสาขา" : m.branchIds.map((id) => db.branches.find((b) => b.id === id)?.name).join(", "));
 
   return (
     <>
       <PageHeader title="ทีมงาน" description="เพิ่มพนักงานได้ในไม่ถึงนาที ไม่ต้องใช้อีเมล — แต่ละคนเห็นเฉพาะงานของตัวเอง" actions={<Button icon={<UserPlus className="h-4 w-4" />} onClick={() => setAdding(true)}>เพิ่มพนักงาน</Button>} />
+      <LoadBanner state={load} className="mb-4" />
       <Tabs value={tab} onValueChange={setTab} tabs={[{ value: "people", label: "พนักงาน", count: active.length }, { value: "roles", label: "ตำแหน่งและสิทธิ์" }]}>
         <TabPanel value="people" className="space-y-4 pt-4">
           {limit !== null && (
@@ -411,7 +414,7 @@ export default function TeamPage() {
                   <li key={m.id} className="flex items-center gap-3 text-ink-3">
                     <Avatar name={m.name} color={m.color} size={32} className="opacity-60" />
                     <span className="flex-1">{m.name}</span>
-                    <Button size="sm" variant="ghost" onClick={() => exec((d, c) => updateMember(d, c, m.id, { active: true }), { success: `เปิดใช้งาน ${m.name} อีกครั้ง` })}>
+                    <Button size="sm" variant="ghost" onClick={() => exec((ds) => ds.updateMember(m.id, { active: true }), { success: `เปิดใช้งาน ${m.name} อีกครั้ง` })}>
                       เปิดใช้งาน
                     </Button>
                   </li>
