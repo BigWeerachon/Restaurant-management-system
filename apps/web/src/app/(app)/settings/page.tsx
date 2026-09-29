@@ -5,6 +5,7 @@ import { Check, Crown, MapPin, Plus, ShieldCheck, Sparkles } from "lucide-react"
 import { motion } from "motion/react";
 import { useSearchParams } from "next/navigation";
 import { Suspense, useState } from "react";
+import { DevicesPanel } from "@/components/app/devices-panel";
 import { LoadBanner } from "@/components/app/load-banner";
 import { PageHeader } from "@/components/app/page-header";
 import { PromptPayQr } from "@/components/app/promptpay-qr";
@@ -14,6 +15,7 @@ import { Badge, Callout, Card, Field, Input, Segmented, Select } from "@/compone
 import { useDsAction, useLoad } from "@/hooks/use-data-source";
 import { useAccess } from "@/hooks/use-sabai";
 import { cn } from "@/lib/cn";
+import { dataSourceMode } from "@/lib/data-source/config";
 import type { DataSource } from "@/lib/data-source/types";
 import { useSabai } from "@/lib/demo/store";
 import type { Branch, Tenant } from "@/lib/demo/types";
@@ -359,6 +361,8 @@ function SettingsInner() {
           { value: "branches", label: "สาขา" },
           { value: "channels", label: "ช่องทางขายและ GP" },
           { value: "payments", label: "การรับเงิน" },
+          // Registered tills exist only where there is a server to remember them.
+          ...(dataSourceMode() === "api" ? [{ value: "devices", label: "เครื่องในร้าน" }] : []),
         ]
       : []),
     ...(can("billing.manage") ? [{ value: "plan", label: "แพ็กเกจ" }] : []),
@@ -379,6 +383,9 @@ function SettingsInner() {
         </TabPanel>
         <TabPanel value="payments" className="pt-4">
           <Payments />
+        </TabPanel>
+        <TabPanel value="devices" className="pt-4">
+          <DevicesPanel />
         </TabPanel>
         <TabPanel value="plan" className="pt-4">
           <Plan />

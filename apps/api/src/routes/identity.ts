@@ -86,6 +86,9 @@ export function registerIdentity(app: Hono<Env>, deps: Deps) {
     pinLimiter.check(`${c.req.header("x-forwarded-for") ?? "local"}:${body.branchId}`);
     const found = await tx(async (t) => {
       const tenantId = await branchTenant(t, body.branchId);
+      // Only someone who already belongs to this shop may try its PINs (otherwise any account could guess at another shop's).
+      const [me] = await t<{ id: string | null }[]>`select app.actor_membership_id(${tenantId}) as id`;
+      if (!me?.id) throw new ApiFailure("PERMISSION_DENIED", 403);
       const [row] = await t<{ id: string | null }[]>`select app.verify_pin(${tenantId}, ${body.branchId}, ${body.pin}) as id`;
       if (!row?.id) return null;
       const [m] = await t<{ display_name: string; role_key: string; home: string }[]>`

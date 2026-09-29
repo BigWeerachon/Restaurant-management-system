@@ -62,6 +62,19 @@ export const CreateTenantBody = z.object({
   pricesIncludeVat: z.boolean().default(true),
 });
 
+/** The device makes its own secret and sends only its SHA-256, so the API and the database never see the secret itself. */
+export const RegisterDeviceBody = z.object({
+  branchId: Id,
+  name: Name,
+  kind: z.enum(["pos", "kds", "kiosk", "printer_hub"]),
+  stationId: Id.optional(),
+  tokenHash: z.string().regex(/^[0-9a-f]{64}$/, "รหัสเครื่องไม่ถูกต้อง"),
+});
+
+export const DevicePinBody = z.object({
+  pin: z.string().regex(/^\d{4,6}$/, "PIN เป็นตัวเลข 4–6 หลัก"),
+});
+
 export const PinSwitchBody = z.object({
   branchId: Id,
   pin: z.string().regex(/^\d{4,6}$/, "PIN เป็นตัวเลข 4–6 หลัก"),

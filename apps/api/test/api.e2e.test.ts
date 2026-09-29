@@ -581,6 +581,77 @@ describe("staff on a shared device", () => {
     expect(Number(stored!.n)).toBe(0);
   });
 
+  it("only someone who belongs to a shop may try its PINs", async () => {
+    const stranger = await ctx.newUser();
+    const r = await ctx.client(stranger.token)("POST", "/v1/auth/pin", { branchId: s.branchId, pin: "1111" });
+    // The branch is not even visible to them: "not found", which does not confirm it exists.
+    expect(r.status).toBe(404);
+  });
+
+  it("registers a till: staff sign in on it with a PIN and no account, and revoking stops it at once", async () => {
+    const { createHash, randomBytes } = await import("node:crypto");
+    const secret = `sbd_${randomBytes(32).toString("base64url")}`;
+    const tokenHash = createHash("sha256").update(secret).digest("hex");
+
+    // Registering takes the right to manage settings: the cashier has not got it.
+    const denied = await s.cashierCall("POST", "/v1/devices", { branchId: s.branchId, name: "เครื่องแอบ", kind: "pos", tokenHash: "a".repeat(64) });
+    expect(denied.status).toBe(403);
+    const bad = await s.call("POST", "/v1/devices", { branchId: s.branchId, name: "x", kind: "pos", tokenHash: "not-a-hash" });
+    expect(bad.status).toBe(422);
+
+    const reg = await s.call("POST", "/v1/devices", { branchId: s.branchId, name: "iPad หน้าร้าน", kind: "pos", tokenHash });
+    expect(reg.status).toBe(201);
+    expect(JSON.stringify(reg.json)).not.toContain(secret);
+    const list = await s.call("GET", "/v1/devices");
+    expect(list.json).toEqual([expect.objectContaining({ id: reg.json.id, name: "iPad หน้าร้าน", kind: "pos", is_active: true, registered_by_name: expect.any(String) })]);
+    expect((await s.cashierCall("GET", "/v1/devices")).status).toBe(403);
+    // Neither the secret nor its hash is anywhere a signed-in person can read.
+    expect(JSON.stringify(list.json)).not.toContain(tokenHash);
+
+    // The till, with nobody signed in.
+    const till = ctx.client();
+    const anonRoster = await till("GET", "/v1/device/roster");
+    expect(anonRoster.status).toBe(401);
+    expect(anonRoster.json.error.code).toBe("DEVICE_REVOKED");
+    const roster = await till("GET", "/v1/device/roster", undefined, { "x-device-token": secret });
+    expect(roster.status).toBe(200);
+    expect(roster.headers.get("cache-control")).toBe("no-store");
+    expect(roster.json.tenant.id).toBe(s.tenantId);
+    expect(roster.json.branch.id).toBe(s.branchId);
+    const names = roster.json.staff.map((x: any) => x.displayName);
+    expect(names).toEqual(expect.arrayContaining(["น้องแคช", "พี่ผู้จัดการ"]));
+    expect(JSON.stringify(roster.json)).not.toMatch(/pin_hash|\$2[aby]\$/);
+
+    const wrong = await till("POST", "/v1/auth/device-pin", { pin: "0000" }, { "x-device-token": secret });
+    expect(wrong.status).toBe(401);
+    expect(wrong.json.error.code).toBe("PIN_INVALID");
+    const noDevice = await till("POST", "/v1/auth/device-pin", { pin: "1111" }, { "x-device-token": `sbd_${randomBytes(32).toString("base64url")}` });
+    expect(noDevice.status).toBe(401);
+    expect(noDevice.json.error.code).toBe("DEVICE_REVOKED");
+
+    const ok = await till("POST", "/v1/auth/device-pin", { pin: "1111" }, { "x-device-token": secret });
+    expect(ok.status).toBe(200);
+    expect(ok.json).toMatchObject({ tenantId: s.tenantId, branchId: s.branchId, membership: { role: "cashier", home: "pos" } });
+    // The token it gives is an ordinary staff token: it works, as the cashier, and it names the till.
+    const me = await ctx.client(ok.json.token, s.tenantId)("GET", "/v1/me");
+    expect(me.json.memberships[0].displayName).toBe("น้องแคช");
+    expect(JSON.parse(Buffer.from(ok.json.token.split(".")[1], "base64url").toString()).did).toBe(reg.json.id);
+    // A sign-in answer never sits in the replay table.
+    const [stored] = await ctx.sql<{ n: string }[]>`select count(*) as n from app.api_idempotency where path = '/v1/auth/device-pin'`;
+    expect(Number(stored!.n)).toBe(0);
+
+    // Revoke: the cashier cannot; the owner can; the till stops working at once, and doing it twice is harmless.
+    expect((await s.cashierCall("DELETE", `/v1/devices/${reg.json.id}`)).status).toBe(403);
+    expect((await s.call("DELETE", `/v1/devices/${reg.json.id}`)).status).toBe(200);
+    expect((await s.call("DELETE", `/v1/devices/${reg.json.id}`)).status).toBe(200);
+    expect((await till("GET", "/v1/device/roster", undefined, { "x-device-token": secret })).json.error.code).toBe("DEVICE_REVOKED");
+    expect((await till("POST", "/v1/auth/device-pin", { pin: "1111" }, { "x-device-token": secret })).json.error.code).toBe("DEVICE_REVOKED");
+    const after = await s.call("GET", "/v1/devices");
+    expect(after.json[0]).toMatchObject({ is_active: false, revoked_at: expect.any(String) });
+    const [events] = await ctx.sql<{ n: string }[]>`select count(*) as n from app.domain_events where event_type = 'device.revoked' and aggregate_id = ${reg.json.id}`;
+    expect(Number(events!.n)).toBe(1);
+  });
+
   it("gives the cashier only the cashier's world", async () => {
     const me = await s.cashierCall("GET", "/v1/me");
     expect(me.json.memberships[0].navigation.primary.map((n: any) => n.key)).toEqual(["pos", "orders", "kds"]);

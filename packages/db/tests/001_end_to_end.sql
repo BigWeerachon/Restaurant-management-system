@@ -433,5 +433,94 @@ select app.add_branch(jsonb_build_object('tenant_id', test.id('tenant_b'), 'code
 select test.ok((select count(*) from app.branches where tenant_id = test.id('tenant_b')) = 3, 'three branches on Pro');
 select test.throws(format('select app.add_branch(%L::jsonb)', jsonb_build_object('tenant_id', test.id('tenant_b'), 'code', 'B4', 'name', 'สาขาสี่')), 'PLAN_LIMIT_REACHED');
 
+-- ---------------------------------------------------------------------------
+-- 11. Registered devices: a till that asks "who is here?" with a secret, not an account
+-- ---------------------------------------------------------------------------
+select test.as_user(test.id('owner_a'));
+do $$
+declare
+  h text := encode(extensions.digest('till-secret-1', 'sha256'), 'hex');
+  d uuid;
+begin
+  d := app.register_device(test.id('branch_a'), 'iPad หน้าร้าน', 'pos', h);
+  perform test.put('device1', d);
+  perform test.ok((select is_active and registered_by = test.id('owner_mem_a') from app.devices where id = d), 'device registered by the owner');
+  perform test.ok((select count(*) from app.domain_events where event_type = 'device.registered' and aggregate_id = d) = 1, 'registration is in the activity feed');
+end $$;
+
+-- The hash lives where no signed-in person can read it.
+select test.throws('select count(*) from app.device_credentials', 'permission denied for table device_credentials');
+
+-- Only someone who may manage settings can register or revoke; the cashier cannot.
+select test.as_member(test.id('cashier'));
+select test.throws(format('select app.register_device(%L, %L, %L, %L)', test.id('branch_a'), 'เครื่องแอบ', 'pos', repeat('a', 64)), 'PERMISSION_DENIED');
+select test.throws(format('select app.revoke_device(%L)', test.id('device1')), 'PERMISSION_DENIED');
+-- A bad kind or a hash that is not a SHA-256 is refused, not stored.
+select test.as_user(test.id('owner_a'));
+select test.throws(format('select app.register_device(%L, %L, %L, %L)', test.id('branch_a'), 'x', 'toaster', repeat('b', 64)), 'VALIDATION');
+select test.throws(format('select app.register_device(%L, %L, %L, %L)', test.id('branch_a'), 'x', 'pos', 'not-a-hash'), 'VALIDATION');
+
+-- The device side runs as the API's service role, not as a signed-in person.
+reset role;
+do $$
+declare
+  h text := encode(extensions.digest('till-secret-1', 'sha256'), 'hex');
+  r jsonb := app.device_roster(h);
+  names text[];
+begin
+  perform test.ok(r->'tenant'->>'name' = 'สบายคาเฟ่' and r->'branch'->>'id' = test.id('branch_a')::text, 'roster names the shop and branch');
+  select array_agg(x->>'display_name' order by x->>'display_name') into names from jsonb_array_elements(r->'staff') x;
+  perform test.ok('น้องแคช' = any(names) and 'พี่ผู้จัดการ' = any(names), 'PIN staff are on the roster');
+  perform test.ok(not (r::text like '%pin_hash%') and not (r::text like '%crypt%'), 'the roster carries no PIN material');
+  -- A wrong secret sees nothing at all.
+  perform test.ok(app.device_roster(repeat('0', 64)) is null, 'unknown secret gets no roster');
+  -- PIN sign-in on the device.
+  perform test.ok((app.device_pin_login(h, '1111'))->>'role_key' = 'cashier', 'cashier PIN works on the registered device');
+  perform test.ok((app.device_pin_login(h, '0000'))->>'device' = 'true' and (app.device_pin_login(h, '0000'))->'membership_id' = 'null'::jsonb, 'wrong PIN is a wrong PIN');
+  perform test.ok((app.device_pin_login(repeat('0', 64), '1111'))->>'device' = 'false', 'PIN with an unknown secret is refused');
+  perform test.ok((select last_seen_at is not null from app.devices where id = test.id('device1')), 'last seen is recorded');
+end $$;
+
+-- Someone who works only at another branch is not on this device's roster and cannot sign in on it.
+set role authenticated;
+select test.as_user(test.id('owner_a'));
+do $$
+declare b2 uuid; far uuid;
+begin
+  b2 := app.add_branch(jsonb_build_object('tenant_id', test.id('tenant_a'), 'code', 'A2', 'name', 'สาขาไกล'));
+  insert into app.memberships (tenant_id, display_name, role_id, all_branches)
+  values (test.id('tenant_a'), 'พนักงานสาขาไกล', (select id from app.roles where tenant_id = test.id('tenant_a') and key = 'cashier'), false) returning id into far;
+  insert into app.membership_branches (tenant_id, membership_id, branch_id) values (test.id('tenant_a'), far, b2);
+  perform app.set_member_pin(far, '4321');
+  perform test.put('far_member', far);
+end $$;
+reset role;
+do $$
+declare h text := encode(extensions.digest('till-secret-1', 'sha256'), 'hex');
+begin
+  perform test.ok(not exists (select 1 from jsonb_array_elements((app.device_roster(h))->'staff') x where x->>'display_name' = 'พนักงานสาขาไกล'), 'other-branch staff not on the roster');
+  perform test.ok((app.device_pin_login(h, '4321'))->'membership_id' = 'null'::jsonb, 'other-branch PIN does not work here');
+end $$;
+
+-- Revoking stops the device at once, and is recorded.
+set role authenticated;
+select test.as_user(test.id('owner_a'));
+select app.revoke_device(test.id('device1'));
+select test.ok((select revoked_at is not null and not is_active from app.devices where id = test.id('device1')), 'device revoked');
+select test.ok((select count(*) from app.domain_events where event_type = 'device.revoked' and aggregate_id = test.id('device1')) = 1, 'revocation is in the activity feed');
+reset role;
+do $$
+declare h text := encode(extensions.digest('till-secret-1', 'sha256'), 'hex');
+begin
+  perform test.ok(app.device_roster(h) is null, 'revoked device gets no roster');
+  perform test.ok((app.device_pin_login(h, '1111'))->>'device' = 'false', 'revoked device cannot sign anyone in');
+end $$;
+
+-- Another shop's owner cannot see or revoke this shop's devices.
+set role authenticated;
+select test.as_user(test.id('owner_b'));
+select test.ok((select count(*) from app.devices where tenant_id = test.id('tenant_a')) = 0, 'B cannot see A devices');
+select test.throws(format('select app.revoke_device(%L)', test.id('device1')), 'PERMISSION_DENIED');
+
 reset role;
 select 'ALL DATABASE TESTS PASSED' as result;

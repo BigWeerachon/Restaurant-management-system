@@ -8,6 +8,7 @@ import { openApiDocument, type Deps, type Env } from "./http";
 import { registerCatalog } from "./routes/catalog";
 import { registerDevAuth } from "./routes/dev-auth";
 import { registerFinance } from "./routes/finance";
+import { registerDevices } from "./routes/devices";
 import { registerIdentity } from "./routes/identity";
 import { registerInventory } from "./routes/inventory";
 import { registerKitchen } from "./routes/kitchen";
@@ -47,7 +48,7 @@ export function createApp(deps: Deps): Hono<Env> {
     "*",
     cors({
       origin: deps.config.corsOrigins,
-      allowHeaders: ["Authorization", "Content-Type", "X-Tenant-Id", "Idempotency-Key", "X-Request-Id", "Accept-Language"],
+      allowHeaders: ["Authorization", "Content-Type", "X-Tenant-Id", "Idempotency-Key", "X-Request-Id", "Accept-Language", "X-Device-Token"],
       exposeHeaders: ["X-Request-Id", "Idempotent-Replayed"],
       maxAge: 600,
     }),
@@ -85,6 +86,7 @@ export function createApp(deps: Deps): Hono<Env> {
   if (deps.config.env !== "production") registerDevAuth(app, deps);
 
   registerIdentity(app, deps);
+  registerDevices(app, deps);
   registerShop(app, deps);
   registerCatalog(app, deps);
   registerPos(app, deps);

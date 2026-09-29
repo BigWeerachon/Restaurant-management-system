@@ -9,6 +9,8 @@ import { DomainError } from "../demo/engine";
 import { useSabai } from "../demo/store";
 import type { Member } from "../demo/types";
 import { getAccount } from "../auth/session";
+import { getDevice } from "../device";
+import { devicePinSignIn } from "./devices";
 import { apiFetch, clearApiSession, getApiSession, setApiSession } from "./http-client";
 import { loadShop, loadSlices } from "./http-context";
 import { financeCommands } from "./http-finance";
@@ -57,6 +59,9 @@ const implemented = {
   },
 
   async pinSwitch(branchId: string, pin: string): Promise<Member> {
+    // On a registered till the PIN goes to the till's own sign-in (it works with no account and with an expired staff token).
+    const device = getDevice();
+    if (device && device.tenantId === getApiSession().tenantId) return devicePinSignIn(pin);
     const r = await apiFetch<PinSwitchResponse>("/v1/auth/pin", { method: "POST", body: { branchId, pin }, tenant: false });
     setApiSession({ token: r.token });
     let member = useSabai.getState().db.members.find((m) => m.id === r.membership.id);

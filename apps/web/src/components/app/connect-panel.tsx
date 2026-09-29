@@ -17,9 +17,11 @@ import { apiFetch, getApiSession } from "@/lib/data-source/http-client";
 import { httpDataSource } from "@/lib/data-source/http-data-source";
 import { isDomainError, useSabai } from "@/lib/demo/store";
 import type { Member } from "@/lib/demo/types";
+import { getDevice } from "@/lib/device";
+import { DeviceSignIn } from "./device-sign-in";
 import { RoleCards } from "./role-cards";
 
-type Phase = "email" | "shops" | "team";
+type Phase = "email" | "shops" | "team" | "device";
 
 /** Title and message together: for a wrong password, the title ("อีเมลหรือรหัสผ่านไม่ถูกต้อง") is the part that says what happened. */
 const errorText = (e: unknown) => {
@@ -33,7 +35,8 @@ export function ConnectPanel() {
   const router = useRouter();
   const [phase, setPhase] = useState<Phase>(() => {
     const s = getApiSession();
-    return s.token && s.tenantId ? "team" : "email";
+    // A registered till with nobody signed in asks "who is here?"; signing in with e-mail stays one tap away.
+    return s.token && s.tenantId ? "team" : getDevice() ? "device" : "email";
   });
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -97,7 +100,7 @@ export function ConnectPanel() {
 
   const disconnect = () => {
     void signOutAccount();
-    setPhase("email");
+    setPhase(getDevice() ? "device" : "email");
     setPassword("");
     setError(null);
   };
@@ -207,6 +210,8 @@ export function ConnectPanel() {
     setPinError(null);
   };
 
+  if (phase === "device") return <DeviceSignIn onEmail={() => setPhase("email")} />;
+
   if (phase === "email") {
     return (
       <form
@@ -243,6 +248,11 @@ export function ConnectPanel() {
         <Button type="submit" size="lg" block disabled={busy} iconRight={<ArrowRight className="h-4 w-4" />}>
           {busy ? "กำลังเชื่อมต่อ…" : auth.usesPassword ? "เข้าสู่ระบบ" : "เชื่อมต่อ"}
         </Button>
+        {getDevice() && (
+          <Button type="button" variant="ghost" block onClick={() => setPhase("device")}>
+            กลับไปเลือกพนักงาน (เข้าด้วย PIN)
+          </Button>
+        )}
         <p className="text-center text-sm text-ink-3">
           ยังไม่มีร้าน?{" "}
           <Link href="/signup" className="font-medium text-brand underline underline-offset-2">

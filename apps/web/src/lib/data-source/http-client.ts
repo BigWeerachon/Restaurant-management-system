@@ -121,6 +121,8 @@ export interface ApiFetchOptions {
    * first answer instead of doing the work twice.
    */
   idempotencyKey?: string;
+  /** A registered till's secret. The call is then made as the device, not as a person: no bearer token, no shop header. */
+  deviceToken?: string;
 }
 
 /**
@@ -135,14 +137,15 @@ export async function apiFetch<T = unknown>(path: string, opts: ApiFetchOptions 
   for (const [k, v] of Object.entries(opts.query ?? {})) if (v !== undefined) url.searchParams.set(k, String(v));
 
   // A token that is about to run out is renewed first, so the request does not have to fail to find out.
-  if (session.token && renewer?.shouldRenew(session.token)) await renewer.renew().catch(() => null);
+  if (!opts.deviceToken && session.token && renewer?.shouldRenew(session.token)) await renewer.renew().catch(() => null);
 
   const headers: Record<string, string> = {};
   const setAuth = () => {
-    if (session.token) headers.Authorization = `Bearer ${session.token}`;
+    if (!opts.deviceToken && session.token) headers.Authorization = `Bearer ${session.token}`;
   };
   setAuth();
-  if ((opts.tenant ?? true) && session.tenantId) headers["X-Tenant-Id"] = session.tenantId;
+  if (opts.deviceToken) headers["X-Device-Token"] = opts.deviceToken;
+  else if ((opts.tenant ?? true) && session.tenantId) headers["X-Tenant-Id"] = session.tenantId;
   if (opts.body !== undefined) headers["Content-Type"] = "application/json";
   if (method === "POST") headers["Idempotency-Key"] = opts.idempotencyKey ?? newIdempotencyKey();
   let renewedAfter401 = false;
@@ -166,7 +169,7 @@ export async function apiFetch<T = unknown>(path: string, opts: ApiFetchOptions 
     } catch (err) {
       clearTimeout(timeout);
       // The server said the token is no good: if it is one that can be renewed, renew it and send the same request again (once).
-      if (err instanceof DomainError && err.code === "AUTH_REQUIRED" && !renewedAfter401 && session.token && renewer?.canRenew(session.token)) {
+      if (err instanceof DomainError && err.code === "AUTH_REQUIRED" && !opts.deviceToken && !renewedAfter401 && session.token && renewer?.canRenew(session.token)) {
         renewedAfter401 = true;
         if (await renewer.renew().catch(() => null)) {
           setAuth();

@@ -32,9 +32,11 @@ export async function mintStaffToken(opts: {
   tenantId: string;
   branchId: string;
   ttlSeconds: number;
+  /** The registered till the PIN was entered on, when there was one. */
+  deviceId?: string;
 }): Promise<{ token: string; expiresAt: string }> {
   const exp = Math.floor(Date.now() / 1000) + opts.ttlSeconds;
-  const token = await new SignJWT({ role: "authenticated", mid: opts.membershipId, tid: opts.tenantId, bid: opts.branchId, amr: ["pin"] })
+  const token = await new SignJWT({ role: "authenticated", mid: opts.membershipId, tid: opts.tenantId, bid: opts.branchId, amr: ["pin"], ...(opts.deviceId ? { did: opts.deviceId } : {}) })
     .setProtectedHeader({ alg: "HS256", typ: "JWT" })
     .setIssuedAt()
     .setExpirationTime(exp)
