@@ -9,9 +9,8 @@ import { Button } from "@/components/ui/button";
 import { AnimatedNumber, Keypad, SuccessCheck } from "@/components/ui/feedback";
 import { Dialog } from "@/components/ui/overlay";
 import { Callout } from "@/components/ui/primitives";
-import { useAction } from "@/hooks/use-sabai";
+import { useDsAction } from "@/hooks/use-data-source";
 import { cn } from "@/lib/cn";
-import { payOrder } from "@/lib/demo/engine";
 import { formatBaht } from "@/lib/demo/selectors";
 import { useSabai } from "@/lib/demo/store";
 import type { Order, PaymentMethod } from "@/lib/demo/types";
@@ -20,7 +19,7 @@ const ICON: Record<string, typeof Banknote> = { cash: Banknote, promptpay: QrCod
 
 export function PaymentDialog({ order, open, onClose, onPaid }: { order: Order | null; open: boolean; onClose: () => void; onPaid: (o: Order) => void }) {
   const db = useSabai((s) => s.db);
-  const { exec, pending } = useAction();
+  const { exec, pending } = useDsAction();
   const channel = db.channels.find((c) => c.id === order?.channelId);
   const methods = useMemo(
     () =>
@@ -48,21 +47,21 @@ export function PaymentDialog({ order, open, onClose, onPaid }: { order: Order |
 
   const pay = async () => {
     if (!order || !method) return;
-    const res = await exec(
-      (d, c) =>
-        payOrder(d, c, order.id, [
-          {
-            methodId: method.id,
-            amount: total,
-            tendered: method.kind === "cash" ? tenderedSatang : undefined,
-            reference: reference || undefined,
-          },
-        ]),
-      { latencyMs: 350 },
+    const res = await exec((ds) =>
+      ds.payOrder(order.id, [
+        {
+          methodId: method.id,
+          amount: total,
+          tendered: method.kind === "cash" ? tenderedSatang : undefined,
+          reference: reference || undefined,
+        },
+      ]),
     );
     if (res.ok) {
-      setDone(res.value);
-      onPaid(res.value);
+      // The paid order (change, receipt number) is in the store once the command has finished, in either mode.
+      const paid = useSabai.getState().db.orders.find((o) => o.id === order.id) ?? order;
+      setDone(paid);
+      onPaid(paid);
     }
   };
 

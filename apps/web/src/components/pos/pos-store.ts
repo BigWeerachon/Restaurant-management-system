@@ -1,7 +1,7 @@
 "use client";
 
 import { create } from "zustand";
-import { newId } from "@/lib/demo/engine";
+import { newClientId } from "@/lib/data-source/ids";
 
 export interface CartLine {
   id: string;
@@ -44,7 +44,7 @@ export const usePos = create<PosState>((set, get) => ({
       set({ lines: get().lines.map((l) => (l.id === existing.id ? { ...l, qty: l.qty + line.qty } : l)), lastAddedId: existing.id });
       return;
     }
-    const id = newId("line");
+    const id = newClientId("line");
     set({ lines: [...get().lines, { ...line, id }], lastAddedId: id });
   },
   inc: (id, delta) =>

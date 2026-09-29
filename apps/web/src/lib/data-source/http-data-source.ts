@@ -8,6 +8,8 @@ import { DomainError } from "../demo/engine";
 import { useSabai } from "../demo/store";
 import type { Member } from "../demo/types";
 import { apiFetch, clearApiSession, setApiSession } from "./http-client";
+import { loadSlices } from "./http-context";
+import { posCommands } from "./http-pos";
 import { mapShopBootstrap, type ShopApiResponse } from "./mappers";
 import type { DataSource, Slice } from "./types";
 
@@ -33,9 +35,8 @@ interface PinSwitchResponse {
 
 const implemented = {
   async load(slices: Slice[]) {
-    const unsupported = slices.filter((s) => s !== "bootstrap");
-    if (unsupported.length) throw new DomainError("INTERNAL", { feature: `load(${unsupported.join(", ")})` });
-    if (slices.length) await loadShop({ reset: false });
+    const live = slices.filter((s) => s !== "bootstrap");
+    await Promise.all([slices.includes("bootstrap") ? loadShop({ reset: false }) : undefined, live.length ? loadSlices(live) : undefined]);
   },
 
   async signIn(memberId: string, branchId?: string) {
@@ -78,21 +79,13 @@ const implemented = {
     });
     return { value: r.approvalId };
   },
+
+  ...posCommands,
 } satisfies Partial<DataSource>;
 
 const NOT_YET = [
-  "openShift",
-  "cashMove",
-  "closeShift",
-  "submitOrder",
-  "applyDiscount",
-  "voidItem",
-  "voidOrder",
-  "payOrder",
-  "refundOrder",
   "setTicketStatus",
   "toggleTicketItem",
-  "setSoldOut",
   "addMenuItem",
   "updateMenuItem",
   "addIngredient",

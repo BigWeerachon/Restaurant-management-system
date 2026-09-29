@@ -8,9 +8,10 @@ import { Button } from "@/components/ui/button";
 import { EmptyState, Keypad } from "@/components/ui/feedback";
 import { Dialog } from "@/components/ui/overlay";
 import { Callout, Input, Segmented } from "@/components/ui/primitives";
-import { useAction, useNow } from "@/hooks/use-sabai";
+import { useDsAction } from "@/hooks/use-data-source";
+import { useNow } from "@/hooks/use-sabai";
 import { cn } from "@/lib/cn";
-import { applyDiscount, closeShift, expectedCash, openShift, openShiftOf, voidItem, voidOrder } from "@/lib/demo/engine";
+import { expectedCash, openShiftOf } from "@/lib/demo/engine";
 import { formatBaht } from "@/lib/demo/selectors";
 import { useSabai } from "@/lib/demo/store";
 import type { Order } from "@/lib/demo/types";
@@ -35,7 +36,7 @@ function ReasonPicker({ reasons, value, onChange }: { reasons: string[]; value: 
 }
 
 export function DiscountDialog({ order, open, onClose }: { order: Order | null; open: boolean; onClose: () => void }) {
-  const { exec, pending } = useAction();
+  const { exec, pending } = useDsAction();
   const [type, setType] = useState<"percent" | "amount">("percent");
   const [value, setValue] = useState("10");
   const [reason, setReason] = useState("");
@@ -51,7 +52,7 @@ export function DiscountDialog({ order, open, onClose }: { order: Order | null; 
   const v = Number(value) || 0;
   const discount = type === "percent" ? Math.round((items * Math.min(v, 100)) / 100) : Math.min(Math.round(v * 100), items);
   const apply = async () => {
-    const res = await exec((d, c, approver) => applyDiscount(d, c, order.id, type, type === "percent" ? v : Math.round(v * 100), reason, approver), {
+    const res = await exec((ds, approval) => ds.applyDiscount(order.id, type, type === "percent" ? v : Math.round(v * 100), reason, approval), {
       approval: { permission: "pos.discount", title: `ส่วนลด ${type === "percent" ? `${v}%` : formatBaht(v * 100)} บิล #${order.orderNo}`, detail: `เหตุผล: ${reason || "-"}` },
       success: "ใส่ส่วนลดแล้ว",
       successDetail: `ลด ${formatBaht(discount)}`,
@@ -88,7 +89,7 @@ export function DiscountDialog({ order, open, onClose }: { order: Order | null; 
 }
 
 export function VoidDialog({ order, itemId, open, onClose }: { order: Order | null; itemId?: string; open: boolean; onClose: () => void }) {
-  const { exec, pending } = useAction();
+  const { exec, pending } = useDsAction();
   const [reason, setReason] = useState("");
   useEffect(() => {
     if (open) setReason("");
@@ -98,7 +99,7 @@ export function VoidDialog({ order, itemId, open, onClose }: { order: Order | nu
   const sent = item ? item.status !== "pending" : order.items.some((i) => i.status !== "pending" && i.status !== "voided");
   const run = async () => {
     const res = await exec(
-      (d, c, approver) => (item ? voidItem(d, c, order.id, item.id, reason, approver) : voidOrder(d, c, order.id, reason, approver)),
+      (ds, approval) => (item ? ds.voidItem(order.id, item.id, reason, approval) : ds.voidOrder(order.id, reason, approval)),
       {
         approval: { permission: "pos.void", title: item ? `ยกเลิก “${item.name}” บิล #${order.orderNo}` : `ยกเลิกทั้งบิล #${order.orderNo}`, detail: `ครัวได้รับออเดอร์แล้ว · เหตุผล: ${reason}` },
         success: item ? `ยกเลิก “${item.name}” แล้ว` : "ยกเลิกบิลแล้ว",
@@ -137,14 +138,14 @@ export function VoidDialog({ order, itemId, open, onClose }: { order: Order | nu
 export function OpenShiftDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
   const db = useSabai((s) => s.db);
   const branchId = useSabai((s) => s.session.branchId) ?? "";
-  const { exec, pending } = useAction();
+  const { exec, pending } = useDsAction();
   const last = db.shifts.filter((s) => s.branchId === branchId && s.status === "closed").at(-1);
   const [amount, setAmount] = useState("");
   useEffect(() => {
     if (open) setAmount(String((last?.countedCash ?? 200000) / 100));
   }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
   const run = async () => {
-    const res = await exec((d, c) => openShift(d, c, Math.round(Number(amount || 0) * 100)), { success: "เปิดกะแล้ว ขายได้เลย" });
+    const res = await exec((ds) => ds.openShift(Math.round(Number(amount || 0) * 100)), { success: "เปิดกะแล้ว ขายได้เลย" });
     if (res.ok) onClose();
   };
   return (
@@ -167,7 +168,7 @@ export function CloseShiftDialog({ open, onClose }: { open: boolean; onClose: ()
   const db = useSabai((s) => s.db);
   const branchId = useSabai((s) => s.session.branchId) ?? "";
   const shift = openShiftOf(db, branchId);
-  const { exec, pending } = useAction();
+  const { exec, pending } = useDsAction();
   const [counts, setCounts] = useState<Record<number, number>>({});
   const [result, setResult] = useState<{ expected: Satang; counted: Satang; variance: Satang } | null>(null);
   useEffect(() => {
@@ -178,7 +179,7 @@ export function CloseShiftDialog({ open, onClose }: { open: boolean; onClose: ()
   }, [open]);
   const counted = NOTES.reduce((s, n) => s + n * 100 * (counts[n] ?? 0), 0);
   const run = async () => {
-    const res = await exec((d, c) => closeShift(d, c, counted));
+    const res = await exec((ds) => ds.closeShift(counted));
     if (res.ok) setResult(res.value);
   };
   return (
@@ -211,7 +212,7 @@ export function CloseShiftDialog({ open, onClose }: { open: boolean; onClose: ()
               </div>
             </div>
           ))}
-          <p className="col-span-full pt-1 text-center text-xs text-ink-3">กะนี้ควรมีเงินสด {formatBaht(expectedCash(db, shift.id))} — ระบบบอกหลังนับเสร็จ เพื่อให้นับตามจริง</p>
+          <p className="col-span-full pt-1 text-center text-xs text-ink-3">กะนี้ควรมีเงินสด {formatBaht(shift.expectedCash ?? expectedCash(db, shift.id))} — ระบบบอกหลังนับเสร็จ เพื่อให้นับตามจริง</p>
         </div>
       )}
     </Dialog>

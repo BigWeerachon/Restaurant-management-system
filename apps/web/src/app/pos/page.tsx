@@ -15,9 +15,12 @@ import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/feedback";
 import { Dialog } from "@/components/ui/overlay";
 import { Avatar, Badge, SearchInput } from "@/components/ui/primitives";
-import { useAccess, useAction, useUi } from "@/hooks/use-sabai";
+import { useAccess, useUi } from "@/hooks/use-sabai";
 import { cn } from "@/lib/cn";
-import { modifierPrice, newId, openShiftOf, priceFor, setSoldOut, submitOrder } from "@/lib/demo/engine";
+import { LoadBanner } from "@/components/app/load-banner";
+import { useDsAction, useLoad } from "@/hooks/use-data-source";
+import { newClientId } from "@/lib/data-source/ids";
+import { modifierPrice, openShiftOf, priceFor } from "@/lib/demo/engine";
 import { formatBaht } from "@/lib/demo/selectors";
 import { useSabai } from "@/lib/demo/store";
 import type { MenuItem, Order } from "@/lib/demo/types";
@@ -28,7 +31,8 @@ function PosScreen() {
   const db = useSabai((s) => s.db);
   const { member, branch, can, nav } = useAccess();
   const pos = usePos();
-  const { exec, pending } = useAction();
+  const { exec, pending } = useDsAction();
+  const load = useLoad(["orders", "shifts", "availability"]);
   const openSwitch = useUi((s) => s.setSwitchUserOpen);
 
   const [category, setCategory] = useState<string>("all");
@@ -93,25 +97,28 @@ function PosScreen() {
   const send = async (thenPay: boolean) => {
     if (!channel) return null;
     if (pos.lines.length === 0 && existing) return existing;
-    const orderId = existing?.id ?? newId("ord");
+    const orderId = existing?.id ?? newClientId("ord");
+    const tableId = existing?.tableId ?? pos.tableId;
+    const channelId = existing?.channelId ?? channel.id;
     const res = await exec(
-      (d, c) =>
-        submitOrder(d, c, {
+      (ds) =>
+        ds.submitOrder({
           id: orderId,
           channelId: channel.id,
           tableId: pos.tableId,
           guestCount: pos.guestCount,
           items: pos.lines.map((l) => ({ id: l.id, menuItemId: l.menuItemId, qty: l.qty, note: l.note, modifierOptionIds: l.modifierOptionIds })),
         }),
-      { success: thenPay ? undefined : "ส่งเข้าครัวแล้ว", successDetail: thenPay ? undefined : "ออเดอร์ขึ้นจอครัวเรียบร้อย", latencyMs: 150 },
+      { success: thenPay ? undefined : "ส่งเข้าครัวแล้ว", successDetail: thenPay ? undefined : "ออเดอร์ขึ้นจอครัวเรียบร้อย" },
     );
     if (!res.ok) return null;
     if (thenPay) {
-      pos.resume(res.value.id, res.value.channelId, res.value.tableId);
+      pos.resume(orderId, channelId, tableId);
     } else {
       pos.clear();
     }
-    return res.value;
+    // The saved order is in the store once the command has finished, in either mode.
+    return useSabai.getState().db.orders.find((o) => o.id === orderId) ?? null;
   };
 
   const startPay = async () => {
@@ -339,6 +346,8 @@ function PosScreen() {
         </button>
       </header>
 
+      <LoadBanner state={load} className="mx-3 mt-2 shrink-0" />
+
       <div className="flex min-h-0 flex-1">
         {/* Categories */}
         <nav aria-label="หมวดเมนู" className="hidden w-[118px] shrink-0 flex-col gap-1 overflow-y-auto border-r border-[var(--glass-border)] bg-[var(--glass-bg)] p-2 backdrop-blur-xl backdrop-saturate-150 scrollbar-thin md:flex">
@@ -510,7 +519,7 @@ function PosScreen() {
               variant={manage.soldOut[branch.id] ? "primary" : "secondary"}
               onClick={async () => {
                 const next = !manage.soldOut[branch.id];
-                const r = await exec((d, c) => setSoldOut(d, c, manage.id, next), { success: next ? `ปิดขาย “${manage.name}” แล้ว` : `เปิดขาย “${manage.name}” อีกครั้ง`, successDetail: next ? "ทุกเครื่องในสาขาจะเห็นว่าหมด" : undefined });
+                const r = await exec((ds) => ds.setSoldOut(manage.id, next), { success: next ? `ปิดขาย “${manage.name}” แล้ว` : `เปิดขาย “${manage.name}” อีกครั้ง`, successDetail: next ? "ทุกเครื่องในสาขาจะเห็นว่าหมด" : undefined });
                 if (r.ok) setManage(null);
               }}
             >

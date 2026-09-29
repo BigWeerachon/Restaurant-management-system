@@ -1,0 +1,183 @@
+/**
+ * API → `DemoState` for the data that changes during a shift (orders, shifts,
+ * availability, ...). Same rules as `mappers.ts`: money becomes satang, ids stay
+ * as they are, snake_case becomes camelCase. Per-unit costs stay in baht.
+ */
+import { toSatang } from "@sabai/domain";
+import type { MenuItem, Order, Shift } from "../demo/types";
+
+// ---------------------------------------------------------------------------
+// Orders — GET /v1/orders?detail=full and GET /v1/orders/{id}
+// ---------------------------------------------------------------------------
+export interface OrderApi {
+  id: string;
+  orderNo: string;
+  receiptNo: string | null;
+  status: Order["status"];
+  businessDate: string;
+  branchId: string;
+  channelId: string;
+  tableId: string | null;
+  shiftId: string | null;
+  guestCount: number | null;
+  note: string | null;
+  openedBy: string | null;
+  openedAt: string;
+  paidAt: string | null;
+  discount: { type: "percent" | "amount"; value: number; reason: string | null } | null;
+  commissionRate: number;
+  commissionAmount: string;
+  commissionVat: string;
+  costTotal: number | null;
+  itemsTotal: string;
+  discountTotal: string;
+  serviceCharge: string;
+  vatAmount: string;
+  rounding: string;
+  total: string;
+  items: {
+    id: string;
+    menu_item_id: string;
+    name: string;
+    qty: string | number;
+    unit_price: string;
+    cost_amount: number | null;
+    note: string | null;
+    status: Order["items"][number]["status"];
+    void_reason: string | null;
+    modifiers: { id: string; name: string; price_delta: string }[];
+  }[];
+  payments: {
+    id: string;
+    method_id: string;
+    kind: "payment" | "refund";
+    amount: string;
+    tendered: string | null;
+    change_given: string;
+    fee_amount: string;
+    reference: string | null;
+    created_at: string;
+  }[];
+}
+
+export function mapOrder(o: OrderApi, menuItems: Pick<MenuItem, "id" | "emoji">[]): Order {
+  const emoji = new Map(menuItems.map((m) => [m.id, m.emoji]));
+  const total = toSatang(o.total);
+  const vatAmount = toSatang(o.vatAmount);
+  const rounding = toSatang(o.rounding);
+  return {
+    id: o.id,
+    branchId: o.branchId,
+    channelId: o.channelId,
+    tableId: o.tableId ?? undefined,
+    orderNo: o.orderNo,
+    receiptNo: o.receiptNo ?? undefined,
+    status: o.status,
+    businessDate: o.businessDate,
+    openedAt: o.openedAt,
+    paidAt: o.paidAt ?? undefined,
+    openedBy: o.openedBy ?? undefined,
+    guestCount: o.guestCount ?? undefined,
+    note: o.note ?? undefined,
+    items: o.items.map((i) => ({
+      id: i.id,
+      menuItemId: i.menu_item_id,
+      name: i.name,
+      emoji: emoji.get(i.menu_item_id) ?? "🍽️",
+      qty: Number(i.qty),
+      unitPrice: toSatang(i.unit_price),
+      modifiers: i.modifiers.map((m) => ({ id: m.id, name: m.name, priceDelta: toSatang(m.price_delta) })),
+      note: i.note ?? undefined,
+      status: i.status,
+      voidReason: i.void_reason ?? undefined,
+      cost: i.cost_amount ?? undefined,
+    })),
+    // A fixed amount is baht in the API and satang in the client, like every other amount; a percent is left alone.
+    discount: o.discount ? { type: o.discount.type, value: o.discount.type === "amount" ? toSatang(o.discount.value) : o.discount.value, reason: o.discount.reason ?? "" } : undefined,
+    payments: o.payments.map((p) => ({
+      id: p.id,
+      methodId: p.method_id,
+      kind: p.kind,
+      amount: toSatang(p.amount),
+      tendered: p.tendered === null ? undefined : toSatang(p.tendered),
+      change: toSatang(p.change_given),
+      fee: toSatang(p.fee_amount),
+      reference: p.reference ?? undefined,
+      at: p.created_at,
+    })),
+    totals: {
+      itemsTotal: toSatang(o.itemsTotal),
+      discountTotal: toSatang(o.discountTotal),
+      serviceCharge: toSatang(o.serviceCharge),
+      vatAmount,
+      rounding,
+      total,
+      commission: toSatang(o.commissionAmount),
+      commissionVat: toSatang(o.commissionVat),
+      // Same definition as calculateOrderTotals: what the owner earned, without VAT or cash rounding.
+      netSales: total - vatAmount - rounding,
+    },
+    commissionRate: o.commissionRate,
+    cost: o.costTotal ?? undefined,
+    shiftId: o.shiftId ?? undefined,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Shifts — GET /v1/shifts/current and GET /v1/shifts
+// ---------------------------------------------------------------------------
+export interface CurrentShiftApi {
+  id: string;
+  opened_at: string;
+  opened_by: string | null;
+  opening_float: string;
+  business_date: string;
+  expected_cash: string;
+  cash_movements: { id: string; kind: "pay_in" | "pay_out" | "drop"; amount: string; reason: string; created_at: string }[];
+}
+
+export interface ShiftRowApi {
+  id: string;
+  business_date: string;
+  status: "open" | "closed";
+  opening_float: string;
+  expected_cash: string | null;
+  counted_cash: string | null;
+  cash_variance: string | null;
+  opened_at: string;
+  closed_at: string | null;
+  opened_by: string | null;
+}
+
+/** The open shift, with the server's own figure for the cash that should be in the drawer. */
+export function mapCurrentShift(s: CurrentShiftApi, branchId: string): Shift {
+  return {
+    id: s.id,
+    branchId,
+    openedBy: s.opened_by ?? "",
+    openedAt: s.opened_at,
+    openingFloat: toSatang(s.opening_float),
+    status: "open",
+    expectedCash: toSatang(s.expected_cash),
+    // A drop is cash leaving the drawer, like a pay-out.
+    cashMoves: s.cash_movements.map((m) => ({ id: m.id, kind: m.kind === "pay_in" ? "pay_in" : "pay_out", amount: toSatang(m.amount), reason: m.reason, at: m.created_at })),
+    businessDate: s.business_date,
+  };
+}
+
+export function mapClosedShift(s: ShiftRowApi, branchId: string): Shift {
+  return {
+    id: s.id,
+    branchId,
+    openedBy: s.opened_by ?? "",
+    openedAt: s.opened_at,
+    openingFloat: toSatang(s.opening_float),
+    status: "closed",
+    closedAt: s.closed_at ?? undefined,
+    countedCash: s.counted_cash === null ? undefined : toSatang(s.counted_cash),
+    expectedCash: s.expected_cash === null ? undefined : toSatang(s.expected_cash),
+    variance: s.cash_variance === null ? undefined : toSatang(s.cash_variance),
+    cashMoves: [],
+    businessDate: s.business_date,
+  };
+}

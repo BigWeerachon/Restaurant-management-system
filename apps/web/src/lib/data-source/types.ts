@@ -54,6 +54,7 @@ export type Slice =
   | "tickets"
   | "stock"
   | "shifts"
+  | "availability"
   | "purchasing"
   | "finance"
   | "team"

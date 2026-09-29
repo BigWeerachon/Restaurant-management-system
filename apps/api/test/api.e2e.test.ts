@@ -365,6 +365,17 @@ describe("a café's first day, through the API", () => {
 
     const shift = await s.call("GET", `/v1/shifts/current?branchId=${s.branchId}`);
     expect(shift.json.shift.business_date).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+    expect(shift.json.shift.opened_by).toBeTruthy();
+    expect(shift.json.shift.cash_movements).toEqual([]);
+
+    // detail=full returns whole orders in one round trip, in the same shape as the single-order detail.
+    const full = await s.call("GET", `/v1/orders?branchId=${s.branchId}&detail=full`);
+    const one = full.json.find((o: any) => o.id === s.order);
+    expect(one).toMatchObject({ status: "paid", branchId: s.branchId, discount: null, commissionRate: 0, total: "185.00", shiftId: s.shift });
+    expect(one.items).toHaveLength(2);
+    expect(one.payments[0]).toMatchObject({ method_id: s.cash, kind: "payment", fee_amount: "0.00" });
+    expect(one.openedBy).toBeTruthy();
+    expect(one.paidAt).toBeTruthy();
   });
 
   it("keeps kitchen in the loop and lets cooks undo a mistaken bump", async () => {
@@ -408,6 +419,7 @@ describe("a café's first day, through the API", () => {
       });
       await s.call("POST", `/v1/orders/${id}/discount`, { type: "percent", value: 12.5, reason: "โปรเปิดร้าน" });
       const detail = await s.call("GET", `/v1/orders/${id}`);
+      expect(detail.json.discount).toEqual({ type: "percent", value: 12.5, reason: "โปรเปิดร้าน" });
       const local = calculateOrderTotals({
         lines: [
           { qty, unitPrice: 6500, modifiersTotal: 0 },
