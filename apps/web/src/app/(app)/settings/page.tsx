@@ -5,14 +5,16 @@ import { Check, Crown, MapPin, Plus, ShieldCheck, Sparkles } from "lucide-react"
 import { motion } from "motion/react";
 import { useSearchParams } from "next/navigation";
 import { Suspense, useState } from "react";
+import { LoadBanner } from "@/components/app/load-banner";
 import { PageHeader } from "@/components/app/page-header";
 import { PromptPayQr } from "@/components/app/promptpay-qr";
 import { Button } from "@/components/ui/button";
 import { Dialog, Switch, TabPanel, Tabs } from "@/components/ui/overlay";
 import { Badge, Callout, Card, Field, Input, Segmented, Select } from "@/components/ui/primitives";
-import { useAccess, useAction } from "@/hooks/use-sabai";
+import { useDsAction, useLoad } from "@/hooks/use-data-source";
+import { useAccess } from "@/hooks/use-sabai";
 import { cn } from "@/lib/cn";
-import { addBranch, changePlan, updateBranch, updateChannel, updatePaymentMethod, updateTenant } from "@/lib/demo/engine";
+import type { DataSource } from "@/lib/data-source/types";
 import { useSabai } from "@/lib/demo/store";
 import type { Branch, Tenant } from "@/lib/demo/types";
 
@@ -33,10 +35,10 @@ const toRate = (s: string) => Math.min(Math.max(Number(s || 0), 0), 100) / 100;
 // ---------------------------------------------------------------------------
 function Business() {
   const db = useSabai((s) => s.db);
-  const { exec } = useAction();
+  const { exec } = useDsAction();
   const t = db.tenant;
   const [name, setName] = useState(t.name);
-  const set = (patch: Parameters<typeof updateTenant>[2], msg = "บันทึกแล้ว") => exec((d, c) => updateTenant(d, c, patch), { success: msg });
+  const set = (patch: Parameters<DataSource["updateTenant"]>[0], msg = "บันทึกแล้ว") => exec((ds) => ds.updateTenant(patch), { success: msg });
   return (
     <div className="grid gap-4 lg:grid-cols-2">
       <Card className="space-y-4 p-5">
@@ -87,7 +89,7 @@ function Business() {
 
 // ---------------------------------------------------------------------------
 function BranchDialog({ branch, open, onClose }: { branch: Branch | null; open: boolean; onClose: () => void }) {
-  const { exec, pending } = useAction();
+  const { exec, pending } = useDsAction();
   const [form, setForm] = useState({ name: "", address: "", phone: "", openingHours: "", dayCutoff: "05:00", service: "0" });
   const [loaded, setLoaded] = useState<string | null>(null);
   const key = branch?.id ?? (open ? "new" : null);
@@ -98,8 +100,8 @@ function BranchDialog({ branch, open, onClose }: { branch: Branch | null; open: 
   const up = (k: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement>) => setForm({ ...form, [k]: e.target.value });
   const save = async () => {
     const r = branch
-      ? await exec((d, c) => updateBranch(d, c, branch.id, { name: form.name, address: form.address, phone: form.phone, openingHours: form.openingHours, dayCutoff: form.dayCutoff, serviceChargeRate: toRate(form.service) }), { success: "บันทึกข้อมูลสาขาแล้ว" })
-      : await exec((d, c) => addBranch(d, c, { name: form.name, address: form.address, phone: form.phone }), { success: `เปิด${form.name}แล้ว`, successDetail: "ตั้งค่าจอครัวและค่าเริ่มต้นให้แล้ว" });
+      ? await exec((ds) => ds.updateBranch(branch.id, { name: form.name, address: form.address, phone: form.phone, openingHours: form.openingHours, dayCutoff: form.dayCutoff, serviceChargeRate: toRate(form.service) }), { success: "บันทึกข้อมูลสาขาแล้ว" })
+      : await exec((ds) => ds.addBranch({ name: form.name, address: form.address, phone: form.phone }), { success: `เปิด${form.name}แล้ว`, successDetail: "ตั้งค่าจอครัวและค่าเริ่มต้นให้แล้ว" });
     if (r.ok) onClose();
   };
   return (
@@ -175,7 +177,7 @@ function Branches({ onUpgrade }: { onUpgrade: () => void }) {
 // ---------------------------------------------------------------------------
 function Channels() {
   const db = useSabai((s) => s.db);
-  const { exec } = useAction();
+  const { exec } = useDsAction();
   const [draft, setDraft] = useState<Record<string, { gp: string; markup: string }>>({});
   return (
     <div className="space-y-4">
@@ -192,11 +194,11 @@ function Channels() {
           const platform = c.kind === "delivery_platform";
           return (
             <li key={c.id}>
-              <Card className={cn("p-5", !c.active && "opacity-70")}>
+              <Card className="p-5">
                 <div className="flex items-center gap-3">
                   <span className="h-3 w-3 rounded-full" style={{ background: c.color }} aria-hidden="true" />
                   <div className="flex-1">
-                    <Switch checked={c.active} onCheckedChange={(v) => exec((dd, cc) => updateChannel(dd, cc, c.id, { active: v }), { success: v ? `เปิดขายผ่าน ${c.name}` : `ปิด ${c.name} แล้ว` })} label={c.name} description={platform ? `โอนเงินเข้าบัญชีทุก ${c.settlementDays} วัน` : c.kind === "dine_in" ? "คิดค่าบริการตามที่ตั้งไว้ในแต่ละสาขา" : "ไม่คิดค่าบริการ · ใส่ค่าบรรจุภัณฑ์เป็นตัวเลือกเสริมได้"} />
+                    <Switch checked={c.active} onCheckedChange={(v) => exec((ds) => ds.updateChannel(c.id, { active: v }), { success: v ? `เปิดขายผ่าน ${c.name}` : `ปิด ${c.name} แล้ว` })} label={c.name} description={platform ? `โอนเงินเข้าบัญชีทุก ${c.settlementDays} วัน` : c.kind === "dine_in" ? "คิดค่าบริการตามที่ตั้งไว้ในแต่ละสาขา" : "ไม่คิดค่าบริการ · ใส่ค่าบรรจุภัณฑ์เป็นตัวเลือกเสริมได้"} />
                   </div>
                 </div>
                 {platform && c.active && (
@@ -212,7 +214,7 @@ function Channels() {
                     </p>
                     {dirty && (
                       <div className="col-span-2 flex justify-end">
-                        <Button size="sm" onClick={() => exec((dd, cc) => updateChannel(dd, cc, c.id, { commissionRate: gp, priceMarkup: markup }), { success: `บันทึก ${c.name} แล้ว`, successDetail: "มีผลกับบิลตั้งแต่ตอนนี้" })}>
+                        <Button size="sm" onClick={() => exec((ds) => ds.updateChannel(c.id, { commissionRate: gp, priceMarkup: markup }), { success: `บันทึก ${c.name} แล้ว`, successDetail: "มีผลกับบิลตั้งแต่ตอนนี้" })}>
                           บันทึก
                         </Button>
                       </div>
@@ -231,7 +233,7 @@ function Channels() {
 // ---------------------------------------------------------------------------
 function Payments() {
   const db = useSabai((s) => s.db);
-  const { exec } = useAction();
+  const { exec } = useDsAction();
   const pp = db.paymentMethods.find((m) => m.kind === "promptpay");
   const [ppId, setPpId] = useState(pp?.promptpayId ?? "");
   return (
@@ -242,7 +244,7 @@ function Payments() {
             <Switch
               checked={m.active}
               disabled={m.kind === "cash"}
-              onCheckedChange={(v) => exec((d, c) => updatePaymentMethod(d, c, m.id, { active: v }), { success: v ? `เปิดรับ${m.name}` : `ปิด${m.name}แล้ว` })}
+              onCheckedChange={(v) => exec((ds) => ds.updatePaymentMethod(m.id, { active: v }), { success: v ? `เปิดรับ${m.name}` : `ปิด${m.name}แล้ว` })}
               label={m.name}
               description={m.kind === "cash" ? "เปิดไว้เสมอ ใช้ทอนเงินและกรณีระบบอื่นขัดข้อง" : m.feeRate > 0 ? `ค่าธรรมเนียม ${pctText(m.feeRate)}% · เงินเข้าใน ${m.settlementDays} วัน` : m.kind === "platform" ? "แพลตฟอร์มเก็บเงินแทนร้าน" : "ไม่มีค่าธรรมเนียม · เงินเข้าทันที"}
             />
@@ -250,7 +252,7 @@ function Payments() {
               <Field label="หมายเลขพร้อมเพย์ของร้าน" hint="เบอร์มือถือ หรือเลขผู้เสียภาษี 13 หลัก" htmlFor="pp" className="mt-3">
                 <div className="flex gap-2">
                   <Input id="pp" className="flex-1" inputMode="numeric" value={ppId} onChange={(e) => setPpId(e.target.value)} placeholder="08x-xxx-xxxx" />
-                  <Button variant="secondary" disabled={!ppId || ppId === m.promptpayId} onClick={() => exec((d, c) => updatePaymentMethod(d, c, m.id, { promptpayId: ppId, active: true }), { success: "บันทึกพร้อมเพย์แล้ว", successDetail: "หน้าขายจะสร้าง QR ตามยอดบิลให้อัตโนมัติ" })}>
+                  <Button variant="secondary" disabled={!ppId || ppId === m.promptpayId} onClick={() => exec((ds) => ds.updatePaymentMethod(m.id, { promptpayId: ppId, active: true }), { success: "บันทึกพร้อมเพย์แล้ว", successDetail: "หน้าขายจะสร้าง QR ตามยอดบิลให้อัตโนมัติ" })}>
                     บันทึก
                   </Button>
                 </div>
@@ -272,7 +274,7 @@ function Payments() {
 function Plan() {
   const db = useSabai((s) => s.db);
   const { can } = useAccess();
-  const { exec, pending } = useAction();
+  const { exec, pending } = useDsAction();
   const [yearly, setYearly] = useState(false);
   const [confirm, setConfirm] = useState<PlanCode | null>(null);
   const current = planOf(db.tenant.plan);
@@ -333,7 +335,7 @@ function Plan() {
       <Dialog open={!!confirm} onOpenChange={(v) => !v && setConfirm(null)} title={`เปลี่ยนเป็นแพ็กเกจ${confirm ? planOf(confirm).name : ""}?`} description="เปลี่ยนได้ทุกเมื่อ คิดเงินตามสัดส่วนวันที่ใช้จริง" size="sm" footer={
         <Button loading={pending} onClick={async () => {
           if (!confirm) return;
-          const r = await exec((d, c) => changePlan(d, c, confirm), { success: `เปลี่ยนเป็น${planOf(confirm).name}แล้ว` });
+          const r = await exec((ds) => ds.changePlan(confirm), { success: `เปลี่ยนเป็น${planOf(confirm).name}แล้ว` });
           if (r.ok) setConfirm(null);
         }}>
           ยืนยัน
@@ -348,6 +350,7 @@ function Plan() {
 function SettingsInner() {
   const params = useSearchParams();
   const { can } = useAccess();
+  const load = useLoad(["settings"]);
   const [tab, setTab] = useState(params.get("tab") ?? (can("settings.manage") ? "business" : "plan"));
   const tabs = [
     ...(can("settings.manage")
@@ -363,6 +366,7 @@ function SettingsInner() {
   return (
     <>
       <PageHeader title="ตั้งค่า" description="ตั้งครั้งเดียว ใช้ได้ทุกสาขา — ทุกช่องมีค่าที่แนะนำไว้ให้แล้ว" />
+      <LoadBanner state={load} className="mb-4" />
       <Tabs value={tab} onValueChange={setTab} tabs={tabs}>
         <TabPanel value="business" className="pt-4">
           <Business />

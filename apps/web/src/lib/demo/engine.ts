@@ -12,6 +12,7 @@ import {
   calculateOrderTotals,
   can,
   cashRound,
+  channelPrice,
   explodeRecipe,
   type CostIngredient,
   type ErrorCode,
@@ -139,9 +140,7 @@ export function recipeBook(state: DemoState, branchId?: string): RecipeBook {
 
 /** Channel price: delivery menus carry a markup rounded up to a friendly ฿5. */
 export function priceFor(item: Pick<MenuItem, "price">, channel?: Pick<Channel, "priceMarkup">): Satang {
-  if (!channel || channel.priceMarkup <= 0) return item.price;
-  const raw = item.price * (1 + channel.priceMarkup);
-  return Math.ceil(raw / 500) * 500;
+  return channel ? channelPrice(item.price, channel.priceMarkup) : item.price;
 }
 
 export function modifierPrice(state: DemoState, optionId: string): { name: string; priceDelta: Satang; recipe?: Recipe } | undefined {
@@ -1030,7 +1029,7 @@ export function setRolePermissions(state: DemoState, ctx: Ctx, roleKey: string, 
 /** Mirrors app.enforce_plan_limits: selling never stops, only adding more. */
 function assertPlanLimit(state: DemoState, metric: "staff" | "branches", wanted: number) {
   const limit = planLimit(state.tenant.plan, metric);
-  if (limit !== null && wanted > limit) throw new DomainError("PLAN_LIMIT_REACHED", { metric: metric === "staff" ? "พนักงาน" : "สาขา", limit });
+  if (limit !== null && wanted > limit) throw new DomainError("PLAN_LIMIT_REACHED", { metric, limit });
 }
 
 const activeOwners = (state: DemoState) => state.members.filter((m) => m.active && state.roles.find((r) => r.key === m.roleKey)?.grantsAll).length;
@@ -1128,8 +1127,8 @@ export function changePlan(state: DemoState, ctx: Ctx, plan: PlanCode) {
   requirePerm(state, ctx, "billing.manage");
   const branches = planLimit(plan, "branches");
   const staff = planLimit(plan, "staff");
-  if (branches !== null && state.branches.length > branches) throw new DomainError("PLAN_LIMIT_REACHED", { metric: "สาขา", limit: branches });
-  if (staff !== null && state.members.filter((m) => m.active).length > staff) throw new DomainError("PLAN_LIMIT_REACHED", { metric: "พนักงาน", limit: staff });
+  if (branches !== null && state.branches.length > branches) throw new DomainError("PLAN_LIMIT_REACHED", { metric: "branches", limit: branches });
+  if (staff !== null && state.members.filter((m) => m.active).length > staff) throw new DomainError("PLAN_LIMIT_REACHED", { metric: "staff", limit: staff });
   state.tenant.plan = plan;
   log(state, ctx, "billing.plan_changed", `${actorName(state, ctx.actorId)} เปลี่ยนแพ็กเกจเป็น ${plan}`, "good");
 }

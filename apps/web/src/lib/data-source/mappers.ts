@@ -79,6 +79,8 @@ export interface ShopApiResponse {
     address: string | null;
     phone: string | null;
     day_cutoff: string;
+    /** Free text kept as `{ text }`; `{}` until someone writes it down. */
+    opening_hours?: { text?: string } | null;
     service_charge_rate: number;
     stock_location_id: string | null;
     tables: { id: string; branch_id: string; area_id: string | null; area_name: string | null; name: string; seats: number }[];
@@ -92,6 +94,8 @@ export interface ShopApiResponse {
     color: string | null;
     applies_service_charge: boolean;
     commission_rate: number;
+    /** 0.15 = +15 % on this channel's menu prices. */
+    price_markup?: number;
     settlement_days: number;
     is_active: boolean;
   }[];
@@ -197,7 +201,9 @@ export function mapShopBootstrap(shop: ShopApiResponse): ShopBootstrap {
     name: b.name,
     address: b.address ?? undefined,
     phone: b.phone ?? undefined,
-    dayCutoff: b.day_cutoff,
+    // The database sends "04:00:00"; the screen and the API speak "04:00".
+    dayCutoff: b.day_cutoff.slice(0, 5),
+    openingHours: b.opening_hours?.text || undefined,
     serviceChargeRate: b.service_charge_rate,
     stockLocationId: b.stock_location_id ?? undefined,
     tables: b.tables.map((t) => ({ id: t.id, name: t.name, seats: t.seats, zone: t.area_name ?? "ทั่วไป" })),
@@ -212,8 +218,7 @@ export function mapShopBootstrap(shop: ShopApiResponse): ShopBootstrap {
     color: c.color ?? "gray",
     active: c.is_active,
     commissionRate: c.commission_rate,
-    // No price_markup column yet (tracked gap) — delivery channels show base menu prices until it lands.
-    priceMarkup: 0,
+    priceMarkup: c.price_markup ?? 0,
     appliesServiceCharge: c.applies_service_charge,
     settlementDays: c.settlement_days,
   }));

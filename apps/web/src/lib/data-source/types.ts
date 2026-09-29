@@ -149,8 +149,9 @@ export interface DataSource {
   // ------------------------------------------------------------- settings
   updateTenant(patch: Partial<Pick<Tenant, "name" | "businessType" | "vatRegistered" | "pricesIncludeVat" | "cashRounding">>): Promise<void>;
   addBranch(input: { name: string; address?: string; phone?: string }): Promise<Branch>;
-  updateBranch(id: string, patch: Partial<Pick<Branch, "name" | "address" | "phone" | "dayCutoff" | "serviceChargeRate">>): Promise<void>;
-  updateChannel(id: string, patch: Partial<Pick<Channel, "active" | "appliesServiceCharge">> & { name?: string; color?: string }): Promise<void>;
+  updateBranch(id: string, patch: Partial<Pick<Branch, "name" | "address" | "phone" | "openingHours" | "dayCutoff" | "serviceChargeRate">>): Promise<void>;
+  /** `commissionRate` (GP) takes effect from today; use `setChannelCommission` to choose the date. */
+  updateChannel(id: string, patch: Partial<Pick<Channel, "active" | "appliesServiceCharge" | "commissionRate" | "priceMarkup">> & { name?: string; color?: string }): Promise<void>;
   /**
    * Sets a channel's GP effective from a given date (the old rate keeps
    * applying to sales before it) — API-only (`POST /v1/channels/{id}/commission-rate`).

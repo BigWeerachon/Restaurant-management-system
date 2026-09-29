@@ -15,6 +15,7 @@ import { menuCommands } from "./http-menu";
 import { posCommands } from "./http-pos";
 import { purchasingCommands } from "./http-purchasing";
 import { reportQueries } from "./http-reports";
+import { settingsCommands } from "./http-settings";
 import { stockCommands } from "./http-stock";
 import { teamCommands } from "./http-team";
 import type { DataSource, Slice } from "./types";
@@ -82,18 +83,12 @@ const implemented = {
   ...financeCommands,
   ...reportQueries,
   ...teamCommands,
+  ...settingsCommands,
 } satisfies Partial<DataSource>;
 
 const NOT_YET = [
-  "updateTenant",
-  "addBranch",
-  "updateBranch",
-  "updateChannel",
-  "setChannelCommission",
-  "updatePaymentMethod",
   "skipOnboardingStep",
   "confirmCashOnly",
-  "changePlan",
 ] as const satisfies readonly Exclude<keyof DataSource, keyof typeof implemented>[];
 
 const notYet = Object.fromEntries(

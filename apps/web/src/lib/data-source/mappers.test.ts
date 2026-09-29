@@ -191,6 +191,19 @@ describe("mapShopBootstrap", () => {
     expect(ingredients[1]!.emoji).toBe("🥚");
   });
 
+  it("keeps a branch's cutoff as HH:MM, its opening hours as written, and a channel's markup", () => {
+    const fixture = shopFixture();
+    fixture.branches[0]!.opening_hours = { text: "07:00–21:00" };
+    fixture.channels[1]!.price_markup = 0.15;
+    const { branches, channels } = mapShopBootstrap(fixture);
+    expect(branches[0]).toMatchObject({ dayCutoff: "04:00", openingHours: "07:00–21:00" });
+    expect(channels[1]!.priceMarkup).toBe(0.15);
+    expect(channels[0]!.priceMarkup).toBe(0);
+    // Not written down yet: the database holds `{}`.
+    fixture.branches[0]!.opening_hours = {};
+    expect(mapShopBootstrap(fixture).branches[0]!.openingHours).toBeUndefined();
+  });
+
   it("models a grants-all role with grantsAll alone, so the '*' marker never reaches the permission editor", () => {
     const { roles } = mapShopBootstrap(shopFixture());
     const owner = roles.find((r) => r.key === "owner")!;

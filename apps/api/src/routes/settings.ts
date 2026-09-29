@@ -54,6 +54,8 @@ export function registerSettings(app: Hono<Env>, deps: Deps) {
                phone = coalesce(${body.phone ?? null}, phone),
                day_cutoff = coalesce(${body.dayCutoff ?? null}::time, day_cutoff),
                service_charge_rate = coalesce(${body.serviceChargeRate ?? null}, service_charge_rate),
+               opening_hours = case when ${body.openingHours ?? null}::text is null then opening_hours
+                               else jsonb_build_object('text', ${body.openingHours ?? null}::text) end,
                is_active = coalesce(${body.isActive ?? null}, is_active)
          where id = ${params.id} and tenant_id = ${tenantId}
         returning id`;
@@ -69,7 +71,8 @@ export function registerSettings(app: Hono<Env>, deps: Deps) {
            set name = coalesce(${body.name ?? null}, name),
                color = coalesce(${body.color ?? null}, color),
                is_active = coalesce(${body.active ?? null}, is_active),
-               applies_service_charge = coalesce(${body.appliesServiceCharge ?? null}, applies_service_charge)
+               applies_service_charge = coalesce(${body.appliesServiceCharge ?? null}, applies_service_charge),
+               price_markup = coalesce(${body.priceMarkup ?? null}, price_markup)
          where id = ${params.id} and tenant_id = ${tenantId}
         returning id`;
       if (!rows.length) throw new ApiFailure("NOT_FOUND", 404, { entity: "channel" });

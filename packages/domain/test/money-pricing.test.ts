@@ -5,6 +5,7 @@ import {
   calculateOrderTotals,
   cashRound,
   changeDue,
+  channelPrice,
   divRound,
   formatMoney,
   roundHalfAwayFromZero,
@@ -149,5 +150,40 @@ describe("cash handling", () => {
     expect(suggestTenders(10000)[0]).toBe(10000);
     expect(changeDue(14500, 20000)).toBe(5500);
     expect(changeDue(14500, 10000)).toBe(0);
+  });
+});
+
+describe("channel prices (parity with app.resolve_menu_price)", () => {
+  it("leaves the price alone when the channel adds nothing", () => {
+    expect(channelPrice(6500, 0)).toBe(6500);
+    expect(channelPrice(6500, -0.1)).toBe(6500);
+  });
+
+  it("adds the markup and rounds up to the next ฿5", () => {
+    expect(channelPrice(6500, 0.15)).toBe(7500); // 74.75 → 75
+    expect(channelPrice(6900, 0.15)).toBe(8000); // 79.35 → 80
+    expect(channelPrice(4500, 0.2)).toBe(5500); // 54.00 → 55
+    expect(channelPrice(12900, 0.1)).toBe(14500); // 141.90 → 145
+  });
+
+  it("does not round up a price that lands exactly on a ฿5 step (with floats, ฿250 + 10% became ฿280)", () => {
+    // The formula the demo used before: 25000 × 1.1 is a hair above 27500, so it went up a whole step.
+    expect(Math.ceil((25000 * (1 + 0.1)) / 500) * 500).toBe(28000);
+    expect(channelPrice(25000, 0.1)).toBe(27500);
+    expect(Math.ceil((12500 * (1 + 0.12)) / 500) * 500).toBe(14500);
+    expect(channelPrice(12500, 0.12)).toBe(14000);
+    expect(channelPrice(5000, 0.1)).toBe(5500);
+    expect(channelPrice(10000, 0.25)).toBe(12500);
+    expect(channelPrice(2000, 0.5)).toBe(3000);
+  });
+
+  it("never comes out below the base price, and is always a multiple of ฿5 once there is a markup", () => {
+    for (const base of [100, 1234, 5000, 6500, 9999, 25050]) {
+      for (const markup of [0.01, 0.05, 0.1, 0.15, 0.3, 1]) {
+        const p = channelPrice(base, markup);
+        expect(p).toBeGreaterThanOrEqual(base);
+        expect(p % 500).toBe(0);
+      }
+    }
   });
 });

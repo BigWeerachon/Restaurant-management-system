@@ -185,6 +185,18 @@ const loaders: Partial<Record<Exclude<Slice, "bootstrap">, (branchId: string) =>
     };
   },
 
+  // The shop's own settings: business details, branches, sales channels and ways to be paid.
+  async settings() {
+    const { tenant, branches, stations, channels, paymentMethods } = await fetchShop();
+    return (d) => {
+      d.tenant = tenant;
+      d.branches = branches;
+      d.stations = stations;
+      d.channels = channels;
+      d.paymentMethods = paymentMethods;
+    };
+  },
+
   // The people who work here and what each role may do (they come with the shop's own data).
   async team() {
     const { members, roles } = await fetchShop();

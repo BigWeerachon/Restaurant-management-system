@@ -1,4 +1,4 @@
-import { addDays, calculateOrderTotals, PERMISSIONS, toSatang } from "@sabai/domain";
+import { addDays, calculateOrderTotals, channelPrice, PERMISSIONS, toSatang } from "@sabai/domain";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { createApp } from "../src/app";
 import { createTestContext, uuidv7 } from "./helpers";
@@ -816,6 +816,53 @@ describe("settings", () => {
     expect(Number(branch!.service_charge_rate)).toBe(0.1);
   });
 
+  it("charges a channel's menu markup, rounded up to ฿5 exactly as the domain does, and shows the GP in force", async () => {
+    const [channel] = s.channels.filter((c: any) => c.kind === "takeaway");
+    const set = await s.call("PATCH", `/v1/channels/${channel.id}`, { priceMarkup: 0.15 });
+    expect(set.status).toBe(200);
+
+    // The catalog for that channel and the price an order is actually charged both follow the domain's rule.
+    const expected = (baht: number) => channelPrice(toSatang(String(baht)), 0.15);
+    const catalog = await s.call("GET", `/v1/catalog?branchId=${s.branchId}&channelId=${channel.id}`);
+    const latte = catalog.json.items.find((i: any) => i.name === "ลาเต้เย็น");
+    expect(toSatang(latte.price)).toBe(expected(65));
+    const dineIn = await s.call("GET", `/v1/catalog?branchId=${s.branchId}`);
+    expect(dineIn.json.items.find((i: any) => i.name === "ลาเต้เย็น").price).toBe("65.00");
+
+    const id = uuidv7();
+    await s.call("POST", "/v1/orders", { id, branchId: s.branchId, channelId: channel.id, items: [{ id: uuidv7(), menuItemId: s.latte, qty: 1 }] });
+    const order = await s.call("GET", `/v1/orders/${id}`);
+    expect(toSatang(order.json.items[0].unit_price)).toBe(expected(65));
+    await s.call("POST", `/v1/orders/${id}/void`, { reason: "ทดสอบ" });
+
+    // An explicit price for the item on that channel wins over the markup.
+    await ctx.sql`insert into app.menu_item_prices (tenant_id, menu_item_id, channel_id, price) values (${s.tenantId}, ${s.latte}, ${channel.id}, 99)`;
+    const overridden = await s.call("GET", `/v1/catalog?branchId=${s.branchId}&channelId=${channel.id}`);
+    expect(overridden.json.items.find((i: any) => i.name === "ลาเต้เย็น").price).toBe("99.00");
+    await ctx.sql`delete from app.menu_item_prices where channel_id = ${channel.id} and menu_item_id = ${s.latte}`;
+
+    // The shop carries the markup, and the GP that is in force today rather than the one the channel started with.
+    const shop = await s.call("GET", "/v1/shop");
+    expect(shop.json.channels.find((c: any) => c.id === channel.id)).toMatchObject({ price_markup: 0.15 });
+    const today = new Date().toISOString().slice(0, 10);
+    await s.call("POST", `/v1/channels/${channel.id}/commission-rate`, { rate: 0.21, validFrom: today });
+    const after = await s.call("GET", "/v1/shop");
+    expect(after.json.channels.find((c: any) => c.id === channel.id).commission_rate).toBe(0.21);
+    const tooMuch = await s.call("PATCH", `/v1/channels/${channel.id}`, { priceMarkup: 1.5 });
+    expect(tooMuch.status).toBe(422);
+    await s.call("PATCH", `/v1/channels/${channel.id}`, { priceMarkup: 0 });
+  });
+
+  it("keeps a branch's opening hours as the shop wrote them", async () => {
+    const r = await s.call("PATCH", `/v1/branches/${s.branchId}`, { openingHours: "07:00–21:00" });
+    expect(r.status).toBe(200);
+    const shop = await s.call("GET", "/v1/shop");
+    expect(shop.json.branches.find((b: any) => b.id === s.branchId).opening_hours).toEqual({ text: "07:00–21:00" });
+    // Editing something else leaves them alone.
+    await s.call("PATCH", `/v1/branches/${s.branchId}`, { phone: "021234567" });
+    expect((await s.call("GET", "/v1/shop")).json.branches.find((b: any) => b.id === s.branchId).opening_hours).toEqual({ text: "07:00–21:00" });
+  });
+
   it("edits a sales channel and sets a new GP that only applies from a future date", async () => {
     const [channel] = s.channels.filter((c: any) => c.kind === "delivery_platform" || c.kind === "takeaway");
     const edited = await s.call("PATCH", `/v1/channels/${channel.id}`, { appliesServiceCharge: true });
@@ -856,6 +903,21 @@ describe("settings", () => {
 
     const bad = await s.call("POST", "/v1/settings/plan", { planCode: "not_a_real_plan" });
     expect(bad.status).toBe(422);
+  });
+
+  it("will not move to a plan the shop has outgrown, and needs the billing right to change plans", async () => {
+    const [people] = await ctx.sql<{ n: string }[]>`select count(*) as n from app.memberships where tenant_id = ${s.tenantId} and status in ('active','invited')`;
+    // Free allows three people; this shop has more, so it stays where it is.
+    expect(Number(people!.n)).toBeGreaterThan(3);
+    const down = await s.call("POST", "/v1/settings/plan", { planCode: "free" });
+    expect(down.status).toBe(402);
+    expect(down.json.error.code).toBe("PLAN_LIMIT_REACHED");
+    const [sub] = await ctx.sql<{ plan_code: string }[]>`select plan_code from app.subscriptions where tenant_id = ${s.tenantId}`;
+    expect(sub!.plan_code).toBe("business");
+
+    // A cashier holds neither settings nor billing rights.
+    const denied = await s.cashierCall("POST", "/v1/settings/plan", { planCode: "pro" });
+    expect(denied.status).toBe(403);
   });
 });
 

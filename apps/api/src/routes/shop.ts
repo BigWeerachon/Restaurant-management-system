@@ -48,9 +48,13 @@ export function registerShop(app: Hono<Env>, deps: Deps) {
         t<{ id: string; branch_id: string; name: string; route_key: string; color: string | null; warn_after_sec: number; late_after_sec: number }[]>`
           select id, branch_id, name, route_key, color, warn_after_sec, late_after_sec
             from app.kitchen_stations where tenant_id = ${tenantId} and is_active order by branch_id, sort`,
-        t<{ id: string; key: string; kind: string; name: string; color: string | null; icon: string | null; applies_service_charge: boolean; commission_rate: string; settlement_days: number; is_active: boolean; sort: number }[]>`
-          select id, key, kind, name, color, icon, applies_service_charge, commission_rate, settlement_days, is_active, sort
-            from app.sales_channels where tenant_id = ${tenantId} order by sort`,
+        t<{ id: string; key: string; kind: string; name: string; color: string | null; icon: string | null; applies_service_charge: boolean; commission_rate: string; price_markup: string; settlement_days: number; is_active: boolean; sort: number }[]>`
+          -- The GP in force today (the one on the newest rate that has started), not just the default it started from.
+          select c.id, c.key, c.kind, c.name, c.color, c.icon, c.applies_service_charge,
+                 app.channel_commission_rate(c.id, (now() at time zone tn.timezone)::date) as commission_rate,
+                 c.price_markup, c.settlement_days, c.is_active, c.sort
+            from app.sales_channels c join app.tenants tn on tn.id = c.tenant_id
+           where c.tenant_id = ${tenantId} order by c.sort`,
         t<{ id: string; kind: string; name: string; icon: string | null; fee_rate: string; fee_fixed: string; opens_drawer: boolean; requires_reference: boolean; settlement_days: number; config: unknown; is_active: boolean; sort: number }[]>`
           select id, kind, name, icon, fee_rate, fee_fixed, opens_drawer, requires_reference, settlement_days, config, is_active, sort
             from app.payment_methods where tenant_id = ${tenantId} order by sort`,
@@ -120,7 +124,7 @@ export function registerShop(app: Hono<Env>, deps: Deps) {
           tables: tables.filter((tb) => tb.branch_id === b.id),
           stations: stations.filter((st) => st.branch_id === b.id),
         })),
-        channels: channels.map((c) => ({ ...c, commission_rate: num(c.commission_rate) })),
+        channels: channels.map((c) => ({ ...c, commission_rate: num(c.commission_rate), price_markup: num(c.price_markup) })),
         paymentMethods: paymentMethods.map((p) => ({ ...p, fee_rate: num(p.fee_rate), fee_fixed: money(p.fee_fixed) })),
         suppliers: suppliers.map((s) => ({
           ...s,

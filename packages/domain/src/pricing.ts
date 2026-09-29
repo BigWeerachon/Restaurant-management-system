@@ -126,3 +126,15 @@ export function suggestTenders(total: Satang, max = 4): Satang[] {
 export function changeDue(total: Satang, tendered: Satang): Satang {
   return Math.max(tendered - total, 0);
 }
+
+/**
+ * The price of a menu item on a channel that adds a markup (a delivery platform's menu): the base price plus
+ * the markup, rounded up to the next ฿5. Integer arithmetic on purpose — a float such as 5000 × 1.1 lands a
+ * hair above 5500 and would round up a whole step. Must match `app.resolve_menu_price` in the database.
+ */
+export function channelPrice(base: Satang, markup: number): Satang {
+  if (!(markup > 0)) return base;
+  // Markup in ten-thousandths (0.15 → 1500), so base × (10000 + markup) stays an exact integer.
+  const scaled = base * (10_000 + Math.round(markup * 10_000));
+  return Math.ceil(scaled / 5_000_000) * 500;
+}

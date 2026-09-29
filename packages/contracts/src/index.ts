@@ -98,6 +98,8 @@ export const UpdateBranchBody = z
     phone: z.string().max(20).optional(),
     dayCutoff: z.string().regex(/^\d{2}:\d{2}$/).optional(),
     serviceChargeRate: z.number().min(0).max(0.3).optional(),
+    /** Opening hours as the shop writes them ("07:00–21:00"), shown on the branch card. */
+    openingHours: z.string().trim().max(60).optional(),
     isActive: z.boolean().optional(),
   })
   .refine((b) => Object.keys(b).length > 0, { message: "ไม่มีอะไรให้แก้ไข" });
@@ -108,6 +110,8 @@ export const UpdateChannelBody = z
     color: z.string().max(20).optional(),
     active: z.boolean().optional(),
     appliesServiceCharge: z.boolean().optional(),
+    /** Added to the menu price on this channel (0.15 = +15 %), rounded up to the next ฿5. */
+    priceMarkup: z.number().min(0).max(1).optional(),
   })
   .refine((b) => Object.keys(b).length > 0, { message: "ไม่มีอะไรให้แก้ไข" });
 
