@@ -4,7 +4,7 @@
  * as they are, snake_case becomes camelCase. Per-unit costs stay in baht.
  */
 import { toSatang } from "@sabai/domain";
-import type { MenuItem, Order, Shift } from "../demo/types";
+import type { MenuItem, Order, Shift, Ticket } from "../demo/types";
 
 // ---------------------------------------------------------------------------
 // Orders — GET /v1/orders?detail=full and GET /v1/orders/{id}
@@ -120,6 +120,43 @@ export function mapOrder(o: OrderApi, menuItems: Pick<MenuItem, "id" | "emoji">[
     commissionRate: o.commissionRate,
     cost: o.costTotal ?? undefined,
     shiftId: o.shiftId ?? undefined,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Kitchen tickets — GET /v1/kds/tickets
+// ---------------------------------------------------------------------------
+export interface TicketApi {
+  id: string;
+  station_id: string;
+  ticket_no: string;
+  status: "new" | "in_progress" | "ready" | "served" | "cancelled";
+  fired_at: string;
+  started_at: string | null;
+  ready_at: string | null;
+  order_id: string;
+  channel: string;
+  channel_kind: Ticket["channelKind"];
+  table_name: string | null;
+  items: { id: string; order_item_id: string; name: string; qty: string | number; modifiers: string | null; note: string | null; status: "pending" | "done" | "voided" }[];
+}
+
+export function mapTicket(t: TicketApi, branchId: string): Ticket {
+  return {
+    id: t.id,
+    branchId,
+    orderId: t.order_id,
+    stationId: t.station_id,
+    ticketNo: t.ticket_no,
+    // The screen has no "served" state: a served ticket is just a finished one.
+    status: t.status === "served" ? "ready" : t.status,
+    firedAt: t.fired_at,
+    startedAt: t.started_at ?? undefined,
+    readyAt: t.ready_at ?? undefined,
+    items: t.items.map((i) => ({ id: i.id, orderItemId: i.order_item_id, name: i.name, qty: Number(i.qty), modifiers: i.modifiers ?? "", note: i.note ?? undefined, status: i.status })),
+    channelName: t.channel,
+    channelKind: t.channel_kind,
+    tableName: t.table_name ?? undefined,
   };
 }
 

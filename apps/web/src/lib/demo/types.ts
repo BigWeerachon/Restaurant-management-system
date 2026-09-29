@@ -234,6 +234,8 @@ export interface Order {
 }
 
 export interface TicketItem {
+  /** The ticket line's own id — only the API has one (the demo finds a line by `orderItemId`). */
+  id?: ID;
   orderItemId: ID;
   name: string;
   qty: number;

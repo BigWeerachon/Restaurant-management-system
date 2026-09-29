@@ -9,6 +9,7 @@ import { useSabai } from "../demo/store";
 import type { Member } from "../demo/types";
 import { apiFetch, clearApiSession, setApiSession } from "./http-client";
 import { loadSlices } from "./http-context";
+import { kdsCommands } from "./http-kds";
 import { posCommands } from "./http-pos";
 import { mapShopBootstrap, type ShopApiResponse } from "./mappers";
 import type { DataSource, Slice } from "./types";
@@ -81,11 +82,10 @@ const implemented = {
   },
 
   ...posCommands,
+  ...kdsCommands,
 } satisfies Partial<DataSource>;
 
 const NOT_YET = [
-  "setTicketStatus",
-  "toggleTicketItem",
   "addMenuItem",
   "updateMenuItem",
   "addIngredient",

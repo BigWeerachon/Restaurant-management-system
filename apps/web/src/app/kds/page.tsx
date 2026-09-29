@@ -7,13 +7,14 @@ import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Gate, RouteGuard } from "@/components/app/gate";
+import { LoadBanner } from "@/components/app/load-banner";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/feedback";
 import { Dialog } from "@/components/ui/overlay";
 import { Avatar, Segmented } from "@/components/ui/primitives";
-import { useAccess, useAction, useNow, useUi } from "@/hooks/use-sabai";
+import { useDsAction, useLoad } from "@/hooks/use-data-source";
+import { useAccess, useNow, useUi } from "@/hooks/use-sabai";
 import { cn } from "@/lib/cn";
-import { setSoldOut, setTicketStatus, toggleTicketItem } from "@/lib/demo/engine";
 import { useSabai } from "@/lib/demo/store";
 import type { Ticket } from "@/lib/demo/types";
 
@@ -133,7 +134,9 @@ function TicketCard({ t, now, index, onBump, onStart, onToggle, isNew, showStati
 function KdsScreen() {
   const db = useSabai((s) => s.db);
   const { branch, member, can, nav } = useAccess();
-  const { exec } = useAction();
+  const { exec } = useDsAction();
+  // Until live events arrive (phase 5) the screen polls, so a new ticket shows up within a few seconds.
+  const load = useLoad(["tickets", "availability"], { everyMs: 4000 });
   const now = useNow(1000).getTime();
   const openSwitch = useUi((s) => s.setSwitchUserOpen);
   const [station, setStation] = useState<string>("all");
@@ -171,11 +174,11 @@ function KdsScreen() {
 
   const bump = useCallback(
     async (t: Ticket) => {
-      const r = await exec((d, c) => setTicketStatus(d, c, t.id, "ready"));
+      const r = await exec((ds) => ds.setTicketStatus(t.id, "ready"));
       if (r.ok) {
         toast.success(`#${t.ticketNo} เสร็จแล้ว`, {
           description: t.tableName ? `เสิร์ฟโต๊ะ ${t.tableName}` : `${t.channelName} · รอลูกค้า/ไรเดอร์`,
-          action: { label: "เรียกคืน", onClick: () => void exec((d, c) => setTicketStatus(d, c, t.id, "in_progress")) },
+          action: { label: "เรียกคืน", onClick: () => void exec((ds) => ds.setTicketStatus(t.id, "in_progress")) },
         });
       }
     },
@@ -189,10 +192,10 @@ function KdsScreen() {
       const n = Number(e.key);
       if (n >= 1 && n <= 9 && tickets[n - 1]) {
         const t = tickets[n - 1]!;
-        if (t.status === "new") void exec((d, c) => setTicketStatus(d, c, t.id, "in_progress"));
+        if (t.status === "new") void exec((ds) => ds.setTicketStatus(t.id, "in_progress"));
         else void bump(t);
       }
-      if (e.key.toLowerCase() === "r" && recent[0]) void exec((d, c) => setTicketStatus(d, c, recent[0]!.id, "in_progress"));
+      if (e.key.toLowerCase() === "r" && recent[0]) void exec((ds) => ds.setTicketStatus(recent[0]!.id, "in_progress"));
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
@@ -249,6 +252,8 @@ function KdsScreen() {
         </div>
       </header>
 
+      <LoadBanner state={load} className="mx-4 mt-2 shrink-0" />
+
       {counts.length > 0 && (
         <div className="no-scrollbar flex shrink-0 items-center gap-2 overflow-x-auto border-b border-line bg-surface px-4 py-2 outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring" role="region" tabIndex={0} aria-label="รวมทุกออเดอร์ที่ต้องทำ">
           <span className="shrink-0 text-sm font-medium text-ink-3">รวมที่ต้องทำ</span>
@@ -275,8 +280,8 @@ function KdsScreen() {
                   isNew={fresh.has(t.id)}
                   showStation={station === "all"}
                   onBump={() => void bump(t)}
-                  onStart={() => void exec((d, c) => setTicketStatus(d, c, t.id, "in_progress"))}
-                  onToggle={(itemId) => void exec((d, c) => toggleTicketItem(d, c, t.id, itemId))}
+                  onStart={() => void exec((ds) => ds.setTicketStatus(t.id, "in_progress"))}
+                  onToggle={(itemId) => void exec((ds) => ds.toggleTicketItem(t.id, itemId))}
                 />
               ))}
             </AnimatePresence>
@@ -297,7 +302,7 @@ function KdsScreen() {
                   variant="secondary"
                   icon={<Undo2 className="h-4 w-4" />}
                   onClick={async () => {
-                    const r = await exec((d, c) => setTicketStatus(d, c, t.id, "in_progress"), { success: `ดึง #${t.ticketNo} กลับขึ้นจอแล้ว` });
+                    const r = await exec((ds) => ds.setTicketStatus(t.id, "in_progress"), { success: `ดึง #${t.ticketNo} กลับขึ้นจอแล้ว` });
                     if (r.ok) setRecallOpen(false);
                   }}
                 >
@@ -315,7 +320,7 @@ function KdsScreen() {
             const out = !!m.soldOut[branch.id];
             return (
               <li key={m.id}>
-                <button onClick={() => void exec((d, c) => setSoldOut(d, c, m.id, !out), { success: out ? `เปิดขาย ${m.name}` : `ปิดขาย ${m.name}` })} aria-pressed={out} className={cn("flex h-14 w-full items-center gap-3 rounded-2xl border-2 px-3 text-left text-[15px] font-medium", out ? "border-danger-fill bg-danger-soft text-danger" : "border-line text-ink hover:border-line-strong")}>
+                <button onClick={() => void exec((ds) => ds.setSoldOut(m.id, !out), { success: out ? `เปิดขาย ${m.name}` : `ปิดขาย ${m.name}` })} aria-pressed={out} className={cn("flex h-14 w-full items-center gap-3 rounded-2xl border-2 px-3 text-left text-[15px] font-medium", out ? "border-danger-fill bg-danger-soft text-danger" : "border-line text-ink hover:border-line-strong")}>
                   <span className="text-2xl" aria-hidden="true">
                     {m.emoji}
                   </span>

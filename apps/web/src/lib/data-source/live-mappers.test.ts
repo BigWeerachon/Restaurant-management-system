@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { orderApi } from "./fixtures";
-import { mapClosedShift, mapCurrentShift, mapOrder } from "./live-mappers";
+import { orderApi, ticketApi } from "./fixtures";
+import { mapClosedShift, mapCurrentShift, mapOrder, mapTicket } from "./live-mappers";
 
 const menu = [{ id: "mi-latte", emoji: "🥤" }];
 
@@ -42,6 +42,20 @@ describe("mapOrder", () => {
     expect(o).toMatchObject({ status: "paid", receiptNo: "HQ-2026-00001", commissionRate: 0.3, cost: 61.4 });
     expect(o.totals).toMatchObject({ commission: 5550, commissionVat: 389 });
     expect(o.payments[0]).toEqual({ id: "p-1", methodId: "pm-cash", kind: "payment", amount: 18500, tendered: 50000, change: 31500, fee: 0, reference: undefined, at: "2026-09-29T03:20:00.000Z" });
+  });
+});
+
+describe("mapTicket", () => {
+  it("keeps both ids of each ticket line: its own (to toggle it) and the order line it belongs to", () => {
+    const t = mapTicket(ticketApi(), "br-1");
+    expect(t).toMatchObject({ id: "kt-1", branchId: "br-1", orderId: "o-1", stationId: "st-bar", ticketNo: "B-004", status: "new", startedAt: undefined, readyAt: undefined, channelName: "ทานที่ร้าน", channelKind: "dine_in", tableName: "A3" });
+    expect(t.items[0]).toEqual({ id: "kti-1", orderItemId: "oi-1", name: "ลาเต้เย็น", qty: 2, modifiers: "หวานน้อย, เพิ่มช็อต", note: undefined, status: "pending" });
+    expect(t.items[1]).toMatchObject({ id: "kti-2", orderItemId: "oi-2", qty: 1, modifiers: "", note: "แก้วเล็ก", status: "done" });
+  });
+
+  it("carries the times and treats a served ticket as a finished one", () => {
+    const t = mapTicket(ticketApi({ status: "served", started_at: "2026-09-29T03:01:00.000Z", ready_at: "2026-09-29T03:05:00.000Z", table_name: null }), "br-1");
+    expect(t).toMatchObject({ status: "ready", startedAt: "2026-09-29T03:01:00.000Z", readyAt: "2026-09-29T03:05:00.000Z", tableName: undefined });
   });
 });
 

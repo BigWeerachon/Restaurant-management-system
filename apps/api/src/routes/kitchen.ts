@@ -21,7 +21,7 @@ export function registerKitchen(app: Hono<Env>, deps: Deps) {
         const tickets = await t`
           select kt.id, kt.station_id, kt.ticket_no, kt.status, kt.priority, kt.fired_at, kt.started_at, kt.ready_at,
                  o.id as order_id, c.name as channel, c.kind as channel_kind, dt.name as table_name, o.customer_name, o.note as order_note,
-                 coalesce(json_agg(json_build_object('id', ti.id, 'name', ti.name, 'qty', ti.qty, 'modifiers', ti.modifiers,
+                 coalesce(json_agg(json_build_object('id', ti.id, 'order_item_id', ti.order_item_id, 'name', ti.name, 'qty', ti.qty, 'modifiers', ti.modifiers,
                                                      'note', ti.note, 'status', ti.status) order by ti.id), '[]') as items
             from app.kitchen_tickets kt
             join app.orders o on o.id = kt.order_id

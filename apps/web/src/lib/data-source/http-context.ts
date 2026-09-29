@@ -10,7 +10,7 @@ import { DomainError } from "../demo/engine";
 import { useSabai } from "../demo/store";
 import type { DemoState } from "../demo/types";
 import { apiFetch } from "./http-client";
-import { mapClosedShift, mapCurrentShift, mapOrder, type CurrentShiftApi, type OrderApi, type ShiftRowApi } from "./live-mappers";
+import { mapClosedShift, mapCurrentShift, mapOrder, mapTicket, type CurrentShiftApi, type OrderApi, type ShiftRowApi, type TicketApi } from "./live-mappers";
 import type { Slice } from "./types";
 
 /** Amounts go to the API as baht with two decimals ("125.50"), never as floats. */
@@ -47,6 +47,14 @@ const loaders: Partial<Record<Exclude<Slice, "bootstrap">, (branchId: string) =>
     };
   },
 
+  // Tickets the kitchen still has to make, plus ones finished in the last few minutes (so a mistaken bump can be recalled).
+  async tickets(branchId) {
+    const r = await apiFetch<{ tickets: TicketApi[] }>("/v1/kds/tickets", { query: { branchId } });
+    return (d) => {
+      d.tickets = [...d.tickets.filter((t) => t.branchId !== branchId), ...r.tickets.map((t) => mapTicket(t, branchId))];
+    };
+  },
+
   // Which menu items this branch has marked sold out.
   async availability(branchId) {
     const catalog = await apiFetch<{ items: { id: string; sold_out: boolean }[] }>("/v1/catalog", { query: { branchId } });
@@ -80,9 +88,7 @@ export async function loadSlices(slices: Slice[]): Promise<void> {
  * failed (a retry could repeat it); the next poll or page load brings the screen up to date.
  */
 export async function refresh(slices: Slice[]): Promise<void> {
-  try {
-    await loadSlices(slices.filter((s) => s !== "bootstrap" && s in loaders));
-  } catch (e) {
-    console.warn("reload after command failed", e);
-  }
+  // One slice at a time, so a slice this person may not read (the kitchen screen, for a waiter) cannot hold back the others.
+  const results = await Promise.allSettled(slices.filter((s) => s !== "bootstrap" && s in loaders).map((s) => loadSlices([s])));
+  for (const r of results) if (r.status === "rejected") console.warn("reload after command failed", r.reason);
 }

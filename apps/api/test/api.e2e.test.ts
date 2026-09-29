@@ -339,6 +339,8 @@ describe("a café's first day, through the API", () => {
     const tickets = await s.call("GET", `/v1/kds/tickets?branchId=${s.branchId}`);
     const ticket = tickets.json.tickets.find((t: any) => t.order_id === s.order);
     expect(ticket.items).toHaveLength(2);
+    // Each ticket item says which order line it is (its own id is what "toggle" takes).
+    expect(ticket.items.every((i: any) => i.id && i.order_item_id && i.id !== i.order_item_id)).toBe(true);
     expect(tickets.json.stations.length).toBe(2);
     s.ticket = ticket.id;
 
