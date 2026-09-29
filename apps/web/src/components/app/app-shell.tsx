@@ -14,6 +14,7 @@ import { Icon } from "@/components/ui/icon";
 import { Avatar, Kbd } from "@/components/ui/primitives";
 import { useAccess, useBusinessDate, useUi } from "@/hooks/use-sabai";
 import { cn } from "@/lib/cn";
+import { dataSourceMode, getDataSource } from "@/lib/data-source";
 import { onboarding } from "@/lib/demo/selectors";
 import { useSabai } from "@/lib/demo/store";
 import { CommandPalette } from "./command-palette";
@@ -50,7 +51,6 @@ function useTheme() {
 
 function BranchSwitcher({ className }: { className?: string }) {
   const { branch, branches } = useAccess();
-  const setBranch = useSabai((s) => s.setBranch);
   if (branches.length <= 1) {
     return <div className={cn("truncate text-sm font-medium text-ink-2", className)}>{branch.name}</div>;
   }
@@ -65,7 +65,7 @@ function BranchSwitcher({ className }: { className?: string }) {
         <DM.Content align="start" sideOffset={6} className="glass-overlay z-50 min-w-56 rounded-2xl p-1.5 animate-fade-in">
           <DM.Label className="px-2.5 py-1.5 text-xs text-ink-3">สาขา</DM.Label>
           {branches.map((b) => (
-            <DM.Item key={b.id} onSelect={() => setBranch(b.id)} className="flex h-11 cursor-pointer items-center gap-2 rounded-xl px-2.5 text-[15px] text-ink outline-none data-[highlighted]:bg-surface-2">
+            <DM.Item key={b.id} onSelect={() => void getDataSource().setBranch(b.id)} className="flex h-11 cursor-pointer items-center gap-2 rounded-xl px-2.5 text-[15px] text-ink outline-none data-[highlighted]:bg-surface-2">
               <span className="flex-1">{b.name}</span>
               {b.id === branch.id && <Check className="h-4 w-4 text-brand" aria-hidden="true" />}
             </DM.Item>
@@ -78,7 +78,6 @@ function BranchSwitcher({ className }: { className?: string }) {
 
 function UserMenu({ side = "top", compact }: { side?: "top" | "bottom"; compact?: boolean }) {
   const { member, role } = useAccess();
-  const signOut = useSabai((s) => s.signOut);
   const reset = useSabai((s) => s.reset);
   const mode = useSabai((s) => s.db.mode);
   const openSwitch = useUi((s) => s.setSwitchUserOpen);
@@ -123,13 +122,15 @@ function UserMenu({ side = "top", compact }: { side?: "top" | "bottom"; compact?
               </DM.Item>
             ))}
             <DM.Separator className="my-1 h-px bg-line" />
-            <DM.Item className={item} onSelect={() => setConfirmReset(true)}>
-              <RefreshCcw className="h-4 w-4 text-ink-3" aria-hidden="true" /> {mode === "demo" ? "รีเซ็ตร้านตัวอย่าง" : "ล้างร้านทดลอง"}
-            </DM.Item>
+            {dataSourceMode() === "demo" && (
+              <DM.Item className={item} onSelect={() => setConfirmReset(true)}>
+                <RefreshCcw className="h-4 w-4 text-ink-3" aria-hidden="true" /> {mode === "demo" ? "รีเซ็ตร้านตัวอย่าง" : "ล้างร้านทดลอง"}
+              </DM.Item>
+            )}
             <DM.Item
               className={item}
-              onSelect={() => {
-                signOut();
+              onSelect={async () => {
+                await getDataSource().signOut();
                 router.push("/");
               }}
             >

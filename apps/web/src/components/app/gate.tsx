@@ -5,6 +5,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { useEffect, type ReactNode } from "react";
 import NoAccessPage from "@/app/(app)/no-access/page";
 import { useAccess } from "@/hooks/use-sabai";
+import { getDataSource } from "@/lib/data-source";
 import { useSabai } from "@/lib/demo/store";
 import { Logo } from "./app-shell";
 
@@ -15,15 +16,14 @@ export function Gate({ children }: { children: ReactNode }) {
   const router = useRouter();
   const { member } = useAccess();
 
-  const signOut = useSabai((s) => s.signOut);
   const signedIn = !!member?.active;
 
   useEffect(() => {
     if (!hydrated || signedIn) return;
     // Covers a member deactivated or removed while signed in on this device.
-    if (memberId) signOut();
+    if (memberId) void getDataSource().signOut();
     router.replace("/");
-  }, [hydrated, signedIn, memberId, signOut, router]);
+  }, [hydrated, signedIn, memberId, router]);
 
   if (!hydrated || !signedIn) return <Splash />;
   return <>{children}</>;
