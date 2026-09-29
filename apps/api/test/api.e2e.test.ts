@@ -820,6 +820,46 @@ describe("purchasing and expense shortcuts", () => {
     expect(missingBoth.status).toBe(422);
   });
 
+  it("lists what the finance screen shows: expenses with their category, bills with their supplier, bank lines and the money still expected", async () => {
+    const expenses = await s.call("GET", `/v1/expenses?branchId=${s.branchId}`);
+    expect(expenses.json.find((e: any) => e.description === "ค่าเช่าร้าน")).toMatchObject({ account_key: "rent", paid_from: "bank", amount: "3000.00", branch_id: s.branchId, period_start: expect.any(String), period_end: expect.any(String) });
+    // Someone else's branch is not in this branch's list; an expense with no branch belongs to the whole shop.
+    const shopWide = await s.call("GET", "/v1/expenses");
+    expect(shopWide.json.find((e: any) => e.description === "ค่าไฟเดือนนี้")).toMatchObject({ account_key: "utilities", branch_id: null });
+    expect(expenses.json.map((e: any) => e.description)).not.toContain("ค่าไฟเดือนนี้");
+
+    // The credit receipt made earlier against a supplier's order left a bill to pay.
+    const bills = await s.call("GET", "/v1/bills");
+    expect(bills.json.length).toBeGreaterThan(0);
+    expect(bills.json[0]).toEqual(expect.objectContaining({ supplier_id: expect.any(String), supplier: "ฟาร์มนมสด", status: "open" }));
+    const partial = await s.call("POST", `/v1/bills/${bills.json[0].id}/pay`, { amount: 100 });
+    expect(partial.status).toBe(200);
+    const afterPay = await s.call("GET", "/v1/bills");
+    expect(afterPay.json.find((b: any) => b.id === bills.json[0].id)).toMatchObject({ status: "partially_paid", amount_paid: "100.00" });
+
+    // Money expected from the card company, and the bank line that arrives for it.
+    const [bank] = await ctx.sql<{ id: string }[]>`select id from app.accounts where tenant_id = ${s.tenantId} and system_key = 'bank'`;
+    const [clearing] = await ctx.sql<{ id: string }[]>`select id from app.accounts where tenant_id = ${s.tenantId} and system_key = 'card_clearing'`;
+    const [exp] = await ctx.sql<{ id: string }[]>`
+      insert into app.expected_receipts (tenant_id, branch_id, business_date, source_type, label, clearing_account_id, bank_account_id, expected_date, expected_amount)
+      values (${s.tenantId}, ${s.branchId}, ${s.date}, 'card_batch', 'บัตร ทดสอบ', ${clearing!.id}, ${bank!.id}, ${s.date}, 480) returning id`;
+    const imported = await s.call("POST", "/v1/bank-statements", { bankAccountId: bank!.id, lines: [{ txnDate: s.date, amount: 480, description: "KBank card settlement" }] });
+    expect(imported.status).toBe(201);
+
+    const before = await s.call("GET", "/v1/reconciliation");
+    expect(before.json.expected.find((e: any) => e.id === exp!.id)).toMatchObject({ branch_id: s.branchId, status: "open", expected_amount: "480.00" });
+    const line = before.json.unmatchedLines.find((l: any) => l.description === "KBank card settlement");
+    expect(line).toMatchObject({ amount: "480.00" });
+    expect(before.json.matchedLines.map((l: any) => l.id)).not.toContain(line.id);
+
+    const matched = await s.call("POST", `/v1/statement-lines/${line.id}/match`, { expectedIds: [exp!.id] });
+    expect(matched.status).toBe(200);
+    const after = await s.call("GET", "/v1/reconciliation");
+    expect(after.json.unmatchedLines.map((l: any) => l.id)).not.toContain(line.id);
+    expect(after.json.matchedLines.map((l: any) => l.id)).toContain(line.id);
+    expect(after.json.expected.map((e: any) => e.id)).not.toContain(exp!.id);
+  });
+
   it("turns a reorder suggestion into a draft purchase order", async () => {
     const [supplier] = await ctx.sql<{ id: string }[]>`insert into app.suppliers (tenant_id, name) values (${s.tenantId}, 'โรงคั่วใบชา') returning id`;
     const tea = await s.call("POST", "/v1/ingredients", { name: "ใบชาไทย", baseUnit: "g", reorderPoint: 100, parLevel: 1000 });

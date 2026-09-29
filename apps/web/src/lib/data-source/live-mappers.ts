@@ -4,7 +4,7 @@
  * as they are, snake_case becomes camelCase. Per-unit costs stay in baht.
  */
 import { toSatang } from "@sabai/domain";
-import type { MenuItem, Movement, Order, PurchaseOrder, Shift, StockCount, Ticket } from "../demo/types";
+import type { Bill, DayClose, ExpectedReceipt, Expense, MenuItem, Movement, Order, PurchaseOrder, Shift, StatementLine, StockCount, Ticket } from "../demo/types";
 
 // ---------------------------------------------------------------------------
 // Orders — GET /v1/orders?detail=full and GET /v1/orders/{id}
@@ -323,5 +323,124 @@ export function mapPurchaseOrder(o: PurchaseOrderApi): PurchaseOrder {
     expectedDate: o.expected_date ?? undefined,
     lines: o.lines.map((l) => ({ id: l.id, ingredientId: l.ingredient_id, packName: l.pack_name, packQty: l.pack_qty, qtyPacks: l.qty_packs, unitPrice: toSatang(l.unit_price), receivedPacks: l.received_packs })),
     total: toSatang(o.total),
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Finance — GET /v1/bills, /v1/expenses, /v1/days, /v1/reconciliation
+// ---------------------------------------------------------------------------
+export interface BillApi {
+  id: string;
+  internal_no: string;
+  bill_no: string | null;
+  bill_date: string;
+  due_date: string;
+  total: string;
+  amount_paid: string;
+  status: "open" | "partially_paid";
+  supplier_id: string | null;
+  source_id: string | null;
+}
+
+export function mapBill(b: BillApi): Bill {
+  return {
+    id: b.id,
+    // A bill made by hand or from an expense may have no supplier; the screen shows it as unnamed.
+    supplierId: b.supplier_id ?? "",
+    billNo: b.bill_no ?? b.internal_no,
+    date: b.bill_date,
+    dueDate: b.due_date,
+    total: toSatang(b.total),
+    paid: toSatang(b.amount_paid),
+    status: b.status,
+    sourceId: b.source_id ?? undefined,
+  };
+}
+
+export interface ExpenseApi {
+  id: string;
+  branch_id: string | null;
+  expense_date: string;
+  period_start: string | null;
+  period_end: string | null;
+  description: string;
+  amount: string;
+  paid_from: Expense["paidFrom"];
+  /** The ledger account's fixed key: "rent", "salaries", ... or "other_expense". */
+  account_key: string | null;
+}
+
+const EXPENSE_CATEGORIES = new Set<string>(["rent", "salaries", "utilities", "marketing", "supplies", "repairs"]);
+
+export function mapExpense(e: ExpenseApi): Expense {
+  return {
+    id: e.id,
+    branchId: e.branch_id ?? undefined,
+    date: e.expense_date,
+    category: e.account_key && EXPENSE_CATEGORIES.has(e.account_key) ? (e.account_key as Expense["category"]) : "other",
+    description: e.description,
+    amount: toSatang(e.amount),
+    paidFrom: e.paid_from,
+    periodStart: e.period_start ?? undefined,
+    periodEnd: e.period_end ?? undefined,
+  };
+}
+
+export interface ExpectedApi {
+  id: string;
+  branch_id: string;
+  status: "open" | "partial";
+  label: string;
+  expected_date: string;
+  expected_amount: string;
+  source_type: ExpectedReceipt["sourceType"];
+  payer: string;
+}
+
+export function mapExpected(e: ExpectedApi): ExpectedReceipt {
+  return {
+    id: e.id,
+    branchId: e.branch_id,
+    label: e.label,
+    expectedDate: e.expected_date,
+    amount: toSatang(e.expected_amount),
+    sourceType: e.source_type,
+    payer: e.payer,
+    // Part-matched money is still waiting for the rest.
+    status: "open",
+  };
+}
+
+export interface StatementLineApi {
+  id: string;
+  txn_date: string;
+  amount: string;
+  description: string | null;
+}
+
+export function mapStatementLine(l: StatementLineApi, status: StatementLine["status"]): StatementLine {
+  return { id: l.id, date: l.txn_date, amount: toSatang(l.amount), description: l.description ?? "", status };
+}
+
+export interface DayCloseApi {
+  business_date: string;
+  status: "closed" | "reopened";
+  /** What the database wrote down when the day was closed: orders and money totals (baht). */
+  summary: { orders: number; total: string | number; vat: string | number; gross_sales?: string | number; discounts?: string | number; service_charge?: string | number } | null;
+  closed_at: string | null;
+}
+
+/**
+ * A day that has been closed and not reopened. The list only carries the totals, so the
+ * per-channel and per-method breakdown (which the demo keeps) is left empty rather than made up.
+ */
+export function mapDayClose(r: DayCloseApi, branchId: string): DayClose {
+  const total = toSatang(r.summary?.total ?? 0);
+  const vat = toSatang(r.summary?.vat ?? 0);
+  return {
+    branchId,
+    businessDate: r.business_date,
+    closedAt: r.closed_at ?? r.business_date,
+    summary: { orders: r.summary?.orders ?? 0, total, netSales: total - vat, vat, byChannel: [], byMethod: [], cashVariance: 0 },
   };
 }

@@ -66,7 +66,7 @@ export function registerFinance(app: Hono<Env>, deps: Deps) {
     tx(async (t) => {
       const rows = await t`
         select e.id, e.branch_id, e.expense_date::text, e.period_start::text, e.period_end::text, e.description, e.amount, e.vat_amount,
-               e.wht_amount, e.paid_from, a.name as account, s.name as supplier
+               e.wht_amount, e.paid_from, a.name as account, a.system_key as account_key, s.name as supplier
           from app.expenses e join app.accounts a on a.id = e.account_id left join app.suppliers s on s.id = e.supplier_id
          where e.tenant_id = ${tenantId}
            and (${query.branchId ?? null}::uuid is null or e.branch_id = ${query.branchId ?? null})
@@ -88,7 +88,7 @@ export function registerFinance(app: Hono<Env>, deps: Deps) {
   route(app, deps, { method: "GET", path: "/v1/bills", tag: "Finance", summary: "บิลค้างจ่าย เรียงตามวันครบกำหนด", tenant: true, permission: "finance.view" }, async ({ tenantId, tx }) =>
     tx(async (t) => {
       const rows = await t`
-        select b.id, b.internal_no, b.bill_no, b.bill_date::text, b.due_date::text, b.total, b.amount_paid, b.status, s.name as supplier,
+        select b.id, b.internal_no, b.bill_no, b.bill_date::text, b.due_date::text, b.total, b.amount_paid, b.status, b.supplier_id, b.branch_id, b.source_id, s.name as supplier,
                (b.due_date < current_date) as overdue
           from app.bills b left join app.suppliers s on s.id = b.supplier_id
          where b.tenant_id = ${tenantId} and b.status in ('open','partially_paid')
@@ -119,8 +119,11 @@ export function registerFinance(app: Hono<Env>, deps: Deps) {
       const lines = await t<{ id: string; txn_date: string; amount: string; description: string | null }[]>`
         select id, txn_date::text, amount, description from app.statement_lines
          where tenant_id = ${tenantId} and status = 'unmatched' order by txn_date desc limit 500`;
-      const expected = await t<{ id: string; label: string; expected_date: string; expected_amount: string; source_type: ExpectedReceipt["sourceType"]; payer: string }[]>`
-        select id, label, expected_date::text, expected_amount, source_type,
+      const matched = await t<{ id: string; txn_date: string; amount: string; description: string | null }[]>`
+        select id, txn_date::text, amount, description from app.statement_lines
+         where tenant_id = ${tenantId} and status = 'matched' order by txn_date desc, created_at desc limit 200`;
+      const expected = await t<{ id: string; branch_id: string; status: "open" | "partial"; label: string; expected_date: string; expected_amount: string; source_type: ExpectedReceipt["sourceType"]; payer: string }[]>`
+        select id, branch_id, status, label, expected_date::text, expected_amount, source_type,
                -- card batches & payouts: the method/channel; single transfers: their clearing account
                case when source_type = 'payment' then clearing_account_id else coalesce(source_id, clearing_account_id) end::text as payer
           from app.expected_receipts
@@ -133,6 +136,7 @@ export function registerFinance(app: Hono<Env>, deps: Deps) {
       const status = reconciliationStatus(exp, new Set(), new Date().toISOString().slice(0, 10));
       return {
         unmatchedLines: lines.map((l) => ({ ...l, amount: money(l.amount) })),
+        matchedLines: matched.map((l) => ({ ...l, amount: money(l.amount) })),
         expected: expected.map((e) => ({ ...e, expected_amount: money(e.expected_amount) })),
         suggestions: suggestions.map((s) => ({ ...s, variance: money(s.variance / 100) })),
         overdue: status.overdue.map((e) => ({ id: e.id, label: e.label, expectedDate: e.expectedDate, amount: money(e.amount / 100) })),

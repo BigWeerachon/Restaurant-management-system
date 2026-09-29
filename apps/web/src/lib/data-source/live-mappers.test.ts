@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { orderApi, ticketApi } from "./fixtures";
-import { mapBalances, mapClosedShift, mapCount, mapCurrentShift, mapMovement, mapOrder, mapPurchaseOrder, mapTicket } from "./live-mappers";
+import { mapBalances, mapBill, mapClosedShift, mapCount, mapCurrentShift, mapDayClose, mapExpected, mapExpense, mapMovement, mapOrder, mapPurchaseOrder, mapStatementLine, mapTicket } from "./live-mappers";
 
 const menu = [{ id: "mi-latte", emoji: "🥤" }];
 
@@ -168,5 +168,56 @@ describe("mapPurchaseOrder", () => {
     expect(mapPurchaseOrder({ ...api, status: "submitted" }).status).toBe("draft");
     expect(mapPurchaseOrder({ ...api, status: "draft" }).status).toBe("draft");
     expect(mapPurchaseOrder({ ...api, expected_date: null }).expectedDate).toBeUndefined();
+  });
+});
+
+describe("finance mappers", () => {
+  it("maps a bill to satang, using the internal number when the supplier gave none and leaving a supplier-less bill unnamed", () => {
+    expect(mapBill({ id: "b-1", internal_no: "BILL-0001", bill_no: "INV-77", bill_date: "2026-09-20", due_date: "2026-10-05", total: "1500.50", amount_paid: "500.00", status: "partially_paid", supplier_id: "su-1", source_id: "gr-1" })).toEqual({
+      id: "b-1",
+      supplierId: "su-1",
+      billNo: "INV-77",
+      date: "2026-09-20",
+      dueDate: "2026-10-05",
+      total: 150050,
+      paid: 50000,
+      status: "partially_paid",
+      sourceId: "gr-1",
+    });
+    const manual = mapBill({ id: "b-2", internal_no: "BILL-0002", bill_no: null, bill_date: "2026-09-20", due_date: "2026-09-21", total: "10.00", amount_paid: "0.00", status: "open", supplier_id: null, source_id: null });
+    expect(manual).toMatchObject({ billNo: "BILL-0002", supplierId: "", sourceId: undefined });
+  });
+
+  it("gives an expense its category from the ledger account's key, and 'other' for anything unfamiliar", () => {
+    const row = { id: "e-1", branch_id: "br-1", expense_date: "2026-09-29", period_start: "2026-09-01", period_end: "2026-09-30", description: "ค่าเช่า", amount: "30000.00", paid_from: "bank" as const, account_key: "rent" };
+    expect(mapExpense(row)).toEqual({ id: "e-1", branchId: "br-1", date: "2026-09-29", category: "rent", description: "ค่าเช่า", amount: 3000000, paidFrom: "bank", periodStart: "2026-09-01", periodEnd: "2026-09-30" });
+    expect(mapExpense({ ...row, account_key: "other_expense" }).category).toBe("other");
+    expect(mapExpense({ ...row, account_key: "cost_of_goods" }).category).toBe("other");
+    expect(mapExpense({ ...row, account_key: null, branch_id: null, period_start: null, period_end: null })).toMatchObject({ category: "other", branchId: undefined, periodStart: undefined });
+  });
+
+  it("maps money still expected, treating part-matched money as still open", () => {
+    expect(mapExpected({ id: "x-1", branch_id: "br-1", status: "partial", label: "บัตร 28/09", expected_date: "2026-09-30", expected_amount: "480.00", source_type: "card_batch", payer: "acc-1" })).toEqual({
+      id: "x-1",
+      branchId: "br-1",
+      label: "บัตร 28/09",
+      expectedDate: "2026-09-30",
+      amount: 48000,
+      sourceType: "card_batch",
+      payer: "acc-1",
+      status: "open",
+    });
+  });
+
+  it("maps bank lines with the status they were listed under and no missing text", () => {
+    expect(mapStatementLine({ id: "l-1", txn_date: "2026-09-30", amount: "480.00", description: null }, "unmatched")).toEqual({ id: "l-1", date: "2026-09-30", amount: 48000, description: "", status: "unmatched" });
+    expect(mapStatementLine({ id: "l-2", txn_date: "2026-09-30", amount: "-25.50", description: "ค่าธรรมเนียม" }, "matched")).toMatchObject({ amount: -2550, status: "matched" });
+  });
+
+  it("maps a closed day from its totals only — the breakdown is left empty, not invented", () => {
+    const c = mapDayClose({ business_date: "2026-09-28", status: "closed", closed_at: "2026-09-29T02:00:00.000Z", summary: { orders: 12, total: "3210.00", vat: "210.00" } }, "br-1");
+    expect(c).toEqual({ branchId: "br-1", businessDate: "2026-09-28", closedAt: "2026-09-29T02:00:00.000Z", summary: { orders: 12, total: 321000, netSales: 300000, vat: 21000, byChannel: [], byMethod: [], cashVariance: 0 } });
+    // A row with no summary yet still maps.
+    expect(mapDayClose({ business_date: "2026-09-27", status: "closed", closed_at: null, summary: null }, "br-1").summary.total).toBe(0);
   });
 });

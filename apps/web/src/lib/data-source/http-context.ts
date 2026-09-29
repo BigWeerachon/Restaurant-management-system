@@ -7,25 +7,35 @@
  */
 import { satangToDecimalString } from "@sabai/domain";
 import { DomainError } from "../demo/engine";
-import { useSabai } from "../demo/store";
+import { isDomainError, useSabai } from "../demo/store";
 import type { DemoState } from "../demo/types";
 import { apiFetch } from "./http-client";
 import {
   mapBalances,
+  mapBill,
   mapClosedShift,
   mapCount,
   mapCurrentShift,
+  mapDayClose,
+  mapExpected,
+  mapExpense,
   mapMovement,
   mapOrder,
   mapPurchaseOrder,
+  mapStatementLine,
   mapTicket,
   type CountDetailApi,
+  type BillApi,
   type CountRowApi,
   type CurrentShiftApi,
+  type DayCloseApi,
+  type ExpectedApi,
+  type ExpenseApi,
   type MovementApi,
   type OrderApi,
   type PurchaseOrderApi,
   type ShiftRowApi,
+  type StatementLineApi,
   type StockRowApi,
   type TicketApi,
 } from "./live-mappers";
@@ -69,6 +79,16 @@ export function currentBranchId(): string {
 }
 
 type Patch = (d: DemoState) => void;
+
+/** A part of a screen this person is not allowed to read is not an error for the rest of it. */
+async function allowed<T>(request: Promise<T>): Promise<T | undefined> {
+  try {
+    return await request;
+  } catch (e) {
+    if (isDomainError(e) && e.code === "PERMISSION_DENIED") return undefined;
+    throw e;
+  }
+}
 
 const loaders: Partial<Record<Exclude<Slice, "bootstrap">, (branchId: string) => Promise<Patch>>> = {
   // Today's orders of this branch, whole (items, payments, discount), oldest first like the demo keeps them.
@@ -128,6 +148,26 @@ const loaders: Partial<Record<Exclude<Slice, "bootstrap">, (branchId: string) =>
     const rows = await apiFetch<PurchaseOrderApi[]>("/v1/purchase-orders", { query: { branchId, detail: "full" } });
     return (d) => {
       d.purchaseOrders = [...rows.map(mapPurchaseOrder), ...d.purchaseOrders.filter((p) => p.branchId !== branchId)];
+    };
+  },
+
+  // Bills to pay, this branch's expenses and closed days, and the money still expected in the bank.
+  // Each part has its own permission, so a part this person may not read is left as it was instead of failing the rest.
+  async finance(branchId) {
+    const [bills, expenses, days, reconciliation] = await Promise.all([
+      allowed(apiFetch<BillApi[]>("/v1/bills")),
+      allowed(apiFetch<ExpenseApi[]>("/v1/expenses", { query: { branchId } })),
+      allowed(apiFetch<DayCloseApi[]>("/v1/days", { query: { branchId } })),
+      allowed(apiFetch<{ unmatchedLines: StatementLineApi[]; matchedLines: StatementLineApi[]; expected: ExpectedApi[] }>("/v1/reconciliation")),
+    ]);
+    return (d) => {
+      if (bills) d.bills = bills.map(mapBill);
+      if (expenses) d.expenses = [...d.expenses.filter((e) => e.branchId !== branchId), ...expenses.map(mapExpense)];
+      if (days) d.dayCloses = [...d.dayCloses.filter((c) => c.branchId !== branchId), ...days.filter((r) => r.status === "closed").map((r) => mapDayClose(r, branchId))];
+      if (reconciliation) {
+        d.statementLines = [...reconciliation.unmatchedLines.map((l) => mapStatementLine(l, "unmatched")), ...reconciliation.matchedLines.map((l) => mapStatementLine(l, "matched"))];
+        d.expected = [...d.expected.filter((e) => e.branchId !== branchId), ...reconciliation.expected.filter((e) => e.branch_id === branchId).map(mapExpected)];
+      }
     };
   },
 

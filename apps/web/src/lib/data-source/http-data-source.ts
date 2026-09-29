@@ -9,6 +9,7 @@ import { useSabai } from "../demo/store";
 import type { Member } from "../demo/types";
 import { apiFetch, clearApiSession, setApiSession } from "./http-client";
 import { loadShop, loadSlices } from "./http-context";
+import { financeCommands } from "./http-finance";
 import { kdsCommands } from "./http-kds";
 import { menuCommands } from "./http-menu";
 import { posCommands } from "./http-pos";
@@ -76,14 +77,10 @@ const implemented = {
   ...stockCommands,
   ...menuCommands,
   ...purchasingCommands,
+  ...financeCommands,
 } satisfies Partial<DataSource>;
 
 const NOT_YET = [
-  "closeDay",
-  "addExpense",
-  "payBill",
-  "matchStatementLine",
-  "ignoreStatementLine",
   "addMember",
   "updateMember",
   "resetMemberPin",

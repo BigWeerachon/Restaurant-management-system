@@ -5,14 +5,16 @@ import { ArrowRight, Banknote, Check, CircleHelp, Landmark, Link2, Moon, Plus, U
 import { motion } from "motion/react";
 import { useSearchParams } from "next/navigation";
 import { Suspense, useMemo, useState } from "react";
+import { LoadBanner } from "@/components/app/load-banner";
 import { PageHeader } from "@/components/app/page-header";
 import { Button, LinkButton } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/feedback";
 import { Dialog, TabPanel, Tabs } from "@/components/ui/overlay";
 import { Badge, Callout, Card, CardHeader, Field, Input, Segmented } from "@/components/ui/primitives";
-import { useAccess, useAction, useBusinessDate, useHistory } from "@/hooks/use-sabai";
+import { useDsAction, useLoad } from "@/hooks/use-data-source";
+import { useAccess, useBusinessDate, useHistory } from "@/hooks/use-sabai";
 import { cn } from "@/lib/cn";
-import { addExpense, expectedCash, ignoreStatementLine, matchStatementLine, openShiftOf, payBill } from "@/lib/demo/engine";
+import { expectedCash, openShiftOf } from "@/lib/demo/engine";
 import { formatBaht } from "@/lib/demo/selectors";
 import { useSabai } from "@/lib/demo/store";
 import type { Expense } from "@/lib/demo/types";
@@ -54,7 +56,7 @@ function TodaySummary() {
             <p className="flex items-center gap-2 text-ink-2">
               <Banknote className="h-4 w-4" aria-hidden="true" /> เงินสดที่ควรมีในลิ้นชักตอนนี้
             </p>
-            <p className="text-xl font-semibold tabular text-ink">{formatBaht(expectedCash(db, shift.id))}</p>
+            <p className="text-xl font-semibold tabular text-ink">{formatBaht(shift.expectedCash ?? expectedCash(db, shift.id))}</p>
           </div>
         )}
         {closed ? (
@@ -103,7 +105,7 @@ function TodaySummary() {
 
 function Reconcile() {
   const db = useSabai((s) => s.db);
-  const { exec } = useAction();
+  const { exec } = useDsAction();
   const lines = db.statementLines.filter((l) => l.status === "unmatched");
   const open = db.expected.filter((e) => e.status === "open");
   const suggestions = useMemo(
@@ -166,11 +168,11 @@ function Reconcile() {
                     </div>
                     <div className="flex gap-2">
                       {s ? (
-                        <Button size="sm" icon={<Check className="h-4 w-4" />} onClick={() => exec((d, c) => matchStatementLine(d, c, l.id, s.expectedIds, s.varianceHint), { success: "กระทบยอดแล้ว", successDetail: s.variance ? `บันทึกส่วนต่าง ${formatBaht(s.variance)} ให้แล้ว` : "ยอดตรงพอดี" })}>
+                        <Button size="sm" icon={<Check className="h-4 w-4" />} onClick={() => exec((ds) => ds.matchStatementLine(l.id, s.expectedIds, s.varianceHint), { success: "กระทบยอดแล้ว", successDetail: s.variance ? `บันทึกส่วนต่าง ${formatBaht(s.variance)} ให้แล้ว` : "ยอดตรงพอดี" })}>
                           {s.reason === "exact" ? "ตรงกัน ยืนยัน" : "ยืนยัน"}
                         </Button>
                       ) : null}
-                      <Button size="sm" variant="ghost" onClick={() => exec((d, c) => ignoreStatementLine(d, c, l.id), { success: "ข้ามรายการนี้แล้ว" })}>
+                      <Button size="sm" variant="ghost" onClick={() => exec((ds) => ds.ignoreStatementLine(l.id), { success: "ข้ามรายการนี้แล้ว" })}>
                         ไม่เกี่ยวกับการขาย
                       </Button>
                     </div>
@@ -209,7 +211,7 @@ function Reconcile() {
 function Bills() {
   const db = useSabai((s) => s.db);
   const { can } = useAccess();
-  const { exec, pending } = useAction();
+  const { exec, pending } = useDsAction();
   const today = useBusinessDate();
   const [paying, setPaying] = useState<string | null>(null);
   const [amount, setAmount] = useState("");
@@ -227,7 +229,7 @@ function Bills() {
               return (
                 <li key={b.id} className="flex flex-wrap items-center gap-3 px-4 py-3">
                   <span className="min-w-48 flex-1">
-                    <span className="block font-medium text-ink">{db.suppliers.find((s) => s.id === b.supplierId)?.name}</span>
+                    <span className="block font-medium text-ink">{db.suppliers.find((s) => s.id === b.supplierId)?.name ?? "ไม่ระบุผู้ขาย"}</span>
                     <span className="text-sm text-ink-3">
                       {b.billNo} · ครบกำหนด {formatThaiDate(b.dueDate, false)}
                     </span>
@@ -251,12 +253,12 @@ function Bills() {
           </ul>
         )}
       </Card>
-      <Dialog open={!!bill} onOpenChange={(v) => !v && setPaying(null)} title="จ่ายบิล" description={bill ? `${db.suppliers.find((s) => s.id === bill.supplierId)?.name} · ${bill.billNo}` : ""} size="sm" footer={
+      <Dialog open={!!bill} onOpenChange={(v) => !v && setPaying(null)} title="จ่ายบิล" description={bill ? `${db.suppliers.find((s) => s.id === bill.supplierId)?.name ?? "ไม่ระบุผู้ขาย"} · ${bill.billNo}` : ""} size="sm" footer={
         <Button
           loading={pending}
           onClick={async () => {
             if (!bill) return;
-            const r = await exec((d, c) => payBill(d, c, bill.id, Math.round(Number(amount) * 100)), { success: "บันทึกการจ่ายแล้ว" });
+            const r = await exec((ds) => ds.payBill(bill.id, Math.round(Number(amount) * 100)), { success: "บันทึกการจ่ายแล้ว" });
             if (r.ok) setPaying(null);
           }}
         >
@@ -276,7 +278,7 @@ function Expenses() {
   const { branch, can } = useAccess();
   const history = useHistory();
   const date = useBusinessDate();
-  const { exec, pending } = useAction();
+  const { exec, pending } = useDsAction();
   const [category, setCategory] = useState<Expense["category"]>("utilities");
   const [desc, setDesc] = useState("");
   const [amount, setAmount] = useState("");
@@ -297,7 +299,7 @@ function Expenses() {
     if (Object.keys(e).length) return;
     const monthStart = `${date.slice(0, 8)}01`;
     const period = cover === "month" ? { periodStart: monthStart, periodEnd: addDays(`${addDays(monthStart, 32).slice(0, 8)}01`, -1) } : {};
-    const r = await exec((d, c) => addExpense(d, c, { branchId: branch.id, date, category, description: desc, amount: Math.round(Number(amount) * 100), paidFrom, ...period }), { success: "บันทึกค่าใช้จ่ายแล้ว", successDetail: "นับรวมในรายงานเงินเหลือจริงแล้ว" });
+    const r = await exec((ds) => ds.addExpense({ branchId: branch.id, date, category, description: desc, amount: Math.round(Number(amount) * 100), paidFrom, ...period }), { success: "บันทึกค่าใช้จ่ายแล้ว", successDetail: "นับรวมในรายงานเงินเหลือจริงแล้ว" });
     if (r.ok) {
       setDesc("");
       setAmount("");
@@ -352,6 +354,7 @@ function FinanceInner() {
   const params = useSearchParams();
   const { can } = useAccess();
   const db = useSabai((s) => s.db);
+  const load = useLoad(["orders", "shifts", "finance"]);
   const [tab, setTab] = useState(params.get("tab") ?? "today");
   const tabs = [
     { value: "today", label: "สรุปวันนี้" },
@@ -362,6 +365,7 @@ function FinanceInner() {
   return (
     <>
       <PageHeader title="การเงิน" description="ยอดขาย เงินที่ต้องเข้าธนาคาร บิลที่ต้องจ่าย และค่าใช้จ่าย — ลงบัญชีคู่ให้อัตโนมัติเบื้องหลัง" actions={can("reports.profit") && <LinkButton href="/reports" variant="secondary" iconRight={<ArrowRight className="h-4 w-4" />}>ดูเงินเหลือจริง</LinkButton>} />
+      <LoadBanner state={load} className="mb-4" />
       <Tabs value={tab} onValueChange={setTab} tabs={tabs}>
         <TabPanel value="today" className="pt-4">
           <TodaySummary />

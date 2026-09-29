@@ -5,25 +5,29 @@ import { ArrowLeft, ArrowRight, CheckCircle2, Moon, Sparkles } from "lucide-reac
 import { AnimatePresence, motion } from "motion/react";
 import Link from "next/link";
 import { useState } from "react";
+import { LoadBanner } from "@/components/app/load-banner";
 import { PageHeader } from "@/components/app/page-header";
 import { CloseShiftDialog } from "@/components/pos/pos-dialogs";
 import { Button, LinkButton } from "@/components/ui/button";
 import { AnimatedNumber, Stepper, SuccessCheck } from "@/components/ui/feedback";
 import { Callout, Card } from "@/components/ui/primitives";
-import { useAccess, useAction, useBusinessDate } from "@/hooks/use-sabai";
-import { closeDay, openShiftOf } from "@/lib/demo/engine";
+import { useDsAction, useLoad } from "@/hooks/use-data-source";
+import { useAccess, useBusinessDate } from "@/hooks/use-sabai";
+import { openShiftOf } from "@/lib/demo/engine";
 import { formatBaht } from "@/lib/demo/selectors";
 import { useSabai } from "@/lib/demo/store";
+import type { DayClose } from "@/lib/demo/types";
 
 /** Close the day in three checks — no accounting knowledge needed. */
 export default function CloseDayPage() {
   const db = useSabai((s) => s.db);
   const { branch, can } = useAccess();
   const date = useBusinessDate();
-  const { exec, pending } = useAction();
+  const { exec, pending } = useDsAction();
+  const load = useLoad(["orders", "shifts", "finance"]);
   const [step, setStep] = useState(0);
   const [shiftOpen, setShiftOpen] = useState(false);
-  const [summary, setSummary] = useState<ReturnType<typeof closeDay> | null>(null);
+  const [summary, setSummary] = useState<DayClose["summary"] | null>(null);
 
   const openOrders = db.orders.filter((o) => o.branchId === branch.id && o.businessDate === date && o.status === "open");
   const shift = openShiftOf(db, branch.id);
@@ -70,6 +74,7 @@ export default function CloseDayPage() {
   return (
     <div className="mx-auto max-w-2xl">
       <PageHeader eyebrow={<Link href="/finance" className="inline-flex items-center gap-1 hover:text-ink"><ArrowLeft className="h-4 w-4" /> การเงิน</Link>} title="ปิดยอดประจำวัน" description={`${formatThaiDate(date)} · ${branch.name} — ตรวจ 2 อย่าง แล้วกดปิดยอด ระบบลงบัญชีให้ทั้งหมด`} />
+      <LoadBanner state={load} className="mb-4" />
       <Stepper steps={["ตรวจความพร้อม", "สรุปยอด"]} current={step} className="mb-6" />
       <AnimatePresence mode="wait">
         {step === 0 ? (
@@ -111,7 +116,7 @@ export default function CloseDayPage() {
                 loading={pending}
                 icon={<Moon className="h-5 w-5" />}
                 onClick={async () => {
-                  const r = await exec((d, c) => closeDay(d, c, date), { latencyMs: 500 });
+                  const r = await exec((ds) => ds.closeDay(date));
                   if (r.ok) setSummary(r.value);
                 }}
               >
