@@ -83,6 +83,7 @@ export const stockCommands = {
       method: "POST",
       body: {
         name: input.name.trim(),
+        emoji: input.emoji,
         baseUnit: input.baseUnit,
         displayUnit: input.displayUnit,
         categoryName: input.category.trim() || undefined,

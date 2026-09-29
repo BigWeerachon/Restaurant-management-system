@@ -6,23 +6,25 @@ import { motion } from "motion/react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { Suspense, useMemo, useState } from "react";
+import { LoadBanner } from "@/components/app/load-banner";
 import { PageHeader } from "@/components/app/page-header";
 import { HealthBadge } from "@/components/app/recipe-editor";
 import { LinkButton } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/feedback";
 import { Switch } from "@/components/ui/overlay";
 import { Badge, Card, SearchInput, Segmented } from "@/components/ui/primitives";
-import { useAccess, useAction } from "@/hooks/use-sabai";
+import { useDsAction, useLoad } from "@/hooks/use-data-source";
+import { useAccess } from "@/hooks/use-sabai";
 import { cn } from "@/lib/cn";
 import { menuItemCostOf } from "@/lib/demo/menu";
-import { setSoldOut } from "@/lib/demo/engine";
 import { formatBaht } from "@/lib/demo/selectors";
 import { useSabai } from "@/lib/demo/store";
 
 function MenuInner() {
   const db = useSabai((s) => s.db);
   const { branch, can } = useAccess();
-  const { exec } = useAction();
+  const { exec } = useDsAction();
+  const load = useLoad(["bootstrap", "availability"]);
   const params = useSearchParams();
   const [cat, setCat] = useState("all");
   const [q, setQ] = useState("");
@@ -52,6 +54,7 @@ function MenuInner() {
         description="ใส่สูตรแล้วระบบจะตัดสต็อกให้เองทุกครั้งที่ขาย และบอกต้นทุน-กำไรต่อจานทันที"
         actions={can("menu.manage") && <LinkButton href="/menu/new" icon={<Plus className="h-4 w-4" />}>เพิ่มเมนู</LinkButton>}
       />
+      <LoadBanner state={load} className="mb-4" />
       {db.menuItems.length === 0 ? (
         <Card>
           <EmptyState emoji="📋" title="ยังไม่มีเมนู" description="เพิ่มเมนูแรกด้วยชื่อ ราคา และรูปไอคอน — จะใส่สูตรตอนนี้หรือทีหลังก็ได้" action={can("menu.manage") ? <LinkButton href="/menu/new" icon={<Plus className="h-4 w-4" />}>เพิ่มเมนูแรก</LinkButton> : undefined} />
@@ -89,7 +92,7 @@ function MenuInner() {
             <ul className="divide-y divide-line">
               {rows.map(({ m, cost, pct, health }, i) => (
                 <motion.li key={m.id} initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: Math.min(i * 0.015, 0.25) }} className="flex flex-wrap items-center gap-x-4 gap-y-2 px-4 py-3">
-                  <Link href={`/menu/${m.id}`} className="flex min-w-0 flex-1 items-center gap-3 rounded-xl hover:opacity-80">
+                  <Link href={`/menu/${m.id}`} className="-m-1 flex min-w-0 flex-1 items-center gap-3 rounded-xl p-1 hover:bg-surface-2">
                     <span className="grid h-12 w-12 shrink-0 place-items-center rounded-xl bg-surface-2 text-3xl" aria-hidden="true">
                       {m.emoji}
                     </span>
@@ -127,7 +130,7 @@ function MenuInner() {
                   </span>
                   {can("menu.availability") && (
                     <span className="w-40">
-                      <Switch checked={!m.soldOut[branch.id]} onCheckedChange={(v) => void exec((d, c) => setSoldOut(d, c, m.id, !v), { success: v ? `เปิดขาย ${m.name}` : `ปิดขาย ${m.name} (หมด)` })} label={m.soldOut[branch.id] ? "หมด" : "มีขาย"} />
+                      <Switch checked={!m.soldOut[branch.id]} onCheckedChange={(v) => void exec((ds) => ds.setSoldOut(m.id, !v), { success: v ? `เปิดขาย ${m.name}` : `ปิดขาย ${m.name} (หมด)` })} label={m.soldOut[branch.id] ? "หมด" : "มีขาย"} />
                     </span>
                   )}
                 </motion.li>

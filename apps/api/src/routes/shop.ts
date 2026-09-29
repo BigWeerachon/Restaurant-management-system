@@ -58,14 +58,14 @@ export function registerShop(app: Hono<Env>, deps: Deps) {
           select id, name, phone, line_id, payment_terms_days, lead_time_days, is_active from app.suppliers where tenant_id = ${tenantId} order by name`,
         t<{ supplier_id: string; ingredient_id: string; pack_name: string; pack_qty: string; last_price: string | null; is_preferred: boolean }[]>`
           select supplier_id, ingredient_id, pack_name, pack_qty, last_price, is_preferred from app.supplier_items where tenant_id = ${tenantId}`,
-        t<{ id: string; name: string; kind: string; base_unit: string; display_unit: string | null; track_stock: boolean; reorder_point: string | null; par_level: string | null; standard_cost: string | null; last_cost: string | null; storage_zone: string | null; category: string | null }[]>`
+        t<{ id: string; name: string; kind: string; base_unit: string; display_unit: string | null; track_stock: boolean; reorder_point: string | null; par_level: string | null; standard_cost: string | null; last_cost: string | null; storage_zone: string | null; emoji: string | null; category: string | null }[]>`
           select i.id, i.name, i.kind, i.base_unit, i.display_unit, i.track_stock, i.reorder_point, i.par_level,
-                 i.standard_cost, i.last_cost, i.storage_zone, c.name as category
+                 i.standard_cost, i.last_cost, i.storage_zone, i.emoji, c.name as category
             from app.ingredients i left join app.ingredient_categories c on c.id = i.category_id
            where i.tenant_id = ${tenantId} and i.archived_at is null order by i.name`,
         t`select id, name, color, icon, sort from app.menu_categories where tenant_id = ${tenantId} and archived_at is null order by sort, name`,
-        t<{ id: string; category_id: string; name: string; name_en: string | null; image_url: string | null; kitchen_route: string; tags: string[]; price: string; is_active: boolean }[]>`
-          select id, category_id, name, name_en, image_url, kitchen_route, tags, price, is_active
+        t<{ id: string; category_id: string; name: string; name_en: string | null; image_url: string | null; emoji: string | null; kitchen_route: string; tags: string[]; price: string; is_active: boolean }[]>`
+          select id, category_id, name, name_en, image_url, emoji, kitchen_route, tags, price, is_active
             from app.menu_items where tenant_id = ${tenantId} and archived_at is null order by sort, name`,
         t<{ menu_item_id: string; ingredient_id: string; qty: string; waste_rate: string }[]>`
           select r.menu_item_id, l.ingredient_id, l.qty, l.waste_rate

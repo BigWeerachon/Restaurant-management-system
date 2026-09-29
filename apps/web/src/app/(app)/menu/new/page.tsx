@@ -4,14 +4,15 @@ import { ArrowLeft, ArrowRight } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
 import Link from "next/link";
 import { useState } from "react";
+import { LoadBanner } from "@/components/app/load-banner";
 import { PageHeader } from "@/components/app/page-header";
 import { CostMeter, HealthBadge, RecipeEditor, SuggestedPrice, toRecipe, useCosting, type EditableLine } from "@/components/app/recipe-editor";
 import { Button, LinkButton } from "@/components/ui/button";
 import { Stepper, SuccessCheck } from "@/components/ui/feedback";
 import { Callout, Card, Field, Input, Segmented } from "@/components/ui/primitives";
-import { useAccess, useAction } from "@/hooks/use-sabai";
+import { useDsAction, useLoad } from "@/hooks/use-data-source";
+import { useAccess } from "@/hooks/use-sabai";
 import { cn } from "@/lib/cn";
-import { addMenuItem } from "@/lib/demo/engine";
 import { formatBaht } from "@/lib/demo/selectors";
 import { useSabai } from "@/lib/demo/store";
 
@@ -20,7 +21,8 @@ const EMOJIS = ["🍛", "🍜", "🍚", "🍤", "🍳", "🥗", "🍲", "🥘", 
 export default function NewMenuPage() {
   const db = useSabai((s) => s.db);
   const { can } = useAccess();
-  const { exec, pending } = useAction();
+  const { exec, pending } = useDsAction();
+  const load = useLoad(["bootstrap"]);
   const [step, setStep] = useState(0);
   const [name, setName] = useState("");
   const [emoji, setEmoji] = useState("🍛");
@@ -44,8 +46,8 @@ export default function NewMenuPage() {
   };
 
   const save = async () => {
-    const r = await exec((d, c) =>
-      addMenuItem(d, c, {
+    const r = await exec((ds) =>
+      ds.addMenuItem({
         name,
         emoji,
         categoryId: categoryId || undefined,
@@ -92,6 +94,7 @@ export default function NewMenuPage() {
   return (
     <div className="mx-auto max-w-3xl">
       <PageHeader eyebrow={<Link href="/menu" className="inline-flex items-center gap-1 hover:text-ink"><ArrowLeft className="h-4 w-4" /> เมนู</Link>} title="เพิ่มเมนูใหม่" description="ชื่อกับราคาก็ขายได้แล้ว — ใส่สูตรเพิ่มเพื่อให้ระบบตัดสต็อกและคิดกำไรให้" />
+      <LoadBanner state={load} className="mb-4" />
       <Stepper steps={["ชื่อและราคา", "สูตร (ไม่บังคับ)", "ตรวจทาน"]} current={step} className="mb-6" />
       <Card className="p-5 sm:p-6">
         <AnimatePresence mode="wait">

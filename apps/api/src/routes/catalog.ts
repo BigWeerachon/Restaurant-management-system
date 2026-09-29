@@ -74,10 +74,10 @@ export function registerCatalog(app: Hono<Env>, deps: Deps) {
         const standardCost = body.standardCost ?? (body.pack && body.pack.qty > 0 ? Number(body.pack.price) / body.pack.qty : undefined);
         const [row] = await t`
           insert into app.ingredients (tenant_id, name, base_unit, display_unit, kind, track_stock, category_id,
-                                       reorder_point, par_level, standard_cost, storage_zone)
+                                       reorder_point, par_level, standard_cost, storage_zone, emoji)
           values (${tenantId}, ${body.name}, ${body.baseUnit}, ${body.displayUnit ?? null}, ${body.kind}, ${body.trackStock},
                   ${categoryId ?? null}, ${body.reorderPoint ?? null}, ${body.parLevel ?? null}, ${standardCost ?? null},
-                  ${body.storageZone ?? null})
+                  ${body.storageZone ?? null}, ${body.emoji ?? null})
           returning id, name, base_unit, display_unit, kind, track_stock`;
         if (body.pack?.supplierId) {
           await t`
@@ -108,11 +108,11 @@ export function registerCatalog(app: Hono<Env>, deps: Deps) {
             select id from app.menu_categories where tenant_id = ${tenantId} and lower(name) = lower(${body.categoryName!}) and archived_at is null`;
           categoryId =
             existing?.id ??
-            (await t<{ id: string }[]>`insert into app.menu_categories (tenant_id, brand_id, name) values (${tenantId}, ${brand.id}, ${body.categoryName!}) returning id`)[0]!.id;
+            (await t<{ id: string }[]>`insert into app.menu_categories (tenant_id, brand_id, name, icon) values (${tenantId}, ${brand.id}, ${body.categoryName!}, ${body.emoji ?? null}) returning id`)[0]!.id;
         }
         const [item] = await t<{ id: string; name: string; price: string }[]>`
-          insert into app.menu_items (tenant_id, brand_id, category_id, name, name_en, price, kitchen_route, image_url)
-          values (${tenantId}, ${brand.id}, ${categoryId}, ${body.name}, ${body.nameEn ?? null}, ${body.price}, ${body.kitchenRoute}, ${body.imageUrl ?? null})
+          insert into app.menu_items (tenant_id, brand_id, category_id, name, name_en, price, kitchen_route, image_url, emoji)
+          values (${tenantId}, ${brand.id}, ${categoryId}, ${body.name}, ${body.nameEn ?? null}, ${body.price}, ${body.kitchenRoute}, ${body.imageUrl ?? null}, ${body.emoji ?? null})
           returning id, name, price`;
         if (body.recipe?.length) {
           await requirePermission(t, tenantId, "recipes.manage");
@@ -134,17 +134,21 @@ export function registerCatalog(app: Hono<Env>, deps: Deps) {
     { method: "PATCH", path: "/v1/menu-items/{id}", tag: "Menu", summary: "แก้ไขเมนู (ชื่อ ราคา เส้นทางครัว สถานะ หรือสูตร)", tenant: true, body: UpdateMenuItemBody, permission: "menu.manage" },
     async ({ tenantId, params, body, tx }) =>
       tx(async (t) => {
-        await requirePermission(t, tenantId, "menu.manage");
+        // Same split as the demo: changing the recipe alone is a recipes matter, anything else about the item is the menu's.
+        const { recipe: recipeChange, ...itemChange } = body;
+        if (Object.keys(itemChange).length > 0 || !recipeChange) await requirePermission(t, tenantId, "menu.manage");
         const [existing] = await t<{ id: string }[]>`select id from app.menu_items where id = ${params.id} and tenant_id = ${tenantId}`;
         if (!existing) throw new ApiFailure("NOT_FOUND", 404, { entity: "menu_item" });
 
-        await t`
+        // (Writing the item at all needs the menu permission, so a recipe-only change leaves it alone.)
+        if (Object.keys(itemChange).length > 0) await t`
           update app.menu_items
              set name = coalesce(${body.name ?? null}, name),
                  name_en = coalesce(${body.nameEn ?? null}, name_en),
                  price = coalesce(${body.price ?? null}, price),
                  kitchen_route = coalesce(${body.kitchenRoute ?? null}, kitchen_route),
                  image_url = coalesce(${body.imageUrl ?? null}, image_url),
+                 emoji = coalesce(${body.emoji ?? null}, emoji),
                  is_active = coalesce(${body.active ?? null}, is_active)
            where id = ${params.id} and tenant_id = ${tenantId}`;
 

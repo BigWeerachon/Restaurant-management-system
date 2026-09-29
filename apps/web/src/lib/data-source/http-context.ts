@@ -40,7 +40,10 @@ export async function loadShop(opts: { reset: boolean }): Promise<void> {
   const store = useSabai.getState();
   if (opts.reset) store.reset("fresh", boot.tenant.name);
   useSabai.getState().patch((d) => {
+    // Which items are sold out is per branch and comes from the availability slice, not from the shop itself.
+    const soldOut = new Map(d.menuItems.map((m) => [m.id, m.soldOut]));
     Object.assign(d, boot);
+    for (const m of d.menuItems) m.soldOut = soldOut.get(m.id) ?? {};
   });
 }
 

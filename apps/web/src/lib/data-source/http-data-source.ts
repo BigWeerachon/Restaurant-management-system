@@ -10,6 +10,7 @@ import type { Member } from "../demo/types";
 import { apiFetch, clearApiSession, setApiSession } from "./http-client";
 import { loadShop, loadSlices } from "./http-context";
 import { kdsCommands } from "./http-kds";
+import { menuCommands } from "./http-menu";
 import { posCommands } from "./http-pos";
 import { stockCommands } from "./http-stock";
 import type { DataSource, Slice } from "./types";
@@ -72,11 +73,10 @@ const implemented = {
   ...posCommands,
   ...kdsCommands,
   ...stockCommands,
+  ...menuCommands,
 } satisfies Partial<DataSource>;
 
 const NOT_YET = [
-  "addMenuItem",
-  "updateMenuItem",
   "createPurchaseOrder",
   "createPOFromSuggestions",
   "setPurchaseOrderStatus",

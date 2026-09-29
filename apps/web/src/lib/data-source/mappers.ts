@@ -5,10 +5,9 @@
  * becomes satang, snake_case becomes camelCase, ids stay as-is (both sides
  * use UUIDs already).
  *
- * One real gap, tracked in docs/v1.1-checklist.md: the database has no
- * `emoji` column yet for ingredients/menu items/categories, so this guesses
- * one from the name. Replace `guessEmoji` with a real column once V1.2 adds
- * it — nothing else needs to change.
+ * The picture of an item is the one chosen when it was added (`emoji`, and
+ * `icon` for categories); rows created without one — the sample shop, imports —
+ * get a guess from the name.
  */
 import { toSatang } from "@sabai/domain";
 import type {
@@ -128,14 +127,17 @@ export interface ShopApiResponse {
     standard_cost: number | null;
     last_cost: number | null;
     storage_zone: string | null;
+    /** The picture chosen when it was added; null for rows that have none (the client then guesses from the name). */
+    emoji?: string | null;
     category: string | null;
   }[];
-  menuCategories: { id: string; name: string; color: string | null; sort: number }[];
+  menuCategories: { id: string; name: string; color: string | null; icon?: string | null; sort: number }[];
   menuItems: {
     id: string;
     category_id: string;
     name: string;
     name_en: string | null;
+    emoji?: string | null;
     kitchen_route: string;
     tags: string[];
     price: string;
@@ -261,7 +263,7 @@ export function mapShopBootstrap(shop: ShopApiResponse): ShopBootstrap {
     return {
       id: i.id,
       name: i.name,
-      emoji: guessEmoji(i.name, "🥘"),
+      emoji: i.emoji ?? guessEmoji(i.name, "🥘"),
       baseUnit: i.base_unit,
       displayUnit: i.display_unit ?? undefined,
       kind: i.kind,
@@ -277,14 +279,14 @@ export function mapShopBootstrap(shop: ShopApiResponse): ShopBootstrap {
     };
   });
 
-  const menuCategories: MenuCategory[] = shop.menuCategories.map((c) => ({ id: c.id, name: c.name, emoji: guessEmoji(c.name), color: c.color ?? "gray", sort: c.sort }));
+  const menuCategories: MenuCategory[] = shop.menuCategories.map((c) => ({ id: c.id, name: c.name, emoji: c.icon ?? guessEmoji(c.name), color: c.color ?? "gray", sort: c.sort }));
 
   const menuItems: MenuItem[] = shop.menuItems.map((m) => ({
     id: m.id,
     categoryId: m.category_id,
     name: m.name,
     nameEn: m.name_en ?? undefined,
-    emoji: guessEmoji(m.name),
+    emoji: m.emoji ?? guessEmoji(m.name),
     price: toSatang(m.price),
     route: m.kitchen_route,
     modifierGroupIds: m.modifierGroupIds,

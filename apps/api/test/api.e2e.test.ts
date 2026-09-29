@@ -190,7 +190,7 @@ describe("a café's first day, through the API", () => {
     });
     const mocha = created.json.id;
 
-    const patched = await s.call("PATCH", `/v1/menu-items/${mocha}`, { price: 75, active: false });
+    const patched = await s.call("PATCH", `/v1/menu-items/${mocha}`, { price: 75, active: false, emoji: "🧋" });
     expect(patched.status).toBe(200);
     expect(patched.json.price).toBe("75.00");
     expect(patched.json.active).toBe(false);
@@ -207,6 +207,29 @@ describe("a café's first day, through the API", () => {
 
     const empty = await s.call("PATCH", `/v1/menu-items/${mocha}`, {});
     expect(empty.status).toBe(422);
+
+    // The picture chosen for the item comes back with the shop, and a new category takes it as its icon.
+    const shop = await s.call("GET", "/v1/shop");
+    expect(shop.json.menuItems.find((m: any) => m.id === mocha).emoji).toBe("🧋");
+    expect(shop.json.menuItems.find((m: any) => m.id === s.latte).emoji).toBeNull();
+
+    // An empty list clears the recipe (the shop then shows the item as having none).
+    const cleared = await s.call("PATCH", `/v1/menu-items/${mocha}`, { recipe: [] });
+    expect(cleared.status).toBe(200);
+    const after = await s.call("GET", "/v1/shop");
+    expect(after.json.menuItems.find((m: any) => m.id === mocha).recipe).toEqual([]);
+  });
+
+  it("gives a new category and a new ingredient the picture chosen for them", async () => {
+    const dessert = await s.call("POST", "/v1/menu-items", { categoryName: "ของหวาน", emoji: "🍰", name: "เค้กช็อกโกแลต", price: 90, kitchenRoute: "kitchen" });
+    expect(dessert.status).toBe(201);
+    const shrimp = await s.call("POST", "/v1/ingredients", { name: "กุ้งแห้ง", baseUnit: "g", emoji: "🦐" });
+    const shop = await s.call("GET", "/v1/shop");
+    expect(shop.json.menuCategories.find((c: any) => c.name === "ของหวาน").icon).toBe("🍰");
+    expect(shop.json.menuItems.find((m: any) => m.id === dessert.json.id).emoji).toBe("🍰");
+    expect(shop.json.ingredients.find((i: any) => i.id === shrimp.json.id).emoji).toBe("🦐");
+    const tooLong = await s.call("POST", "/v1/menu-items", { categoryName: "ของหวาน", emoji: "x".repeat(17), name: "อะไรสักอย่าง", price: 10 });
+    expect(tooLong.status).toBe(422);
   });
 
   it("serves the whole POS catalog in one call", async () => {
@@ -507,6 +530,24 @@ describe("staff on a shared device", () => {
     const report = await s.cashierCall("GET", "/v1/reports/summary?from=2026-01-01&to=2026-12-31");
     expect(report.status).toBe(403);
     expect(report.json.error.title).toBe("ต้องให้ผู้จัดการช่วย");
+  });
+
+  it("lets a role that may only manage recipes change a recipe, but not the price", async () => {
+    const [role] = await ctx.sql<{ id: string }[]>`select id from app.roles where tenant_id = ${s.tenantId} and key = 'cashier'`;
+    // (Managing recipes goes with seeing them: a row that cannot be read back cannot be written either.)
+    await ctx.sql`insert into app.role_permissions (tenant_id, role_id, permission_key) select ${s.tenantId}, ${role!.id}, k from unnest(array['recipes.view', 'recipes.manage']) k`;
+    try {
+      const recipeOnly = await s.cashierCall("PATCH", `/v1/menu-items/${s.americano}`, { recipe: [{ ingredientId: s.coffee, qty: 20 }] });
+      expect(recipeOnly.status).toBe(200);
+      const price = await s.cashierCall("PATCH", `/v1/menu-items/${s.americano}`, { price: 1 });
+      expect(price.status).toBe(403);
+      const both = await s.cashierCall("PATCH", `/v1/menu-items/${s.americano}`, { price: 1, recipe: [] });
+      expect(both.status).toBe(403);
+    } finally {
+      await ctx.sql`delete from app.role_permissions where role_id = ${role!.id} and permission_key in ('recipes.view', 'recipes.manage')`;
+    }
+    const withoutIt = await s.cashierCall("PATCH", `/v1/menu-items/${s.americano}`, { recipe: [] });
+    expect(withoutIt.status).toBe(403);
   });
 
   it("needs a manager PIN for a discount above the cashier's cap", async () => {

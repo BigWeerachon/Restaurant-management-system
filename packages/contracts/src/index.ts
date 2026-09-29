@@ -172,6 +172,9 @@ export const SkipOnboardingBody = z.object({
 // ---------------------------------------------------------------------------
 // Menu & recipes
 // ---------------------------------------------------------------------------
+/** The picture staff recognise an item by (one emoji, sometimes a sequence of them). */
+const Emoji = z.string().trim().min(1).max(16);
+
 export const RecipeLineInput = z.object({
   ingredientId: Id,
   qty: z.number().finite().refine((v) => v !== 0, "ปริมาณต้องไม่เป็น 0"),
@@ -190,6 +193,7 @@ export const CreateIngredientBody = z.object({
   /** Cost per base unit used until the first purchase is recorded. */
   standardCost: z.number().nonnegative().optional(),
   storageZone: z.string().max(40).optional(),
+  emoji: Emoji.optional(),
   /** Category by name: an existing one is reused, a new name creates it (like menu categories). */
   categoryName: z.string().trim().min(1).max(60).optional(),
   /** How it is usually bought. Remembered as the supplier's pack when a supplier is given. */
@@ -204,6 +208,7 @@ export const CreateMenuItemBody = z.object({
   categoryName: z.string().trim().max(60).optional(),
   name: Name,
   nameEn: z.string().max(80).optional(),
+  emoji: Emoji.optional(),
   price: PositiveMoney,
   kitchenRoute: z.string().regex(/^[a-z][a-z0-9_]{1,30}$/).default("kitchen"),
   imageUrl: z.url().optional(),
@@ -220,6 +225,7 @@ export const UpdateMenuItemBody = z
   .object({
     name: Name.optional(),
     nameEn: z.string().max(80).optional(),
+    emoji: Emoji.optional(),
     price: PositiveMoney.optional(),
     kitchenRoute: z
       .string()

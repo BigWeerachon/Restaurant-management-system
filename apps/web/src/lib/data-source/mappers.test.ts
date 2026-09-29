@@ -177,6 +177,20 @@ describe("mapShopBootstrap", () => {
     expect(modifierGroups[0]!.options.map((o) => o.priceDelta)).toEqual([0, 1500]);
   });
 
+  it("uses the picture chosen when an item or category was added, and guesses from the name only when there is none", () => {
+    const fixture = shopFixture();
+    fixture.menuItems[0]!.emoji = "🧋";
+    fixture.menuCategories[0]!.icon = "🫖";
+    fixture.ingredients[0]!.emoji = "🍼";
+    const { menuItems, menuCategories, ingredients } = mapShopBootstrap(fixture);
+    expect(menuItems[0]!.emoji).toBe("🧋");
+    expect(menuCategories[0]!.emoji).toBe("🫖");
+    expect(ingredients[0]!.emoji).toBe("🍼");
+    // No picture stored: the guess from the name, as before.
+    expect(menuItems[1]!.emoji).toBe(guessEmoji("น้ำเปล่า"));
+    expect(ingredients[1]!.emoji).toBe("🥚");
+  });
+
   it("models a grants-all role with grantsAll alone, so the '*' marker never reaches the permission editor", () => {
     const { roles } = mapShopBootstrap(shopFixture());
     const owner = roles.find((r) => r.key === "owner")!;

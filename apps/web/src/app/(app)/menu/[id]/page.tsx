@@ -6,13 +6,15 @@ import { motion } from "motion/react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useEffect, useState } from "react";
+import { LoadBanner } from "@/components/app/load-banner";
 import { PageHeader } from "@/components/app/page-header";
 import { CostMeter, HealthBadge, HEALTH, RecipeEditor, SuggestedPrice, fromRecipe, toRecipe, useCosting, type EditableLine } from "@/components/app/recipe-editor";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/feedback";
 import { Card, CardHeader, Input } from "@/components/ui/primitives";
-import { useAccess, useAction } from "@/hooks/use-sabai";
-import { priceFor, updateMenuItem } from "@/lib/demo/engine";
+import { useDsAction, useLoad } from "@/hooks/use-data-source";
+import { useAccess } from "@/hooks/use-sabai";
+import { priceFor } from "@/lib/demo/engine";
 import { formatBaht } from "@/lib/demo/selectors";
 import { useSabai } from "@/lib/demo/store";
 
@@ -20,7 +22,8 @@ export default function MenuItemPage() {
   const { id } = useParams<{ id: string }>();
   const db = useSabai((s) => s.db);
   const { can } = useAccess();
-  const { exec, pending } = useAction();
+  const { exec, pending } = useDsAction();
+  const load = useLoad(["bootstrap"]);
   const item = db.menuItems.find((m) => m.id === id);
   const [lines, setLines] = useState<EditableLine[]>([]);
   const [price, setPrice] = useState("");
@@ -40,8 +43,8 @@ export default function MenuItemPage() {
 
   const save = () =>
     exec(
-      (d, c) =>
-        updateMenuItem(d, c, item.id, {
+      (ds) =>
+        ds.updateMenuItem(item.id, {
           ...(can("menu.manage") ? { price: Math.round(Number(price) * 100) } : {}),
           ...(can("recipes.manage") ? { recipe: lines.length ? toRecipe(lines) : undefined } : {}),
         }),
@@ -63,6 +66,7 @@ export default function MenuItemPage() {
         description={`${cat?.name ?? ""} · ${item.route === "bar" ? "ทำที่บาร์" : "ทำที่ครัว"}`}
         actions={(can("menu.manage") || can("recipes.manage")) && <Button icon={<Save className="h-4 w-4" />} disabled={!dirty} loading={pending} onClick={save}>บันทึกการเปลี่ยนแปลง</Button>}
       />
+      <LoadBanner state={load} className="mb-4" />
       <div className="grid gap-6 lg:grid-cols-[1.5fr_1fr]">
         <Card>
           <CardHeader title="สูตรต่อ 1 จาน/แก้ว" description={can("recipes.manage") ? "แก้ปริมาณแล้วดูต้นทุนเปลี่ยนทันที" : "ดูสูตรเพื่อทำให้ได้มาตรฐานเดียวกันทุกครั้ง"} />
