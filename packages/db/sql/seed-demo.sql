@@ -225,18 +225,20 @@ declare
   m record;
   members jsonb := '[
     {"key":"manager",    "name":"พี่นิด",    "role":"manager",    "pin":"2222", "all_branches":true},
-    {"key":"cashier",    "name":"น้องแพรว",  "role":"cashier",    "pin":"3333", "all_branches":false},
+    {"key":"cashier",    "name":"น้องแพรว",  "role":"cashier",    "pin":"3333", "all_branches":false, "max_discount":0.1},
     {"key":"waiter",     "name":"น้องโอ๊ต",  "role":"waiter",     "pin":"4444", "all_branches":false},
     {"key":"kitchen",    "name":"ป้าแดง",    "role":"kitchen",    "pin":"5555", "all_branches":false},
     {"key":"stock",      "name":"พี่ต้น",    "role":"stock",      "pin":"6666", "all_branches":true},
     {"key":"accountant", "name":"คุณมิ้นท์", "role":"accountant", "pin":"7777", "all_branches":true}
   ]'::jsonb;
 begin
-  for m in select * from jsonb_to_recordset(members) as x(key text, name text, role text, pin text, all_branches boolean)
+  for m in select * from jsonb_to_recordset(members) as x(key text, name text, role text, pin text, all_branches boolean, max_discount numeric)
   loop
     select id into role_id from app.roles where tenant_id = seed.id('tenant') and key = m.role;
-    insert into app.memberships (tenant_id, display_name, role_id, all_branches, status)
-      values (seed.id('tenant'), m.name, role_id, m.all_branches, 'active')
+    -- Same as the demo: only the cashier has a discount cap (10%); anything above needs a manager's PIN.
+    insert into app.memberships (tenant_id, display_name, role_id, all_branches, status, limits)
+      values (seed.id('tenant'), m.name, role_id, m.all_branches, 'active',
+              case when m.max_discount is null then '{}'::jsonb else jsonb_build_object('max_discount_rate', m.max_discount) end)
       returning id into mem_id;
     insert into seed_member (key, id) values (m.key, mem_id);
     perform app.set_member_pin(mem_id, m.pin);

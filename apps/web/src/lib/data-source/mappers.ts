@@ -73,7 +73,7 @@ export interface ShopApiResponse {
     phone: string | null;
     day_cutoff: string;
     service_charge_rate: number;
-    tables: { id: string; branch_id: string; area_id: string | null; name: string; seats: number }[];
+    tables: { id: string; branch_id: string; area_id: string | null; area_name: string | null; name: string; seats: number }[];
     stations: { id: string; branch_id: string; name: string; route_key: string; color: string | null; warn_after_sec: number; late_after_sec: number }[];
   }[];
   channels: {
@@ -94,9 +94,18 @@ export interface ShopApiResponse {
     fee_rate: number;
     is_active: boolean;
     settlement_days: number;
+    requires_reference: boolean;
     config: { promptpay_id?: string } | null;
   }[];
-  suppliers: { id: string; name: string; phone: string | null; line_id: string | null; payment_terms_days: number; lead_time_days: number }[];
+  suppliers: {
+    id: string;
+    name: string;
+    phone: string | null;
+    line_id: string | null;
+    payment_terms_days: number;
+    lead_time_days: number;
+    items: { ingredientId: string; packName: string; packQty: number; lastPrice: string | null; isPreferred: boolean }[];
+  }[];
   ingredients: {
     id: string;
     name: string;
@@ -106,8 +115,9 @@ export interface ShopApiResponse {
     track_stock: boolean;
     reorder_point: number | null;
     par_level: number | null;
-    standard_cost: string | null;
-    last_cost: string | null;
+    /** ฿ per base unit at full precision (numeric(18,6)), not satang. */
+    standard_cost: number | null;
+    last_cost: number | null;
     storage_zone: string | null;
     category: string | null;
   }[];
@@ -132,7 +142,7 @@ export interface ShopApiResponse {
     options: { id: string; group_id: string; name: string; price_delta: string; is_default: boolean }[];
   }[];
   roles: { id: string; key: string; name: string; description: string | null; grants_all: boolean; home: string; color: string | null; permissions: string[] }[];
-  members: { id: string; display_name: string; nickname: string | null; status: string; all_branches: boolean; role_key: string; branch_ids: string[] | null }[];
+  members: { id: string; display_name: string; nickname: string | null; status: string; all_branches: boolean; role_key: string; max_discount_rate: number; branch_ids: string[] | null }[];
 }
 
 export interface ShopBootstrap {
@@ -178,7 +188,7 @@ export function mapShopBootstrap(shop: ShopApiResponse): ShopBootstrap {
     phone: b.phone ?? undefined,
     dayCutoff: b.day_cutoff,
     serviceChargeRate: b.service_charge_rate,
-    tables: b.tables.map((t) => ({ id: t.id, name: t.name, seats: t.seats, zone: t.area_id ?? "" })),
+    tables: b.tables.map((t) => ({ id: t.id, name: t.name, seats: t.seats, zone: t.area_name ?? "ทั่วไป" })),
   }));
 
   const channels: Channel[] = shop.channels.map((c) => ({
@@ -203,7 +213,7 @@ export function mapShopBootstrap(shop: ShopApiResponse): ShopBootstrap {
     active: p.is_active,
     feeRate: p.fee_rate,
     promptpayId: p.config?.promptpay_id,
-    requiresReference: false,
+    requiresReference: p.requires_reference,
     settlementDays: p.settlement_days,
   }));
 
@@ -216,22 +226,46 @@ export function mapShopBootstrap(shop: ShopApiResponse): ShopBootstrap {
     leadTimeDays: s.lead_time_days,
   }));
 
-  const ingredients: Ingredient[] = shop.ingredients.map((i, idx) => ({
-    id: i.id,
-    name: i.name,
-    emoji: guessEmoji(i.name, "🥘"),
-    baseUnit: i.base_unit,
-    displayUnit: i.display_unit ?? undefined,
-    kind: i.kind,
-    trackStock: i.track_stock,
-    category: i.category ?? "",
-    reorderPoint: i.reorder_point ?? undefined,
-    parLevel: i.par_level ?? undefined,
-    standardCost: i.standard_cost ? toSatang(i.standard_cost) : 0,
-    lastCost: i.last_cost ? toSatang(i.last_cost) : undefined,
-    zone: i.storage_zone ?? undefined,
-    countSort: idx,
-  }));
+  // How each ingredient is usually bought (the preferred supplier's pack, else the first one listed) —
+  // the receiving and purchasing pages read this to pre-fill packs and group by supplier.
+  const supplierItems = new Map<string, { supplierId: string; item: ShopApiResponse["suppliers"][number]["items"][number] }[]>();
+  for (const s of shop.suppliers)
+    for (const item of s.items) supplierItems.set(item.ingredientId, [...(supplierItems.get(item.ingredientId) ?? []), { supplierId: s.id, item }]);
+
+  const ingredients: Ingredient[] = shop.ingredients.map((i, idx) => {
+    // Unlike prices, per-unit costs are ฿ (not satang) as decimals, exactly as the demo engine and @sabai/domain costing use them.
+    const standardCost = i.standard_cost ?? 0;
+    const candidates = supplierItems.get(i.id) ?? [];
+    const chosen = candidates.find((c) => c.item.isPreferred) ?? candidates[0];
+    let pack: Ingredient["pack"];
+    if (chosen) {
+      const lastPrice = chosen.item.lastPrice ? toSatang(chosen.item.lastPrice) : 0;
+      // Never bought yet: estimate from the standard cost so the receiving form isn't pre-filled with ฿0.
+      pack = {
+        name: chosen.item.packName,
+        qty: chosen.item.packQty,
+        price: lastPrice > 0 ? lastPrice : Math.round(standardCost * chosen.item.packQty * 100),
+        supplierId: chosen.supplierId,
+      };
+    }
+    return {
+      id: i.id,
+      name: i.name,
+      emoji: guessEmoji(i.name, "🥘"),
+      baseUnit: i.base_unit,
+      displayUnit: i.display_unit ?? undefined,
+      kind: i.kind,
+      trackStock: i.track_stock,
+      category: i.category ?? "",
+      reorderPoint: i.reorder_point ?? undefined,
+      parLevel: i.par_level ?? undefined,
+      standardCost,
+      lastCost: i.last_cost ?? undefined,
+      zone: i.storage_zone ?? undefined,
+      countSort: idx,
+      pack,
+    };
+  });
 
   const menuCategories: MenuCategory[] = shop.menuCategories.map((c) => ({ id: c.id, name: c.name, emoji: guessEmoji(c.name), color: c.color ?? "gray", sort: c.sort }));
 
@@ -266,7 +300,8 @@ export function mapShopBootstrap(shop: ShopApiResponse): ShopBootstrap {
     grantsAll: r.grants_all,
     home: r.home,
     color: r.color ?? "gray",
-    permissions: r.permissions,
+    // The API marks grants-all roles with "*"; the client models that with grantsAll alone (accessFromRole).
+    permissions: r.permissions.filter((p) => p !== "*"),
   }));
 
   // The API never returns PIN values (hashed, write-only) — unlike the demo,
@@ -280,6 +315,7 @@ export function mapShopBootstrap(shop: ShopApiResponse): ShopBootstrap {
     roleKey: m.role_key,
     pin: "",
     branchIds: m.all_branches ? "all" : (m.branch_ids ?? []),
+    maxDiscountRate: m.max_discount_rate,
     color: "slate",
     active: m.status === "active",
   }));

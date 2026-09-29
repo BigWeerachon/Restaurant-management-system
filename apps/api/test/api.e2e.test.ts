@@ -234,6 +234,23 @@ describe("a café's first day, through the API", () => {
     expect(latte.recipe).toEqual(expect.arrayContaining([expect.objectContaining({ ingredientId: s.coffee, qty: 18 })]));
     expect(r.json.roles.find((role: any) => role.key === "owner").permissions).toEqual(["*"]);
     expect(r.json.members.map((m: any) => m.role_key)).toContain("owner");
+    // No cap set means the SQL default (100%), so the client never has to guess.
+    expect(r.json.members.find((m: any) => m.role_key === "owner").max_discount_rate).toBe(1);
+  });
+
+  it("keeps per-unit ingredient costs at full precision and names each table's area", async () => {
+    const [area] = await ctx.sql<{ id: string }[]>`
+      insert into app.dining_areas (tenant_id, branch_id, name) values (${s.tenantId}, ${s.branchId}, 'ระเบียง') returning id`;
+    await ctx.sql`insert into app.dining_tables (tenant_id, branch_id, area_id, name, seats) values (${s.tenantId}, ${s.branchId}, ${area!.id}, 'B1', 4)`;
+    await ctx.sql`insert into app.dining_tables (tenant_id, branch_id, name, seats) values (${s.tenantId}, ${s.branchId}, 'ริมทาง', 2)`;
+
+    const r = await s.call("GET", "/v1/shop");
+    // 0.045 ฿/ml is below one satang; rounding it to 2 decimals would make the shop's stock valuation wrong.
+    expect(r.json.ingredients.find((i: any) => i.id === s.milk).standard_cost).toBe(0.045);
+    expect(r.json.ingredients.find((i: any) => i.id === s.coffee).standard_cost).toBe(0.45);
+    const tables = r.json.branches.find((b: any) => b.id === s.branchId).tables;
+    expect(tables.find((t: any) => t.name === "B1")).toMatchObject({ area_id: area!.id, area_name: "ระเบียง", seats: 4 });
+    expect(tables.find((t: any) => t.name === "ริมทาง")).toMatchObject({ area_id: null, area_name: null });
   });
 
   it("receives goods from the market (paid in cash, no supplier needed)", async () => {
@@ -274,6 +291,15 @@ describe("a café's first day, through the API", () => {
     const draftList = await s.call("GET", `/v1/purchase-orders?branchId=${s.branchId}&status=draft`);
     expect(draftList.json.map((x: any) => x.id)).toContain(po.json.id);
     expect(draftList.json[0].supplier).toBe("ฟาร์มนมสด");
+
+    // The shop bootstrap tells the client how each ingredient is usually bought; receiving and purchasing pre-fill from it.
+    await ctx.sql`
+      insert into app.supplier_items (tenant_id, supplier_id, ingredient_id, pack_name, pack_qty, last_price, is_preferred)
+      values (${s.tenantId}, ${supplier!.id}, ${s.milk}, 'ขวด 2 ลิตร', 2000, 100, true)`;
+    const shop = await s.call("GET", "/v1/shop");
+    expect(shop.json.suppliers.find((x: any) => x.id === supplier!.id).items).toEqual([
+      { ingredientId: s.milk, packName: "ขวด 2 ลิตร", packQty: 2000, lastPrice: "100.00", isPreferred: true },
+    ]);
 
     const count = await s.call("POST", "/v1/stock-counts", { locationId: location!.id, scope: "partial", ingredientIds: [s.coffee] });
     expect(count.status).toBe(201);

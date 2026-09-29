@@ -40,8 +40,10 @@ export function registerShop(app: Hono<Env>, deps: Deps) {
         t<{ id: string; code: string; name: string; address: string | null; phone: string | null; day_cutoff: string; opening_hours: unknown; service_charge_rate: string; is_active: boolean }[]>`
           select id, code, name, address, phone, day_cutoff, opening_hours, service_charge_rate, is_active
             from app.branches where tenant_id = ${tenantId} and archived_at is null order by created_at`,
-        t<{ id: string; branch_id: string; area_id: string | null; name: string; seats: number }[]>`
-          select id, branch_id, area_id, name, seats from app.dining_tables where tenant_id = ${tenantId} and is_active order by branch_id, sort, name`,
+        t<{ id: string; branch_id: string; area_id: string | null; area_name: string | null; name: string; seats: number }[]>`
+          select dt.id, dt.branch_id, dt.area_id, da.name as area_name, dt.name, dt.seats
+            from app.dining_tables dt left join app.dining_areas da on da.id = dt.area_id
+           where dt.tenant_id = ${tenantId} and dt.is_active order by dt.branch_id, dt.sort, dt.name`,
         t<{ id: string; branch_id: string; name: string; route_key: string; color: string | null; warn_after_sec: number; late_after_sec: number }[]>`
           select id, branch_id, name, route_key, color, warn_after_sec, late_after_sec
             from app.kitchen_stations where tenant_id = ${tenantId} and is_active order by branch_id, sort`,
@@ -76,8 +78,9 @@ export function registerShop(app: Hono<Env>, deps: Deps) {
         t<{ id: string; key: string; name: string; description: string | null; grants_all: boolean; home: string; color: string | null; sort: number }[]>`
           select id, key, name, description, grants_all, home, color, sort from app.roles where tenant_id = ${tenantId} order by sort`,
         t<{ role_id: string; permission_key: string }[]>`select role_id, permission_key from app.role_permissions where tenant_id = ${tenantId}`,
-        t<{ id: string; display_name: string; nickname: string | null; status: string; all_branches: boolean; pin_only: boolean; role_key: string; role_name: string }[]>`
-          select m.id, m.display_name, m.nickname, m.status, m.all_branches, m.user_id is null as pin_only, r.key as role_key, r.name as role_name
+        t<{ id: string; display_name: string; nickname: string | null; status: string; all_branches: boolean; pin_only: boolean; role_key: string; role_name: string; max_discount_rate: string }[]>`
+          select m.id, m.display_name, m.nickname, m.status, m.all_branches, m.user_id is null as pin_only, r.key as role_key, r.name as role_name,
+                 coalesce((m.limits->>'max_discount_rate')::numeric, 1) as max_discount_rate
             from app.memberships m join app.roles r on r.id = m.role_id
            where m.tenant_id = ${tenantId} and m.status <> 'removed' order by r.sort, m.display_name`,
         t<{ membership_id: string; branch_id: string }[]>`select membership_id, branch_id from app.membership_branches where tenant_id = ${tenantId}`,
@@ -125,8 +128,9 @@ export function registerShop(app: Hono<Env>, deps: Deps) {
           ...i,
           reorder_point: i.reorder_point ? num(i.reorder_point) : null,
           par_level: i.par_level ? num(i.par_level) : null,
-          standard_cost: i.standard_cost ? money(i.standard_cost) : null,
-          last_cost: i.last_cost ? money(i.last_cost) : null,
+          // Per-base-unit costs keep their 6 decimals (0.045 ฿/ml); money() would round them to satang.
+          standard_cost: i.standard_cost === null ? null : num(i.standard_cost),
+          last_cost: i.last_cost === null ? null : num(i.last_cost),
         })),
         menuCategories,
         menuItems: menuItems.map((i) => ({
@@ -142,6 +146,7 @@ export function registerShop(app: Hono<Env>, deps: Deps) {
         roles: roles.map((r) => ({ ...r, permissions: r.grants_all ? ["*"] : rolePermissions.filter((p) => p.role_id === r.id).map((p) => p.permission_key) })),
         members: members.map((m) => ({
           ...m,
+          max_discount_rate: num(m.max_discount_rate),
           branch_ids: m.all_branches ? null : membershipBranches.filter((mb) => mb.membership_id === m.id).map((mb) => mb.branch_id),
         })),
       };
