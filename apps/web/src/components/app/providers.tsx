@@ -8,6 +8,7 @@ import { ApiBoot } from "./api-boot";
 import { ApprovalDialog } from "./approval-dialog";
 import { OfflineBridge } from "./offline-bridge";
 import { RealtimeBridge } from "./realtime-bridge";
+import { ServiceWorkerRegister } from "./service-worker-register";
 import { SwitchUserDialog } from "./switch-user-dialog";
 
 export function Providers({ children }: { children: ReactNode }) {
@@ -18,6 +19,7 @@ export function Providers({ children }: { children: ReactNode }) {
         <ApiBoot />
         <RealtimeBridge />
         <OfflineBridge />
+        <ServiceWorkerRegister />
         <ApprovalDialog />
         <SwitchUserDialog />
         <Toaster

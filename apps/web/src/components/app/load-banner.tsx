@@ -10,9 +10,10 @@ import { isDomainError } from "@/lib/demo/store";
 export function LoadBanner({ state, className }: { state: LoadState; className?: string }) {
   if (state.error) {
     const h = humanizeError(isDomainError(state.error) ? state.error.code : "INTERNAL");
+    // Losing the line is not a fault to alarm anyone about: what is on screen is what this device already knew.
     return (
       <Callout
-        tone="danger"
+        tone={h.code === "NETWORK_OFFLINE" ? "warning" : "danger"}
         title={h.title}
         className={className}
         action={

@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="th">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="color-scheme" content="light dark" />
+    <title>ออฟไลน์ · Sabai</title>
+    <style>
+      :root { --bg: #f6f5f1; --ink: #1c1b18; --ink-2: #4a4841; --line: #d9d6cc; --brand: #13784f; --brand-ink: #ffffff; --card: #ffffff; }
+      @media (prefers-color-scheme: dark) {
+        :root { --bg: #11110f; --ink: #f2f0ea; --ink-2: #c4c1b8; --line: #3a3934; --brand: #3fbf8a; --brand-ink: #0b1a13; --card: #1a1a17; }
+      }
+      * { box-sizing: border-box; }
+      body { margin: 0; min-height: 100dvh; display: grid; place-items: center; padding: 24px; background: var(--bg); color: var(--ink); font-family: system-ui, -apple-system, "Segoe UI", "Noto Sans Thai", sans-serif; line-height: 1.6; }
+      main { width: 100%; max-width: 30rem; background: var(--card); border: 1px solid var(--line); border-radius: 24px; padding: 28px 24px; }
+      h1 { margin: 0 0 8px; font-size: 1.35rem; }
+      p { margin: 0 0 16px; color: var(--ink-2); }
+      .row { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 8px; }
+      a, button { display: inline-flex; align-items: center; justify-content: center; min-height: 48px; padding: 0 20px; border-radius: 999px; font: inherit; font-weight: 600; text-decoration: none; cursor: pointer; }
+      a.primary, button.primary { background: var(--brand); color: var(--brand-ink); border: 0; }
+      a.secondary { color: var(--ink); border: 1px solid var(--line); background: transparent; }
+      a:focus-visible, button:focus-visible { outline: 3px solid var(--brand); outline-offset: 2px; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>เปิดหน้านี้ตอนออฟไลน์ไม่ได้</h1>
+      <p>หน้านี้ยังไม่เคยถูกเปิดบนเครื่องนี้ตอนที่ต่ออินเทอร์เน็ตอยู่ จึงยังไม่มีข้อมูลเก็บไว้ หน้าที่เคยเปิดแล้ว เช่น หน้าขาย ยังใช้งานต่อได้ตามปกติ และระบบจะส่งรายการที่ขายไว้ให้เองเมื่อกลับมาออนไลน์</p>
+      <div class="row">
+        <a class="primary" href="/pos">ไปหน้าขาย</a>
+        <a class="secondary" href="/kds">ไปจอครัว</a>
+        <button class="secondary" type="button" onclick="location.reload()" style="border:1px solid var(--line);background:transparent;color:var(--ink)">ลองใหม่</button>
+      </div>
+    </main>
+  </body>
+</html>
