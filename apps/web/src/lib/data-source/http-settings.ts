@@ -28,6 +28,10 @@ export const settingsCommands = {
     if (patch.vatRegistered !== undefined) body.vatRegistered = patch.vatRegistered;
     if (patch.pricesIncludeVat !== undefined) body.pricesIncludeVat = patch.pricesIncludeVat;
     if (patch.cashRounding !== undefined) body.cashRounding = patch.cashRounding;
+    // Emptying a printed detail sends null: "clear it", not "leave it".
+    if ("legalName" in patch) body.legalName = patch.legalName?.trim() || null;
+    if ("taxId" in patch) body.taxId = patch.taxId?.trim() || null;
+    if ("receiptFooter" in patch) body.receiptFooter = patch.receiptFooter?.trim() || null;
     if (Object.keys(body).length === 0) return;
     await apiFetch("/v1/tenant", { method: "PATCH", body });
     await refresh(["settings"]);
@@ -52,6 +56,7 @@ export const settingsCommands = {
     if (patch.openingHours !== undefined) body.openingHours = patch.openingHours;
     if (patch.dayCutoff !== undefined) body.dayCutoff = patch.dayCutoff;
     if (patch.serviceChargeRate !== undefined) body.serviceChargeRate = patch.serviceChargeRate;
+    if (patch.taxBranchNo !== undefined) body.taxBranchNo = patch.taxBranchNo;
     if (Object.keys(body).length === 0) return;
     await apiFetch(`/v1/branches/${id}`, { method: "PATCH", body });
     await refresh(["settings"]);

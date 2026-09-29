@@ -29,6 +29,7 @@ import {
   parsePromptPayId,
   planLimit,
   type PlanCode,
+  isValidThaiTaxId,
 } from "@sabai/domain";
 import { defaultStations } from "./seed";
 import type {
@@ -1058,20 +1059,25 @@ export function resetMemberPin(state: DemoState, ctx: Ctx, id: string, pin: stri
   log(state, ctx, "team.pin_reset", `${actorName(state, ctx.actorId)} ตั้ง PIN ใหม่ให้ “${m.name}”`, "warn");
 }
 
-export function updateTenant(state: DemoState, ctx: Ctx, patch: Partial<Pick<Tenant, "name" | "businessType" | "vatRegistered" | "pricesIncludeVat" | "cashRounding">>) {
+export function updateTenant(state: DemoState, ctx: Ctx, patch: Partial<Pick<Tenant, "name" | "businessType" | "vatRegistered" | "pricesIncludeVat" | "cashRounding" | "legalName" | "taxId" | "receiptFooter">>) {
   requirePerm(state, ctx, "settings.manage");
   if (patch.name !== undefined && !patch.name.trim()) throw new DomainError("VALIDATION", { field: "name" });
-  Object.assign(state.tenant, patch);
+  if (patch.taxId && !isValidThaiTaxId(patch.taxId)) throw new DomainError("VALIDATION", { fields: { taxId: "เลขประจำตัวผู้เสียภาษีไม่ถูกต้อง ตรวจตัวเลขอีกครั้ง" } });
+  // An emptied field means "none", like the API: not an empty string that would print as a blank line.
+  const clean = { ...patch };
+  for (const k of ["legalName", "taxId", "receiptFooter"] as const) if (k in clean && !clean[k]?.trim()) clean[k] = undefined;
+  Object.assign(state.tenant, clean);
   log(state, ctx, "settings.updated", `${actorName(state, ctx.actorId)} แก้ไขข้อมูลร้าน`);
 }
 
-export function updateBranch(state: DemoState, ctx: Ctx, id: string, patch: Partial<Pick<Branch, "name" | "address" | "phone" | "openingHours" | "dayCutoff" | "serviceChargeRate">>) {
+export function updateBranch(state: DemoState, ctx: Ctx, id: string, patch: Partial<Pick<Branch, "name" | "address" | "phone" | "openingHours" | "dayCutoff" | "serviceChargeRate" | "taxBranchNo">>) {
   requirePerm(state, ctx, "settings.manage");
   const b = state.branches.find((x) => x.id === id);
   if (!b) throw new DomainError("NOT_FOUND");
   if (patch.name !== undefined && !patch.name.trim()) throw new DomainError("VALIDATION", { field: "name" });
   if (patch.dayCutoff !== undefined && !/^([01]\d|2[0-3]):[0-5]\d$/.test(patch.dayCutoff)) throw new DomainError("VALIDATION", { field: "dayCutoff" });
   if (patch.serviceChargeRate !== undefined && !(patch.serviceChargeRate >= 0 && patch.serviceChargeRate <= 0.2)) throw new DomainError("VALIDATION", { field: "serviceChargeRate" });
+  if (patch.taxBranchNo !== undefined && !/^\d{5}$/.test(patch.taxBranchNo)) throw new DomainError("VALIDATION", { fields: { taxBranchNo: "เลขที่สาขา 5 หลัก เช่น 00000 (สำนักงานใหญ่)" } });
   Object.assign(b, patch);
   log(state, ctx, "settings.branch_updated", `${actorName(state, ctx.actorId)} แก้ไขข้อมูล${b.name}`);
 }

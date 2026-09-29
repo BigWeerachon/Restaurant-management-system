@@ -154,9 +154,9 @@ export interface DataSource {
   setRolePermissions(roleKey: string, permissions: string[]): Promise<void>;
 
   // ------------------------------------------------------------- settings
-  updateTenant(patch: Partial<Pick<Tenant, "name" | "businessType" | "vatRegistered" | "pricesIncludeVat" | "cashRounding">>): Promise<void>;
+  updateTenant(patch: Partial<Pick<Tenant, "name" | "businessType" | "vatRegistered" | "pricesIncludeVat" | "cashRounding" | "legalName" | "taxId" | "receiptFooter">>): Promise<void>;
   addBranch(input: { name: string; address?: string; phone?: string }): Promise<Branch>;
-  updateBranch(id: string, patch: Partial<Pick<Branch, "name" | "address" | "phone" | "openingHours" | "dayCutoff" | "serviceChargeRate">>): Promise<void>;
+  updateBranch(id: string, patch: Partial<Pick<Branch, "name" | "address" | "phone" | "openingHours" | "dayCutoff" | "serviceChargeRate" | "taxBranchNo">>): Promise<void>;
   /** `commissionRate` (GP) takes effect from today; use `setChannelCommission` to choose the date. */
   updateChannel(id: string, patch: Partial<Pick<Channel, "active" | "appliesServiceCharge" | "commissionRate" | "priceMarkup">> & { name?: string; color?: string }): Promise<void>;
   /**

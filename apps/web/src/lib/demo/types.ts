@@ -15,6 +15,12 @@ export interface Tenant {
   pricesIncludeVat: boolean;
   vatRate: number;
   cashRounding: "none" | "0.25" | "1.00";
+  /** Printed on receipts and tax invoices. */
+  legalName?: string;
+  /** 13-digit taxpayer number; checksum-checked where it is typed. */
+  taxId?: string;
+  /** A line at the bottom of every receipt ("ขอบคุณที่มาอุดหนุน"). */
+  receiptFooter?: string;
   plan: "free" | "starter" | "pro" | "business" | "enterprise";
   trialEndsAt: string;
   onboarding: { skipped: string[]; paymentsConfirmed: boolean };
@@ -32,6 +38,8 @@ export interface Branch {
   tables: { id: ID; name: string; seats: number; zone: string }[];
   /** API only: the branch's default stock location, where waste, counts and opening stock are recorded. */
   stockLocationId?: ID;
+  /** Branch number on tax documents ("00000" = head office). */
+  taxBranchNo?: string;
 }
 
 export interface Station {

@@ -11,6 +11,7 @@ import { EmptyState } from "@/components/ui/feedback";
 import { Dialog, Switch } from "@/components/ui/overlay";
 import { Badge, Card, Input, SearchInput, Segmented } from "@/components/ui/primitives";
 import { useDsAction, useLoad } from "@/hooks/use-data-source";
+import { printReceipt } from "@/lib/print";
 import { useAccess, useBusinessDate } from "@/hooks/use-sabai";
 import { actorName } from "@/lib/demo/engine";
 import { formatBaht } from "@/lib/demo/selectors";
@@ -112,7 +113,7 @@ function OrdersInner() {
 
       <Dialog open={!!current && !refund} onOpenChange={(v) => !v && setOpen(null)} title={current ? `บิล #${current.orderNo}` : ""} description={current?.receiptNo ? `ใบเสร็จ ${current.receiptNo}` : "ยังไม่ออกใบเสร็จ"} size="md" footer={current && (
         <>
-          <Button variant="secondary" icon={<Printer className="h-4 w-4" />} onClick={() => window.print()}>
+          <Button variant="secondary" icon={<Printer className="h-4 w-4" />} onClick={() => printReceipt(current.id, { copy: true })}>
             พิมพ์ซ้ำ
           </Button>
           {current.status === "paid" && (can("pos.refund") || can("pos.pay")) && (

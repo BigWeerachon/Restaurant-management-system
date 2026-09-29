@@ -1,11 +1,12 @@
 "use client";
 
-import { cheapestPlanFor, FEATURE_COPY, PLANS, planLimit, planOf, type PlanCode } from "@sabai/domain";
+import { cheapestPlanFor, FEATURE_COPY, isValidThaiTaxId, PLANS, planLimit, planOf, type PlanCode } from "@sabai/domain";
 import { Check, Crown, MapPin, Plus, ShieldCheck, Sparkles } from "lucide-react";
 import { motion } from "motion/react";
 import { useSearchParams } from "next/navigation";
 import { Suspense, useState } from "react";
 import { DevicesPanel } from "@/components/app/devices-panel";
+import { PaperSettings } from "@/components/app/paper-settings";
 import { LoadBanner } from "@/components/app/load-banner";
 import { PageHeader } from "@/components/app/page-header";
 import { PromptPayQr } from "@/components/app/promptpay-qr";
@@ -33,6 +34,48 @@ const BUSINESS_TYPES: { value: Tenant["businessType"]; label: string }[] = [
 
 const pctText = (v: number) => String(Math.round(v * 1000) / 10);
 const toRate = (s: string) => Math.min(Math.max(Number(s || 0), 0), 100) / 100;
+
+// ---------------------------------------------------------------------------
+/** What a printed receipt and a tax invoice say about the shop. The taxpayer number is checked as it is typed: a wrong one on a tax document helps no one. */
+function ReceiptDetails() {
+  const db = useSabai((s) => s.db);
+  const { exec, pending } = useDsAction();
+  const t = db.tenant;
+  const [legalName, setLegalName] = useState(t.legalName ?? "");
+  const [taxId, setTaxId] = useState(t.taxId ?? "");
+  const [footer, setFooter] = useState(t.receiptFooter ?? "");
+  const digits = taxId.replace(/\D/g, "");
+  const taxError = digits && !isValidThaiTaxId(digits) ? "เลขประจำตัวผู้เสียภาษีต้องมี 13 หลักและตัวเลขถูกต้อง ตรวจอีกครั้ง" : null;
+  const dirty = legalName.trim() !== (t.legalName ?? "") || digits !== (t.taxId ?? "") || footer.trim() !== (t.receiptFooter ?? "");
+  const save = () => exec((ds) => ds.updateTenant({ legalName: legalName.trim(), taxId: digits, receiptFooter: footer.trim() }), { success: "บันทึกข้อมูลบนใบเสร็จแล้ว", successDetail: "ใบเสร็จที่พิมพ์ต่อจากนี้จะใช้ข้อมูลใหม่" });
+  return (
+    <Card className="space-y-4 p-5">
+      <div>
+        <h3 className="font-semibold text-ink">ข้อมูลบนใบเสร็จและใบกำกับภาษี</h3>
+        <p className="text-sm text-ink-3">ที่อยู่และเบอร์โทรตั้งที่แต่ละสาขา ส่วนชื่อนิติบุคคลและเลขผู้เสียภาษีตั้งที่นี่ครั้งเดียว</p>
+      </div>
+      <div className="grid gap-4 sm:grid-cols-2">
+        <Field label="ชื่อนิติบุคคลหรือชื่อผู้ประกอบการ" optional hint="ตามที่จดทะเบียน พิมพ์เป็นหัวใบเสร็จแทนชื่อร้าน" htmlFor="legal">
+          <Input id="legal" value={legalName} onChange={(e) => setLegalName(e.target.value)} placeholder="เช่น บริษัท สบายดี จำกัด" />
+        </Field>
+        <Field label="เลขประจำตัวผู้เสียภาษี 13 หลัก" optional={!t.vatRegistered} required={t.vatRegistered} error={taxError} hint={t.vatRegistered ? "จำเป็นสำหรับใบกำกับภาษี" : "ใส่เมื่อจด VAT หรืออยากให้ขึ้นบนใบเสร็จ"} htmlFor="taxid">
+          <Input id="taxid" inputMode="numeric" maxLength={17} value={taxId} invalid={!!taxError} onChange={(e) => setTaxId(e.target.value)} placeholder="0-0000-00000-00-0" />
+        </Field>
+        <Field label="ข้อความท้ายใบเสร็จ" optional htmlFor="footer" className="sm:col-span-2">
+          <Input id="footer" value={footer} maxLength={200} onChange={(e) => setFooter(e.target.value)} placeholder="เช่น ขอบคุณที่มาอุดหนุน ไวไฟรหัส sabai1234" />
+        </Field>
+      </div>
+      {t.vatRegistered && !t.taxId && (
+        <Callout tone="warning" title="ร้านจด VAT แต่ยังไม่ได้ใส่เลขผู้เสียภาษี">
+          ใบเสร็จจะเป็นใบเสร็จธรรมดา ยังเป็นใบกำกับภาษีอย่างย่อไม่ได้จนกว่าจะใส่เลขนี้
+        </Callout>
+      )}
+      <Button loading={pending} disabled={!dirty || !!taxError} onClick={() => void save()}>
+        บันทึก
+      </Button>
+    </Card>
+  );
+}
 
 // ---------------------------------------------------------------------------
 function Business() {
@@ -92,17 +135,17 @@ function Business() {
 // ---------------------------------------------------------------------------
 function BranchDialog({ branch, open, onClose }: { branch: Branch | null; open: boolean; onClose: () => void }) {
   const { exec, pending } = useDsAction();
-  const [form, setForm] = useState({ name: "", address: "", phone: "", openingHours: "", dayCutoff: "05:00", service: "0" });
+  const [form, setForm] = useState({ name: "", address: "", phone: "", openingHours: "", dayCutoff: "05:00", service: "0", taxBranchNo: "00000" });
   const [loaded, setLoaded] = useState<string | null>(null);
   const key = branch?.id ?? (open ? "new" : null);
   if (key !== loaded) {
     setLoaded(key);
-    setForm({ name: branch?.name ?? "", address: branch?.address ?? "", phone: branch?.phone ?? "", openingHours: branch?.openingHours ?? "", dayCutoff: branch?.dayCutoff ?? "05:00", service: pctText(branch?.serviceChargeRate ?? 0) });
+    setForm({ name: branch?.name ?? "", address: branch?.address ?? "", phone: branch?.phone ?? "", openingHours: branch?.openingHours ?? "", dayCutoff: branch?.dayCutoff ?? "05:00", service: pctText(branch?.serviceChargeRate ?? 0), taxBranchNo: branch?.taxBranchNo ?? "00000" });
   }
   const up = (k: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement>) => setForm({ ...form, [k]: e.target.value });
   const save = async () => {
     const r = branch
-      ? await exec((ds) => ds.updateBranch(branch.id, { name: form.name, address: form.address, phone: form.phone, openingHours: form.openingHours, dayCutoff: form.dayCutoff, serviceChargeRate: toRate(form.service) }), { success: "บันทึกข้อมูลสาขาแล้ว" })
+      ? await exec((ds) => ds.updateBranch(branch.id, { name: form.name, address: form.address, phone: form.phone, openingHours: form.openingHours, dayCutoff: form.dayCutoff, serviceChargeRate: toRate(form.service), taxBranchNo: form.taxBranchNo }), { success: "บันทึกข้อมูลสาขาแล้ว" })
       : await exec((ds) => ds.addBranch({ name: form.name, address: form.address, phone: form.phone }), { success: `เปิด${form.name}แล้ว`, successDetail: "ตั้งค่าจอครัวและค่าเริ่มต้นให้แล้ว" });
     if (r.ok) onClose();
   };
@@ -128,6 +171,9 @@ function BranchDialog({ branch, open, onClose }: { branch: Branch | null; open: 
             </Field>
             <Field label="ค่าบริการ (Service charge)" hint="คิดเฉพาะการทานที่ร้าน" htmlFor="bs">
               <Input id="bs" inputMode="decimal" suffix="%" value={form.service} onChange={up("service")} />
+            </Field>
+            <Field label="เลขที่สาขาตามทะเบียนภาษี" hint="00000 = สำนักงานใหญ่ สาขาอื่นใส่ 5 หลักตามที่จดไว้ พิมพ์บนใบกำกับภาษี" htmlFor="btax">
+              <Input id="btax" inputMode="numeric" maxLength={5} value={form.taxBranchNo} onChange={up("taxBranchNo")} />
             </Field>
           </>
         )}
@@ -361,6 +407,7 @@ function SettingsInner() {
           { value: "branches", label: "สาขา" },
           { value: "channels", label: "ช่องทางขายและ GP" },
           { value: "payments", label: "การรับเงิน" },
+          { value: "receipt", label: "ใบเสร็จและเครื่องพิมพ์" },
           // Registered tills exist only where there is a server to remember them.
           ...(dataSourceMode() === "api" ? [{ value: "devices", label: "เครื่องในร้าน" }] : []),
         ]
@@ -383,6 +430,10 @@ function SettingsInner() {
         </TabPanel>
         <TabPanel value="payments" className="pt-4">
           <Payments />
+        </TabPanel>
+        <TabPanel value="receipt" className="grid gap-4 pt-4 lg:grid-cols-2">
+          <ReceiptDetails />
+          <PaperSettings />
         </TabPanel>
         <TabPanel value="devices" className="pt-4">
           <DevicesPanel />

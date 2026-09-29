@@ -7,6 +7,7 @@ import {
   UpdatePaymentMethodBody,
   UpdateTenantBody,
 } from "@sabai/contracts";
+import { isValidThaiTaxId } from "@sabai/domain";
 import type { Hono } from "hono";
 import { ApiFailure } from "../errors";
 import { route, type Deps, type Env } from "../http";
@@ -15,9 +16,16 @@ import { callJson } from "./support";
 export function registerSettings(app: Hono<Env>, deps: Deps) {
   route(app, deps, { method: "PATCH", path: "/v1/tenant", tag: "Settings", summary: "แก้ไขข้อมูลร้าน (ชื่อ ประเภทกิจการ ภาษี การปัดเศษ)", tenant: true, body: UpdateTenantBody, permission: "settings.manage" }, async ({ tenantId, body, tx }) =>
     tx(async (t) => {
+      // A mistyped taxpayer number on a tax document is worse than none: the checksum is checked here, and again nowhere else can enter it.
+      if (body.taxId && !isValidThaiTaxId(body.taxId)) throw new ApiFailure("VALIDATION", 422, {}, { taxId: "เลขประจำตัวผู้เสียภาษีไม่ถูกต้อง ตรวจตัวเลขอีกครั้ง" });
+      // Row security alone would answer "not found" to someone who may not change this; say what is actually true.
+      await t`select app.assert_permission(${tenantId}, 'settings.manage')`;
       const rows = await t`
         update app.tenants
            set name = coalesce(${body.name ?? null}, name),
+               legal_name = case when ${"legalName" in body}::boolean then nullif(${body.legalName ?? null}::text, '') else legal_name end,
+               tax_id = case when ${"taxId" in body}::boolean then ${body.taxId ?? null}::text else tax_id end,
+               receipt_footer = case when ${"receiptFooter" in body}::boolean then nullif(${body.receiptFooter ?? null}::text, '') else receipt_footer end,
                business_type = coalesce(${body.businessType ?? null}, business_type),
                vat_registered = coalesce(${body.vatRegistered ?? null}, vat_registered),
                prices_include_vat = coalesce(${body.pricesIncludeVat ?? null}, prices_include_vat),
@@ -54,6 +62,7 @@ export function registerSettings(app: Hono<Env>, deps: Deps) {
                phone = coalesce(${body.phone ?? null}, phone),
                day_cutoff = coalesce(${body.dayCutoff ?? null}::time, day_cutoff),
                service_charge_rate = coalesce(${body.serviceChargeRate ?? null}, service_charge_rate),
+               tax_branch_no = coalesce(${body.taxBranchNo ?? null}, tax_branch_no),
                opening_hours = case when ${body.openingHours ?? null}::text is null then opening_hours
                                else jsonb_build_object('text', ${body.openingHours ?? null}::text) end,
                is_active = coalesce(${body.isActive ?? null}, is_active)

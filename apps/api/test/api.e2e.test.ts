@@ -963,6 +963,34 @@ describe("settings", () => {
     expect(empty.status).toBe(422);
   });
 
+  it("keeps what a receipt says about the shop: legal name, a checked taxpayer number, a footer line — and the branch's tax number", async () => {
+    const wrong = await s.call("PATCH", "/v1/tenant", { taxId: "1101700230705" });
+    expect(wrong.status).toBe(422);
+    expect(wrong.json.error.fields.taxId).toContain("ไม่ถูกต้อง");
+    expect((await s.call("PATCH", "/v1/tenant", { taxId: "12345" })).status).toBe(422);
+
+    const ok = await s.call("PATCH", "/v1/tenant", { legalName: "บริษัท สบายคาเฟ่ จำกัด", taxId: "1101700230708", receiptFooter: "ขอบคุณค่ะ ไวไฟ sabai1234" });
+    expect(ok.status).toBe(200);
+    const shop = await s.call("GET", "/v1/shop");
+    expect(shop.json.tenant).toMatchObject({ legalName: "บริษัท สบายคาเฟ่ จำกัด", taxId: "1101700230708", receiptFooter: "ขอบคุณค่ะ ไวไฟ sabai1234" });
+    expect(shop.json.branches[0].tax_branch_no).toBe("00000");
+
+    // Changing one thing leaves the others; null (or empty) clears just that one.
+    await s.call("PATCH", "/v1/tenant", { receiptFooter: null });
+    const after = (await s.call("GET", "/v1/shop")).json.tenant;
+    expect(after).toMatchObject({ legalName: "บริษัท สบายคาเฟ่ จำกัด", taxId: "1101700230708", receiptFooter: null });
+    await s.call("PATCH", "/v1/tenant", { legalName: "" });
+    expect((await s.call("GET", "/v1/shop")).json.tenant.legalName).toBeNull();
+
+    // Only someone who manages settings can change what goes on the receipts.
+    expect((await s.cashierCall("PATCH", "/v1/tenant", { receiptFooter: "แอบแก้" })).status).toBe(403);
+
+    expect((await s.call("PATCH", `/v1/branches/${s.branchId}`, { taxBranchNo: "12" })).status).toBe(422);
+    expect((await s.call("PATCH", `/v1/branches/${s.branchId}`, { taxBranchNo: "00003" })).status).toBe(200);
+    expect((await s.call("GET", "/v1/shop")).json.branches.find((b: any) => b.id === s.branchId).tax_branch_no).toBe("00003");
+    await s.call("PATCH", `/v1/branches/${s.branchId}`, { taxBranchNo: "00000" });
+  });
+
   it("adds a second branch and edits an existing one", async () => {
     const created = await s.call("POST", "/v1/branches", { code: "TL2", name: "สาขาทองหล่อ 2" });
     expect(created.status).toBe(201);

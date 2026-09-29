@@ -91,6 +91,10 @@ export const UpdateTenantBody = z
     pricesIncludeVat: z.boolean().optional(),
     vatRate: z.number().min(0).max(1).optional(),
     cashRounding: z.enum(["none", "0.25", "1.00"]).optional(),
+    /** Printed on receipts and tax invoices. `null` clears it. */
+    legalName: z.string().trim().max(160).nullable().optional(),
+    taxId: z.string().regex(/^\d{13}$/, "เลขประจำตัวผู้เสียภาษี 13 หลัก").nullable().optional(),
+    receiptFooter: z.string().trim().max(200).nullable().optional(),
   })
   .refine((b) => Object.keys(b).length > 0, { message: "ไม่มีอะไรให้แก้ไข" });
 
@@ -113,6 +117,8 @@ export const UpdateBranchBody = z
     serviceChargeRate: z.number().min(0).max(0.3).optional(),
     /** Opening hours as the shop writes them ("07:00–21:00"), shown on the branch card. */
     openingHours: z.string().trim().max(60).optional(),
+    /** The branch number on tax documents: "00000" is the head office. */
+    taxBranchNo: z.string().regex(/^\d{5}$/, "เลขที่สาขา 5 หลัก เช่น 00000 (สำนักงานใหญ่)").optional(),
     isActive: z.boolean().optional(),
   })
   .refine((b) => Object.keys(b).length > 0, { message: "ไม่มีอะไรให้แก้ไข" });

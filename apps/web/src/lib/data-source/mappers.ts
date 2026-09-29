@@ -68,6 +68,9 @@ export interface ShopApiResponse {
     pricesIncludeVat: boolean;
     vatRate: number;
     cashRounding: Tenant["cashRounding"];
+    legalName?: string | null;
+    taxId?: string | null;
+    receiptFooter?: string | null;
     planCode: string | null;
     trialEndsAt: string | null;
     settings: { onboarding?: { skipped?: string[]; payments_confirmed?: boolean } } | null;
@@ -82,6 +85,7 @@ export interface ShopApiResponse {
     /** Free text kept as `{ text }`; `{}` until someone writes it down. */
     opening_hours?: { text?: string } | null;
     service_charge_rate: number;
+    tax_branch_no?: string;
     stock_location_id: string | null;
     tables: { id: string; branch_id: string; area_id: string | null; area_name: string | null; name: string; seats: number }[];
     stations: { id: string; branch_id: string; name: string; route_key: string; color: string | null; warn_after_sec: number; late_after_sec: number }[];
@@ -183,6 +187,9 @@ export function mapShopBootstrap(shop: ShopApiResponse): ShopBootstrap {
     pricesIncludeVat: shop.tenant?.pricesIncludeVat ?? true,
     vatRate: shop.tenant?.vatRate ?? 0.07,
     cashRounding: shop.tenant?.cashRounding ?? "none",
+    legalName: shop.tenant?.legalName || undefined,
+    taxId: shop.tenant?.taxId || undefined,
+    receiptFooter: shop.tenant?.receiptFooter || undefined,
     plan: (shop.tenant?.planCode as Tenant["plan"]) ?? "free",
     trialEndsAt: shop.tenant?.trialEndsAt ?? "",
     onboarding: {
@@ -205,6 +212,7 @@ export function mapShopBootstrap(shop: ShopApiResponse): ShopBootstrap {
     dayCutoff: b.day_cutoff.slice(0, 5),
     openingHours: b.opening_hours?.text || undefined,
     serviceChargeRate: b.service_charge_rate,
+    taxBranchNo: b.tax_branch_no,
     stockLocationId: b.stock_location_id ?? undefined,
     tables: b.tables.map((t) => ({ id: t.id, name: t.name, seats: t.seats, zone: t.area_name ?? "ทั่วไป" })),
   }));

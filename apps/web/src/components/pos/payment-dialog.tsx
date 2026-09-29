@@ -12,6 +12,7 @@ import { Callout } from "@/components/ui/primitives";
 import { useDsAction } from "@/hooks/use-data-source";
 import { cn } from "@/lib/cn";
 import { formatBaht } from "@/lib/demo/selectors";
+import { printReceipt } from "@/lib/print";
 import { useSabai } from "@/lib/demo/store";
 import type { Order, PaymentMethod } from "@/lib/demo/types";
 
@@ -105,7 +106,7 @@ export function PaymentDialog({ order, open, onClose, onPaid }: { order: Order |
               </p>
             )}
             <div className="mt-3 flex w-full flex-col gap-2 sm:flex-row">
-              <Button variant="secondary" size="lg" className="flex-1" icon={<Printer className="h-5 w-5" />} onClick={() => window.print()}>
+              <Button variant="secondary" size="lg" className="flex-1" icon={<Printer className="h-5 w-5" />} onClick={() => printReceipt(done.id)}>
                 พิมพ์ใบเสร็จ
               </Button>
               <Button size="lg" className="flex-1" autoFocus onClick={onClose}>

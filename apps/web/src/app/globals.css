@@ -395,7 +395,31 @@
   .status-dot { forced-color-adjust: none; border: 1px solid CanvasText; }
 }
 
+/* Paper. The receipt is drawn into #print-root (components/app/print-root.tsx), which is invisible on screen; when the
+   browser prints, everything except it is hidden, so the roll gets the receipt and never the till's screen. */
+#print-root { display: none; }
+.receipt { color: #000; background: #fff; font-family: "Noto Sans Thai", "Sarabun", system-ui, sans-serif; font-size: 12px; line-height: 1.35; padding: 2mm 3mm 4mm; box-sizing: border-box; }
+.receipt p, .receipt dl, .receipt dd, .receipt ul { margin: 0; padding: 0; }
+.receipt ul { list-style: none; }
+.receipt hr { border: 0; border-top: 1px dashed #000; margin: 5px 0; }
+.receipt-center { text-align: center; }
+.receipt-name { font-weight: 700; font-size: 14px; }
+.receipt-title { margin-top: 4px; font-weight: 700; }
+.receipt-banner { margin-top: 2px; font-weight: 700; border: 1px solid #000; padding: 1px 4px; display: inline-block; }
+.receipt-meta > div { display: flex; justify-content: space-between; gap: 6px; }
+.receipt-meta dt { flex: none; }
+.receipt-meta dd { text-align: right; }
+.receipt-row { display: flex; justify-content: space-between; align-items: flex-start; gap: 6px; }
+.receipt-row > span:first-child { min-width: 0; overflow-wrap: anywhere; }
+.receipt-num { flex: none; font-variant-numeric: tabular-nums; text-align: right; }
+.receipt-sub { padding-left: 10px; font-size: 11px; }
+.receipt-strong { font-weight: 700; font-size: 14px; margin-top: 2px; }
+.receipt-note { margin-top: 4px; font-size: 11px; text-align: center; }
+.receipt footer { margin-top: 6px; }
+
 @media print {
-  body { background: white; }
+  html, body { background: #fff !important; margin: 0 !important; padding: 0 !important; }
+  body > :not(#print-root) { display: none !important; }
+  #print-root { display: block; }
   .no-print { display: none !important; }
 }

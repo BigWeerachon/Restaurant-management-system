@@ -12,3 +12,4 @@ export * from "./kds";
 export * from "./promptpay";
 export * from "./business-date";
 export * from "./plans";
+export * from "./tax";

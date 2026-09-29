@@ -33,13 +33,13 @@ export function registerShop(app: Hono<Env>, deps: Deps) {
         membershipBranches,
         stockLocations,
       ] = await Promise.all([
-        t<{ id: string; name: string; business_type: string; vat_registered: boolean; prices_include_vat: boolean; vat_rate: string; cash_rounding: string; settings: unknown; plan_code: string | null; subscription_status: string | null; trial_ends_at: string | null }[]>`
-          select tn.id, tn.name, tn.business_type, tn.vat_registered, tn.prices_include_vat, tn.vat_rate, tn.cash_rounding, tn.settings,
+        t<{ id: string; name: string; business_type: string; vat_registered: boolean; prices_include_vat: boolean; vat_rate: string; cash_rounding: string; legal_name: string | null; tax_id: string | null; receipt_footer: string | null; settings: unknown; plan_code: string | null; subscription_status: string | null; trial_ends_at: string | null }[]>`
+          select tn.id, tn.name, tn.business_type, tn.vat_registered, tn.prices_include_vat, tn.vat_rate, tn.cash_rounding, tn.legal_name, tn.tax_id, tn.receipt_footer, tn.settings,
                  s.plan_code, s.status as subscription_status, s.trial_ends_at
             from app.tenants tn left join app.subscriptions s on s.tenant_id = tn.id
            where tn.id = ${tenantId}`,
-        t<{ id: string; code: string; name: string; address: string | null; phone: string | null; day_cutoff: string; opening_hours: unknown; service_charge_rate: string; is_active: boolean }[]>`
-          select id, code, name, address, phone, day_cutoff, opening_hours, service_charge_rate, is_active
+        t<{ id: string; code: string; name: string; address: string | null; phone: string | null; day_cutoff: string; opening_hours: unknown; service_charge_rate: string; tax_branch_no: string; is_active: boolean }[]>`
+          select id, code, name, address, phone, day_cutoff, opening_hours, service_charge_rate, tax_branch_no, is_active
             from app.branches where tenant_id = ${tenantId} and archived_at is null order by created_at`,
         t<{ id: string; branch_id: string; area_id: string | null; area_name: string | null; name: string; seats: number }[]>`
           select dt.id, dt.branch_id, dt.area_id, da.name as area_name, dt.name, dt.seats
@@ -107,6 +107,9 @@ export function registerShop(app: Hono<Env>, deps: Deps) {
               pricesIncludeVat: tenant.prices_include_vat,
               vatRate: num(tenant.vat_rate),
               cashRounding: tenant.cash_rounding,
+              legalName: tenant.legal_name,
+              taxId: tenant.tax_id,
+              receiptFooter: tenant.receipt_footer,
               settings: tenant.settings,
               planCode: tenant.plan_code,
               subscriptionStatus: tenant.subscription_status,
