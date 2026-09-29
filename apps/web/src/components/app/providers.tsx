@@ -7,6 +7,7 @@ import { TooltipProvider } from "@/components/ui/overlay";
 import { ApiBoot } from "./api-boot";
 import { ApprovalDialog } from "./approval-dialog";
 import { OfflineBridge } from "./offline-bridge";
+import { PrinterBridge } from "./printer-bridge";
 import { PrintRoot } from "./print-root";
 import { RealtimeBridge } from "./realtime-bridge";
 import { ServiceWorkerRegister } from "./service-worker-register";
@@ -22,6 +23,7 @@ export function Providers({ children }: { children: ReactNode }) {
         <OfflineBridge />
         <ServiceWorkerRegister />
         <PrintRoot />
+        <PrinterBridge />
         <ApprovalDialog />
         <SwitchUserDialog />
         <Toaster

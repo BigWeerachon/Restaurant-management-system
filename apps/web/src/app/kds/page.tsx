@@ -1,12 +1,13 @@
 "use client";
 
 import { allDayCounts, elapsedSeconds, formatElapsed, URGENCY_COPY, urgency, type Urgency } from "@sabai/domain";
-import { AlertTriangle, ArrowLeft, Bell, BellOff, Bike, Check, ChefHat, Clock, Flame, History, ShoppingBag, Trash2, Undo2, Utensils } from "lucide-react";
+import { AlertTriangle, ArrowLeft, Bell, BellOff, Bike, Check, ChefHat, Clock, Flame, History, Printer, ShoppingBag, Trash2, Undo2, Utensils } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Gate, RouteGuard } from "@/components/app/gate";
+import { printTicketSlip } from "@/components/app/printer-bridge";
 import { ConnectionBadge, ConnectionBanner, QueueBanner } from "@/components/app/connection-badge";
 import { LoadBanner } from "@/components/app/load-banner";
 import { Button } from "@/components/ui/button";
@@ -17,6 +18,7 @@ import { useDsAction, useLoad } from "@/hooks/use-data-source";
 import { useAccess, useNow, useUi } from "@/hooks/use-sabai";
 import { cn } from "@/lib/cn";
 import { useSabai } from "@/lib/demo/store";
+import { usePrinter } from "@/lib/escpos/printer";
 import type { Ticket } from "@/lib/demo/types";
 
 const CHANNEL_ICON = { dine_in: Utensils, takeaway: ShoppingBag, delivery_platform: Bike, own_delivery: Bike };
@@ -47,6 +49,7 @@ function TicketCard({ t, now, index, onBump, onStart, onToggle, isNew, showStati
   const CIcon = CHANNEL_ICON[t.channelKind] ?? Utensils;
   const active = t.items.filter((i) => i.status !== "voided");
   const doneCount = active.filter((i) => i.status === "done").length;
+  const canPrint = usePrinter((p) => p.status === "ready");
 
   return (
     <motion.article
@@ -117,13 +120,18 @@ function TicketCard({ t, now, index, onBump, onStart, onToggle, isNew, showStati
         })}
       </ul>
 
-      <footer className="border-t border-line p-3">
+      <footer className="flex gap-2 border-t border-line p-3">
+        {canPrint && (
+          <Button size="icon-lg" variant="secondary" className="shrink-0" icon={<Printer className="h-5 w-5" />} onClick={() => void printTicketSlip(t)}>
+            <span className="sr-only">พิมพ์ใบครัว</span>
+          </Button>
+        )}
         {t.status === "new" ? (
-          <Button size="xl" variant="secondary" block onClick={onStart} icon={<ChefHat className="h-5 w-5" />}>
+          <Button size="xl" variant="secondary" className="min-w-0 flex-1 px-4" onClick={onStart} icon={<ChefHat className="h-5 w-5" />}>
             เริ่มทำ
           </Button>
         ) : (
-          <Button size="xl" block onClick={onBump} icon={<Check className="h-6 w-6" />}>
+          <Button size="xl" className="min-w-0 flex-1 px-4" onClick={onBump} icon={<Check className="h-6 w-6" />}>
             เสร็จแล้ว {active.length > 1 && <span className="text-base font-normal opacity-80">({doneCount}/{active.length})</span>}
           </Button>
         )}

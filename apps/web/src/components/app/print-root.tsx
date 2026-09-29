@@ -4,6 +4,7 @@ import { useEffect, useMemo } from "react";
 import { createPortal } from "react-dom";
 import { toast } from "sonner";
 import { ReceiptView } from "@/components/pos/receipt-view";
+import { directReady, printReceiptDirect } from "@/lib/escpos/printer";
 import { getPaperWidth, usePrintJob } from "@/lib/print";
 import { buildReceipt, buildSampleReceipt } from "@/lib/receipt";
 import { useSabai } from "@/lib/demo/store";
@@ -40,18 +41,31 @@ export function PrintRoot() {
     style.id = "receipt-page-size";
     style.textContent = `@page { size: ${widthMm}mm auto; margin: 0; }`;
     document.head.appendChild(style);
-    // Two frames: the receipt must be laid out before the print dialog takes its picture.
     let cancelled = false;
-    requestAnimationFrame(() =>
-      requestAnimationFrame(() => {
-        if (cancelled) return;
-        try {
-          window.print();
-        } finally {
+    const openDialog = () =>
+      // Two frames: the receipt must be laid out before the print dialog takes its picture.
+      requestAnimationFrame(() =>
+        requestAnimationFrame(() => {
+          if (cancelled) return;
+          try {
+            window.print();
+          } finally {
+            done();
+          }
+        }),
+      );
+    if (directReady()) {
+      // The till's own printer: no dialog. If it fails the receipt is still on the page, so the dialog takes over.
+      printReceiptDirect(data, { widthMm })
+        .then(() => {
+          toast.success(job.kind === "sample" ? "ส่งใบทดลองไปเครื่องพิมพ์แล้ว" : "ส่งใบเสร็จไปเครื่องพิมพ์แล้ว");
           done();
-        }
-      }),
-    );
+        })
+        .catch(() => {
+          toast.error("เครื่องพิมพ์ไม่ตอบ ใช้หน้าต่างพิมพ์แทน", { description: "ตรวจสายและกระดาษ แล้วเชื่อมต่อเครื่องพิมพ์ใหม่ในหน้า ตั้งค่า → ใบเสร็จและเครื่องพิมพ์" });
+          openDialog();
+        });
+    } else openDialog();
     return () => {
       cancelled = true;
       style.remove();

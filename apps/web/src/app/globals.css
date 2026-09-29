@@ -398,7 +398,7 @@
 /* Paper. The receipt is drawn into #print-root (components/app/print-root.tsx), which is invisible on screen; when the
    browser prints, everything except it is hidden, so the roll gets the receipt and never the till's screen. */
 #print-root { display: none; }
-.receipt { color: #000; background: #fff; font-family: "Noto Sans Thai", "Sarabun", system-ui, sans-serif; font-size: 12px; line-height: 1.35; padding: 2mm 3mm 4mm; box-sizing: border-box; }
+.receipt { color: #000; background: #fff; font-family: "IBM Plex Sans Thai", "Noto Sans Thai", "Sarabun", system-ui, sans-serif; font-size: 12px; line-height: 1.35; padding: 2mm 3mm 4mm; box-sizing: border-box; }
 .receipt p, .receipt dl, .receipt dd, .receipt ul { margin: 0; padding: 0; }
 .receipt ul { list-style: none; }
 .receipt hr { border: 0; border-top: 1px dashed #000; margin: 5px 0; }
