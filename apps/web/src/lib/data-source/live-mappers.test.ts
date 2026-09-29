@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { orderApi, ticketApi } from "./fixtures";
-import { emptyReportSummary, mapBalances, mapBill, mapClosedShift, mapCount, mapCurrentShift, mapDayClose, mapExpected, mapExpense, mapMovement, mapOrder, mapPurchaseOrder, mapReportSummary, mapStatementLine, mapTicket, mapTodayStats, type ReportSummaryApi } from "./live-mappers";
+import { describeActivity, emptyReportSummary, mapBalances, mapActivity, mapBill, mapClosedShift, mapCount, mapCurrentShift, mapDayClose, mapExpected, mapExpense, mapMovement, mapOrder, mapPurchaseOrder, mapReportSummary, mapStatementLine, mapTicket, mapTodayStats, type ReportSummaryApi } from "./live-mappers";
 
 const menu = [{ id: "mi-latte", emoji: "🥤" }];
 
@@ -305,5 +305,53 @@ describe("mapTodayStats", () => {
       spark: [10000, 0, 123450],
       open: 2,
     });
+  });
+});
+
+describe("the activity feed", () => {
+  const ev = (type: string, payload: Record<string, unknown>, over: Record<string, unknown> = {}) => ({
+    id: `ev-${type}`,
+    type,
+    occurred_at: "2026-09-29T03:00:00.000Z",
+    payload,
+    branch_id: "br-1",
+    actor_id: "m-1",
+    entity_type: "order",
+    entity_id: "ent-1",
+    actor: "คุณปิยะ",
+    ...over,
+  });
+  const noName = () => undefined;
+
+  it("says what someone did to an order in words, marking the ones an owner should look at", () => {
+    expect(describeActivity(ev("order.discounted", { type: "percent", value: 50, reason: "ลูกค้าประจำ" }), noName)).toEqual({ text: "คุณปิยะ ให้ส่วนลด 50% (ลูกค้าประจำ)", tone: "warn" });
+    expect(describeActivity(ev("order.discounted", { type: "amount", value: 20, reason: null }), noName)).toEqual({ text: "คุณปิยะ ให้ส่วนลด ฿20", tone: "warn" });
+    expect(describeActivity(ev("order.voided", { reason: "ลูกค้ายกเลิก" }), noName)).toEqual({ text: "คุณปิยะ ยกเลิกบิล (ลูกค้ายกเลิก)", tone: "bad" });
+    expect(describeActivity(ev("order.refunded", { amount: 45, reason: "เมนูผิด" }), noName)).toEqual({ text: "คุณปิยะ คืนเงิน ฿45 (เมนูผิด)", tone: "bad" });
+    // A line taken off before it went to the kitchen is less serious than one already sent.
+    expect(describeActivity(ev("order.item_voided", { name: "ลาเต้", reason: "สั่งผิด", was_sent: false }), noName)!.tone).toBe("warn");
+    expect(describeActivity(ev("order.item_voided", { name: "ลาเต้", reason: "สั่งผิด", was_sent: true }), noName)!.tone).toBe("bad");
+  });
+
+  it("describes shifts, stock, day closing and orders to suppliers", () => {
+    expect(describeActivity(ev("shift.closed", { variance: -20 }), noName)).toEqual({ text: "คุณปิยะ ปิดกะ เงินสดขาด ฿20", tone: "warn" });
+    expect(describeActivity(ev("shift.closed", { variance: 0 }), noName)!.text).toBe("คุณปิยะ ปิดกะ เงินสดตรงพอดี");
+    expect(describeActivity(ev("inventory.waste_recorded", { qty: 500, reason: "expired" }, { entity_id: "ing-1" }), (id) => (id === "ing-1" ? "หมูสับ" : undefined))!.text).toBe("คุณปิยะ บันทึกของเสีย “หมูสับ” (หมดอายุ)");
+    expect(describeActivity(ev("finance.day_closed", { business_date: "2026-09-28", total: 1234.5, orders: 12 }), noName)).toEqual({ text: "คุณปิยะ ปิดยอดวันที่ 2026-09-28 ยอดขาย ฿1,234.5 (12 บิล)", tone: "good" });
+    expect(describeActivity(ev("purchasing.po_approved", { po_no: "PO2609-0001" }), noName)!.text).toBe("คุณปิยะ อนุมัติใบสั่งซื้อ PO2609-0001");
+    expect(describeActivity(ev("purchasing.po_sent", { po_no: "PO2609-0001" }), noName)!.text).toBe("คุณปิยะ ส่งให้ผู้ขายใบสั่งซื้อ PO2609-0001");
+  });
+
+  it("attributes what the system did to 'ระบบ', and names an ingredient's price rise so other screens can act on it", () => {
+    const d = describeActivity(ev("inventory.price_increased", { name: "นมสด", old_cost: 0.045, new_cost: 0.05, change_pct: 11.1 }, { actor: null, entity_id: "ing-milk", entity_type: "ingredient" }), noName)!;
+    expect(d).toEqual({ text: "ราคา “นมสด” ขึ้น 11.1% จากครั้งก่อน", tone: "warn", data: { ingredientId: "ing-milk", pct: 11.1 } });
+    expect(describeActivity(ev("shift.opened", { opening_float: 1000 }, { actor: null }), noName)!.text).toBe("ระบบ เปิดกะ เงินทอนตั้งต้น ฿1,000");
+  });
+
+  it("leaves out routine events, and keeps the rest in order with who and where", () => {
+    const rows = [ev("order.opened", { order_no: "001" }), ev("kitchen.ticket_fired", {}), ev("order.voided", { reason: "x" }, { id: "keep", actor_id: null, branch_id: null }), ev("kitchen.item_toggled", {})];
+    const feed = mapActivity(rows, noName);
+    expect(feed.map((e) => e.id)).toEqual(["keep"]);
+    expect(feed[0]).toMatchObject({ type: "order.voided", actorId: undefined, branchId: undefined, at: "2026-09-29T03:00:00.000Z" });
   });
 });

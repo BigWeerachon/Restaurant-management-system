@@ -3,9 +3,9 @@
  * availability, ...). Same rules as `mappers.ts`: money becomes satang, ids stay
  * as they are, snake_case becomes camelCase. Per-unit costs stay in baht.
  */
-import { addDays, profitWaterfall, toSatang, type MenuClass } from "@sabai/domain";
+import { addDays, profitWaterfall, toSatang, WASTE_REASONS, type MenuClass } from "@sabai/domain";
 import type { ReportFilter, ReportSummary, TodayStats } from "./types";
-import type { Bill, DayClose, ExpectedReceipt, Expense, MenuItem, Movement, Order, PurchaseOrder, Shift, StatementLine, StockCount, Ticket } from "../demo/types";
+import type { ActivityEvent, Bill, DayClose, ExpectedReceipt, Expense, MenuItem, Movement, Order, PurchaseOrder, Shift, StatementLine, StockCount, Ticket } from "../demo/types";
 
 // ---------------------------------------------------------------------------
 // Orders — GET /v1/orders?detail=full and GET /v1/orders/{id}
@@ -560,4 +560,84 @@ export function mapTodayStats(t: TodayStatsApi): TodayStats {
     spark: t.spark.map(toSatang),
     open: t.open,
   };
+}
+
+// ---------------------------------------------------------------------------
+// Activity feed — GET /v1/activity
+// ---------------------------------------------------------------------------
+export interface ActivityApi {
+  id: string;
+  type: string;
+  occurred_at: string;
+  payload: Record<string, unknown>;
+  branch_id: string | null;
+  actor_id: string | null;
+  entity_type: string;
+  entity_id: string;
+  /** The actor's display name. */
+  actor: string | null;
+}
+
+const baht0 = (v: unknown) => `฿${Number(v ?? 0).toLocaleString("th-TH", { maximumFractionDigits: 2 })}`;
+const str = (v: unknown) => (typeof v === "string" ? v : "");
+const inParens = (v: unknown) => (str(v) ? ` (${str(v)})` : "");
+const wasteReason = (code: unknown) => WASTE_REASONS.find((r) => r.code === code)?.th ?? str(code);
+const PO_VERB: Record<string, string> = { submitted: "ส่งขออนุมัติ", approved: "อนุมัติ", sent: "ส่งให้ผู้ขาย", cancelled: "ยกเลิก" };
+
+/**
+ * The events an owner wants to read about, in words. Routine ones (an order opened, a ticket started) are left out,
+ * like the demo's feed, which only records what someone might have to answer for. `null` means "not for the feed".
+ */
+export function describeActivity(a: ActivityApi, ingredientName: (id: string) => string | undefined): Pick<ActivityEvent, "text" | "tone" | "data"> | null {
+  const who = a.actor ?? "ระบบ";
+  const p = a.payload ?? {};
+  switch (a.type) {
+    case "shift.opened":
+      return { text: `${who} เปิดกะ เงินทอนตั้งต้น ${baht0(p.opening_float)}`, tone: "neutral" };
+    case "shift.closed": {
+      const variance = Number(p.variance ?? 0);
+      return { text: `${who} ปิดกะ ${variance === 0 ? "เงินสดตรงพอดี" : variance < 0 ? `เงินสดขาด ${baht0(-variance)}` : `เงินสดเกิน ${baht0(variance)}`}`, tone: variance < 0 ? "warn" : "neutral" };
+    }
+    case "order.discounted":
+      return { text: `${who} ให้ส่วนลด ${p.type === "percent" ? `${p.value}%` : baht0(p.value)}${inParens(p.reason)}`, tone: "warn" };
+    case "order.item_voided":
+      return { text: `${who} ยกเลิกรายการ “${str(p.name)}”${inParens(p.reason)}`, tone: p.was_sent ? "bad" : "warn" };
+    case "order.voided":
+      return { text: `${who} ยกเลิกบิล${inParens(p.reason)}`, tone: "bad" };
+    case "order.refunded":
+      return { text: `${who} คืนเงิน ${baht0(p.amount)}${inParens(p.reason)}`, tone: "bad" };
+    case "inventory.goods_received":
+      return { text: `${who} รับของ ${str(p.gr_no)} ${baht0(p.total)}`, tone: "neutral" };
+    case "inventory.waste_recorded": {
+      const name = ingredientName(a.entity_id);
+      return { text: `${who} บันทึกของเสีย${name ? ` “${name}”` : ""} (${wasteReason(p.reason)})`, tone: "warn" };
+    }
+    case "inventory.price_increased":
+      return { text: `ราคา “${str(p.name)}” ขึ้น ${p.change_pct}% จากครั้งก่อน`, tone: "warn", data: { ingredientId: a.entity_id, pct: Number(p.change_pct ?? 0) } };
+    case "inventory.count_submitted":
+      return { text: `${who} ส่งผลนับสต็อก`, tone: "neutral" };
+    case "inventory.count_approved":
+      return { text: `${who} อนุมัติผลนับสต็อก ปรับยอด ${p.adjusted_lines} รายการ`, tone: "warn" };
+    case "finance.day_closed":
+      return { text: `${who} ปิดยอดวันที่ ${str(p.business_date)} ยอดขาย ${baht0(p.total)} (${p.orders} บิล)`, tone: "good" };
+    case "finance.day_reopened":
+      return { text: `${who} เปิดวันที่ ${str(p.business_date)} เพื่อแก้ไข${inParens(p.reason)}`, tone: "warn" };
+    case "branch.created":
+      return { text: `${who} เปิดสาขา “${str(p.name)}”`, tone: "good" };
+    default: {
+      const po = /^purchasing\.po_(\w+)$/.exec(a.type);
+      if (po) return { text: `${who} ${PO_VERB[po[1]!] ?? po[1]}ใบสั่งซื้อ ${str(p.po_no)}`, tone: "neutral" };
+      return null;
+    }
+  }
+}
+
+export function mapActivity(rows: ActivityApi[], ingredientName: (id: string) => string | undefined): ActivityEvent[] {
+  const out: ActivityEvent[] = [];
+  for (const a of rows) {
+    const d = describeActivity(a, ingredientName);
+    if (!d) continue;
+    out.push({ id: a.id, at: a.occurred_at, type: a.type, actorId: a.actor_id ?? undefined, branchId: a.branch_id ?? undefined, ...d });
+  }
+  return out;
 }

@@ -4,17 +4,22 @@ import { formatThaiDate, percentChange, quickActionsFor, urgency, elapsedSeconds
 import { ArrowRight, BellRing, ChefHat, CircleAlert, Flame, PartyPopper, TrendingDown, TrendingUp } from "lucide-react";
 import { motion } from "motion/react";
 import Link from "next/link";
+import { LoadBanner } from "@/components/app/load-banner";
 import { PageHeader } from "@/components/app/page-header";
 import { Sparkline } from "@/components/charts/sparkline";
 import { LinkButton } from "@/components/ui/button";
 import { AnimatedNumber, EmptyState, ProgressRing } from "@/components/ui/feedback";
 import { Icon } from "@/components/ui/icon";
 import { Avatar, Badge, Card, CardHeader } from "@/components/ui/primitives";
-import { useAccess, useBusinessDate, useHistory, useNow } from "@/hooks/use-sabai";
+import { useLoad, useTodayStats } from "@/hooks/use-data-source";
+import { useAccess, useBusinessDate, useNow } from "@/hooks/use-sabai";
 import { cn } from "@/lib/cn";
 import { actorName } from "@/lib/demo/engine";
-import { alerts, formatBaht, onboarding, todayStats } from "@/lib/demo/selectors";
+import { alerts, formatBaht, onboarding } from "@/lib/demo/selectors";
 import { useSabai } from "@/lib/demo/store";
+
+/** What the tiles hold until the first answer arrives (they show a dash, not these zeros). */
+const EMPTY_STATS = { today: "", sales: 0, orders: 0, avgTicket: 0, keep: 0, keepPct: 0, lastWeekSales: 0, lastWeekOrders: 0, spark: [] as number[], open: 0 };
 
 function greeting(h: number) {
   if (h < 11) return "สวัสดีตอนเช้า";
@@ -38,11 +43,15 @@ function Delta({ current, previous, label }: { current: number; previous: number
 
 export default function TodayPage() {
   const db = useSabai((s) => s.db);
-  const history = useHistory();
   const { member, branch, can, access } = useAccess();
   const now = useNow(30_000);
   const date = useBusinessDate();
-  const stats = todayStats(db, history, branch.id, now);
+  // The alerts below are worked out from what the shop holds, so the home page asks for everything they read
+  // (the loader skips whatever this person may not see).
+  const load = useLoad(["orders", "tickets", "stock", "purchasing", "finance", "reports"]);
+  const query = useTodayStats(branch.id, now);
+  const stats = query.data ?? EMPTY_STATS;
+  const ready = !!query.data;
   const todo = alerts(db, branch.id, date, now);
   const setup = onboarding(db);
   const tickets = db.tickets.filter((t) => t.branchId === branch.id && (t.status === "new" || t.status === "in_progress"));
@@ -52,7 +61,7 @@ export default function TodayPage() {
   });
   const actions = quickActionsFor(access);
   const feed = db.activity.filter((a) => !a.branchId || a.branchId === branch.id).slice(0, 7);
-  const noSales = stats.orders === 0 && db.mode === "fresh";
+  const noSales = ready && stats.orders === 0 && db.mode === "fresh";
 
   return (
     <>
@@ -90,32 +99,34 @@ export default function TodayPage() {
         </motion.div>
       )}
 
+      <LoadBanner state={{ loading: load.loading || query.loading, error: load.error ?? query.error, reload: async () => { await Promise.all([load.reload(), query.reload()]); } }} className="mb-4" />
+
       {/* KPI tiles */}
       <section aria-label="ตัวเลขวันนี้" className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         {[
           {
             label: "ยอดขายวันนี้",
-            value: <AnimatedNumber value={stats.sales} format={(v) => formatBaht(v, { compact: true })} />,
+            value: ready ? <AnimatedNumber value={stats.sales} format={(v) => formatBaht(v, { compact: true })} /> : "—",
             foot: <Delta current={stats.sales} previous={stats.lastWeekSales} label="เทียบสัปดาห์ก่อน ณ เวลานี้" />,
             chart: stats.spark.length > 2 ? <Sparkline values={stats.spark} label="ยอดขาย 14 วันล่าสุด" /> : null,
           },
           {
             label: "จำนวนบิล",
-            value: <AnimatedNumber value={stats.orders} format={(v) => v.toLocaleString("th-TH")} />,
+            value: ready ? <AnimatedNumber value={stats.orders} format={(v) => v.toLocaleString("th-TH")} /> : "—",
             foot: <span className="text-xs text-ink-3">เฉลี่ย {formatBaht(stats.avgTicket, { compact: true })} ต่อบิล</span>,
           },
           ...(can("reports.profit")
             ? [
                 {
                   label: "เหลือจริงจากการขายวันนี้",
-                  value: <AnimatedNumber value={stats.keep} format={(v) => formatBaht(v, { compact: true })} />,
+                  value: ready ? <AnimatedNumber value={stats.keep} format={(v) => formatBaht(v, { compact: true })} /> : "—",
                   foot: <span className="text-xs text-ink-3">หลังหักต้นทุนวัตถุดิบ ค่า GP ค่าธรรมเนียม · {(stats.keepPct * 100).toFixed(0)}% ของยอดขาย</span>,
                 },
               ]
             : []),
           {
             label: "บิลที่ยังเปิดอยู่",
-            value: <AnimatedNumber value={stats.open} format={(v) => v.toLocaleString("th-TH")} />,
+            value: ready ? <AnimatedNumber value={stats.open} format={(v) => v.toLocaleString("th-TH")} /> : "—",
             foot: <Link href="/orders?status=open" className="text-xs font-medium text-brand hover:underline">ดูบิลที่เปิดอยู่ →</Link>,
           },
         ].map((k, i) => (

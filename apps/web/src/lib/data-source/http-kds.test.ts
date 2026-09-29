@@ -69,6 +69,20 @@ describe("HttpDataSource kitchen commands", () => {
     await expect(ds.toggleTicketItem("kt-1", "no-such-line")).rejects.toMatchObject({ code: "NOT_FOUND" });
   });
 
+  it("loads what a screen asks for without failing over the part this person may not read", async () => {
+    fakeApi({
+      "GET /v1/kds/tickets": { status: 403, body: { error: { code: "PERMISSION_DENIED" } } },
+      "GET /v1/orders": { body: [orderApi({ id: "o-88", branchId })] },
+    });
+    await expect(ds.load(["orders", "tickets"])).resolves.toBeUndefined();
+    expect(useSabai.getState().db.orders.some((o) => o.id === "o-88")).toBe(true);
+  });
+
+  it("still fails a load for any other reason", async () => {
+    fakeApi({ "GET /v1/kds/tickets": { status: 500, body: { error: { code: "INTERNAL" } } }, "GET /v1/orders": { body: [] } });
+    await expect(ds.load(["orders", "tickets"])).rejects.toMatchObject({ code: "INTERNAL" });
+  });
+
   it("still refreshes the other slices when one of them cannot be read by this person", async () => {
     const calls = fakeApi({
       "POST /v1/kds/tickets/kt-1/status": { body: {} },

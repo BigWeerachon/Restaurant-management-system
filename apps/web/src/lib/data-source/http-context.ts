@@ -12,6 +12,7 @@ import type { DemoState } from "../demo/types";
 import { apiFetch } from "./http-client";
 import {
   mapBalances,
+  mapActivity,
   mapBill,
   mapClosedShift,
   mapCount,
@@ -25,6 +26,7 @@ import {
   mapStatementLine,
   mapTicket,
   type CountDetailApi,
+  type ActivityApi,
   type BillApi,
   type CountRowApi,
   type CurrentShiftApi,
@@ -171,6 +173,16 @@ const loaders: Partial<Record<Exclude<Slice, "bootstrap">, (branchId: string) =>
     };
   },
 
+  // What has been happening in the shop, newest first: the feed on the home page and the price-rise warnings.
+  async reports() {
+    const rows = await apiFetch<ActivityApi[]>("/v1/activity", { query: { limit: 100 } });
+    return (d) => {
+      const name = (id: string) => d.ingredients.find((i) => i.id === id)?.name;
+      // The feed is the shop's, not one branch's: the page picks out this branch's own events.
+      d.activity = mapActivity(rows, name);
+    };
+  },
+
   // Which menu items this branch has marked sold out.
   async availability(branchId) {
     const catalog = await apiFetch<{ items: { id: string; sold_out: boolean }[] }>("/v1/catalog", { query: { branchId } });
@@ -183,18 +195,22 @@ const loaders: Partial<Record<Exclude<Slice, "bootstrap">, (branchId: string) =>
   },
 };
 
-/** Loads slices other than "bootstrap"; a slice with no loader yet is an error rather than a silent no-op. */
+/**
+ * Loads slices other than "bootstrap"; a slice with no loader yet is an error rather than a silent no-op.
+ * A slice this person is not allowed to read is left as it was: a screen shows what its viewer may see
+ * (the home page asks for the kitchen, the bills and the stock, and not everyone may read all three).
+ */
 export async function loadSlices(slices: Slice[]): Promise<void> {
   const branchId = currentBranchId();
   const patches = await Promise.all(
     slices.map((slice) => {
       const loader = slice === "bootstrap" ? undefined : loaders[slice];
       if (!loader) throw new DomainError("INTERNAL", { feature: `load(${slice})` });
-      return loader(branchId);
+      return allowed(loader(branchId));
     }),
   );
   useSabai.getState().patch((d) => {
-    for (const patch of patches) patch(d);
+    for (const patch of patches) patch?.(d);
   });
 }
 

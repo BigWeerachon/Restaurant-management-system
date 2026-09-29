@@ -743,6 +743,8 @@ describe("closing the day and reading the numbers", () => {
     const types = r.json.map((e: any) => e.type);
     expect(types).toContain("order.paid");
     // Who did it and what it was about, so the screen can say "คุณปิยะ ..." and link a price rise to its ingredient.
+    // Shifts and other actions that never passed an actor still say who did them.
+    expect(r.json.find((e: any) => e.type === "shift.opened")).toEqual(expect.objectContaining({ actor: expect.any(String), actor_id: expect.any(String) }));
     expect(r.json.find((e: any) => e.type === "order.paid")).toEqual(expect.objectContaining({ actor: expect.any(String), actor_id: expect.any(String), entity_type: "order", entity_id: expect.any(String) }));
     expect(types).toContain("order.discounted");
     expect(types).toContain("finance.day_closed");

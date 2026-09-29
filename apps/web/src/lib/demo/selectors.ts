@@ -280,7 +280,13 @@ export function alerts(state: DemoState, branchId: string, today: string, now = 
   const dueSoon = state.bills.filter((b) => b.status !== "paid" && b.dueDate >= today && b.dueDate <= addDays(today, 3));
   if (overdue.length) out.push({ id: "bills-overdue", tone: "bad", title: `บิลเลยกำหนดจ่าย ${overdue.length} ใบ`, detail: `รวม ฿${(overdue.reduce((s, b) => s + b.total - b.paid, 0) / 100).toLocaleString("th-TH")}`, href: "/finance?tab=bills", cta: "จ่ายบิล" });
   if (dueSoon.length) out.push({ id: "bills-soon", tone: "info", title: `บิลครบกำหนดใน 3 วัน ${dueSoon.length} ใบ`, detail: dueSoon.map((b) => state.suppliers.find((s) => s.id === b.supplierId)?.name).join(", "), href: "/finance?tab=bills", cta: "ดูบิล" });
-  const recentAlerts = state.receipts.filter((r) => r.branchId === branchId && r.at >= addDays(today, -2)).flatMap((r) => r.priceAlerts);
+  const recentAlerts: { ingredientId: string; pct: number }[] = state.receipts.filter((r) => r.branchId === branchId && r.at >= addDays(today, -2)).flatMap((r) => r.priceAlerts);
+  // Shops on the API do not carry receipts on the page; the same warning comes from the price-rise events instead.
+  for (const e of state.activity) {
+    const { ingredientId, pct } = e.data ?? {};
+    if (e.type !== "inventory.price_increased" || !ingredientId || pct === undefined || (e.branchId && e.branchId !== branchId) || e.at < addDays(today, -2)) continue;
+    if (!recentAlerts.some((r) => r.ingredientId === ingredientId)) recentAlerts.push({ ingredientId, pct });
+  }
   for (const a of recentAlerts.slice(0, 2)) {
     const ing = state.ingredients.find((i) => i.id === a.ingredientId);
     out.push({ id: `price-${a.ingredientId}`, tone: "warn", title: `ราคา${ing?.name}ขึ้น ${a.pct}%`, detail: "ต้นทุนเมนูที่ใช้วัตถุดิบนี้เปลี่ยนแล้ว ลองดูว่าควรปรับราคาไหม", href: "/menu?sort=cost", cta: "ดูผลกระทบ" });

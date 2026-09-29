@@ -397,6 +397,8 @@ export interface ActivityEvent {
   branchId?: ID;
   text: string;
   tone?: "neutral" | "good" | "warn" | "bad";
+  /** What the event was about, for events that other screens act on (a price rise names its ingredient). */
+  data?: { ingredientId?: string; pct?: number };
 }
 
 export interface DemoState {
