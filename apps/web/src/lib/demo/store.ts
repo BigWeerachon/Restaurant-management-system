@@ -10,6 +10,7 @@ import { current, isDraft, produce } from "immer";
 import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
 import { businessDate } from "@sabai/domain";
+import { dataSourceMode } from "../data-source/config";
 import { DomainError, type Ctx } from "./engine";
 import { generateHistory, type History } from "./history";
 import { seedLive } from "./live-seed";
@@ -51,6 +52,9 @@ interface SabaiStore {
 }
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+// API mode keeps its own cache: the demo's daily rebuild must never overwrite a real shop's data, and vice versa.
+const apiMode = dataSourceMode() === "api";
 
 export const useSabai = create<SabaiStore>()(
   persist(
@@ -103,13 +107,19 @@ export const useSabai = create<SabaiStore>()(
       },
     }),
     {
-      name: "sabai-demo",
+      name: apiMode ? "sabai-api-cache" : "sabai-demo",
       version: DEMO_VERSION,
       storage: createJSONStorage(() => localStorage),
       partialize: (s) => ({ db: s.db, session: s.session }),
-      migrate: () => ({ db: build("demo"), session: { memberId: null, branchId: null } }) as never,
+      migrate: () => ({ db: apiMode ? { ...freshState("1970-01-01"), seededFor: "" } : build("demo"), session: { memberId: null, branchId: null } }) as never,
       onRehydrateStorage: () => (state) => {
         if (!state) return;
+        if (apiMode) {
+          // The shop is reloaded from the API by <ApiBoot />; the cache only makes the first paint instant.
+          state.hydrated = true;
+          useSabai.setState({ hydrated: true, db: state.db, session: state.session });
+          return;
+        }
         // A new calendar day starts a fresh, lively demo (same mode).
         if (!state.db.seededFor) {
           state.db = build("demo");

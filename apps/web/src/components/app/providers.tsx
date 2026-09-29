@@ -4,6 +4,7 @@ import { MotionConfig } from "motion/react";
 import type { ReactNode } from "react";
 import { Toaster } from "sonner";
 import { TooltipProvider } from "@/components/ui/overlay";
+import { ApiBoot } from "./api-boot";
 import { ApprovalDialog } from "./approval-dialog";
 import { SwitchUserDialog } from "./switch-user-dialog";
 
@@ -12,6 +13,7 @@ export function Providers({ children }: { children: ReactNode }) {
     <MotionConfig reducedMotion="user">
       <TooltipProvider delayDuration={250}>
         {children}
+        <ApiBoot />
         <ApprovalDialog />
         <SwitchUserDialog />
         <Toaster

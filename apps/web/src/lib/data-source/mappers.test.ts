@@ -194,9 +194,47 @@ describe("mapShopBootstrap", () => {
 });
 
 describe("guessEmoji", () => {
-  it("picks an emoji from the name, falling back for anything it does not recognise", () => {
-    expect(guessEmoji("ข้าวสวย")).toBe("🍚");
-    expect(guessEmoji("อเมริกาโน่เย็น")).toBe("☕");
+  it("picks a fitting emoji for every item and category on the sample menu", () => {
+    const expected: Record<string, string> = {
+      // categories
+      กาแฟ: "☕",
+      "ชา นม โกโก้": "🧋",
+      อาหารจานเดียว: "🍛",
+      ขนมและเบเกอรี่: "🥐",
+      // dishes
+      ข้าวกะเพราหมูสับ: "🍛",
+      ข้าวกะเพราไก่: "🍛",
+      ข้าวผัดกุ้ง: "🍛",
+      ข้าวผัดไก่: "🍛",
+      ข้าวไข่เจียว: "🍛",
+      ผัดซีอิ๊วหมู: "🍜",
+      // drinks
+      คาปูชิโน่ร้อน: "☕",
+      ลาเต้เย็น: "☕",
+      อเมริกาโน่เย็น: "☕",
+      เอสเพรสโซ่: "☕",
+      ชาไทยเย็น: "🧋",
+      มอคค่าเย็น: "🧋",
+      มัทฉะลาเต้: "🥤",
+      โกโก้เย็น: "🥤",
+      // bakery
+      ครัวซองต์เนยสด: "🥐",
+      ฮันนี่โทสต์: "🍞",
+      เค้กช็อกโกแลต: "🍰",
+    };
+    for (const [name, emoji] of Object.entries(expected)) expect(guessEmoji(name), name).toBe(emoji);
+  });
+
+  it("tells raw ingredients apart from the dishes they share words with", () => {
+    expect(guessEmoji("ไข่ไก่")).toBe("🥚");
+    expect(guessEmoji("อกไก่")).toBe("🍗");
+    expect(guessEmoji("ข้าวหอมมะลิ")).toBe("🍚");
+    expect(guessEmoji("นมสด")).toBe("🥛");
+    expect(guessEmoji("ซีอิ๊วขาว", "🥘")).toBe("🥘");
+    expect(guessEmoji("ใบกะเพรา")).toBe("🌿");
+  });
+
+  it("falls back for anything it does not recognise", () => {
     expect(guessEmoji("อะไรก็ไม่รู้")).toBe("🍽️");
     expect(guessEmoji("อะไรก็ไม่รู้", "🥘")).toBe("🥘");
   });

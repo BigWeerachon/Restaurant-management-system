@@ -1,0 +1,130 @@
+/**
+ * The API adapter (ADR-0009). Session and shop loading are real; every other
+ * command is filled in alongside the page that uses it (checklist phase 4) and
+ * until then fails loudly with `INTERNAL` rather than quietly changing only the
+ * local copy of the shop.
+ */
+import { DomainError } from "../demo/engine";
+import { useSabai } from "../demo/store";
+import type { Member } from "../demo/types";
+import { apiFetch, clearApiSession, setApiSession } from "./http-client";
+import { mapShopBootstrap, type ShopApiResponse } from "./mappers";
+import type { DataSource, Slice } from "./types";
+
+/**
+ * Fetches `GET /v1/shop` into the shared store. `reset` starts from an empty
+ * shop first (and signs everyone out) — used when connecting; a plain refresh
+ * keeps the signed-in person and whatever live data has been loaded.
+ */
+export async function loadShop(opts: { reset: boolean }): Promise<void> {
+  const boot = mapShopBootstrap(await apiFetch<ShopApiResponse>("/v1/shop"));
+  const store = useSabai.getState();
+  if (opts.reset) store.reset("fresh", boot.tenant.name);
+  useSabai.getState().patch((d) => {
+    Object.assign(d, boot);
+  });
+}
+
+interface PinSwitchResponse {
+  token: string;
+  expiresAt: string;
+  membership: { id: string; displayName: string; role: string; home: string };
+}
+
+const implemented = {
+  async load(slices: Slice[]) {
+    const unsupported = slices.filter((s) => s !== "bootstrap");
+    if (unsupported.length) throw new DomainError("INTERNAL", { feature: `load(${unsupported.join(", ")})` });
+    if (slices.length) await loadShop({ reset: false });
+  },
+
+  async signIn(memberId: string, branchId?: string) {
+    // Signing in as a member needs a token for that member, which only a PIN gives (pinSwitch).
+    void memberId;
+    void branchId;
+    throw new DomainError("AUTH_REQUIRED");
+  },
+
+  async signOut() {
+    clearApiSession();
+    useSabai.getState().signOut();
+  },
+
+  async setBranch(branchId: string) {
+    useSabai.getState().setBranch(branchId);
+  },
+
+  async pinSwitch(branchId: string, pin: string): Promise<Member> {
+    const r = await apiFetch<PinSwitchResponse>("/v1/auth/pin", { method: "POST", body: { branchId, pin }, tenant: false });
+    setApiSession({ token: r.token });
+    let member = useSabai.getState().db.members.find((m) => m.id === r.membership.id);
+    if (!member) {
+      // Added on another device since this one last loaded the shop.
+      await loadShop({ reset: false });
+      member = useSabai.getState().db.members.find((m) => m.id === r.membership.id);
+    }
+    if (!member) throw new DomainError("INTERNAL", { feature: "pinSwitch: member missing from shop" });
+    useSabai.getState().signIn(member.id, branchId);
+    return member;
+  },
+} satisfies Partial<DataSource>;
+
+const NOT_YET = [
+  "approve",
+  "openShift",
+  "cashMove",
+  "closeShift",
+  "submitOrder",
+  "applyDiscount",
+  "voidItem",
+  "voidOrder",
+  "payOrder",
+  "refundOrder",
+  "setTicketStatus",
+  "toggleTicketItem",
+  "setSoldOut",
+  "addMenuItem",
+  "updateMenuItem",
+  "addIngredient",
+  "receiveGoods",
+  "recordWaste",
+  "startCount",
+  "recordCount",
+  "submitCount",
+  "approveCount",
+  "createPurchaseOrder",
+  "createPOFromSuggestions",
+  "setPurchaseOrderStatus",
+  "closeDay",
+  "addExpense",
+  "payBill",
+  "matchStatementLine",
+  "ignoreStatementLine",
+  "addMember",
+  "updateMember",
+  "resetMemberPin",
+  "setRolePermissions",
+  "updateTenant",
+  "addBranch",
+  "updateBranch",
+  "updateChannel",
+  "setChannelCommission",
+  "updatePaymentMethod",
+  "skipOnboardingStep",
+  "confirmCashOnly",
+  "changePlan",
+  "reportSummary",
+  "today",
+] as const satisfies readonly Exclude<keyof DataSource, keyof typeof implemented>[];
+
+const notYet = Object.fromEntries(
+  NOT_YET.map((name) => [
+    name,
+    async () => {
+      throw new DomainError("INTERNAL", { feature: name });
+    },
+  ]),
+) as Record<(typeof NOT_YET)[number], () => Promise<never>>;
+
+// Fails to compile if a DataSource method is neither implemented above nor listed in NOT_YET.
+export const httpDataSource: DataSource = { ...implemented, ...notYet };

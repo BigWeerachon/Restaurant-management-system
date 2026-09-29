@@ -1,40 +1,19 @@
 "use client";
 
 import { accessFromRole, homeFor, type Home, type Permission } from "@sabai/domain";
-import { ArrowRight, Banknote, Calculator, ChefHat, ClipboardList, Crown, PackageCheck, PiggyBank, Sparkles, Store, UserRoundCog, Wallet } from "lucide-react";
+import { ArrowRight, Banknote, ChefHat, PiggyBank, Sparkles, Store } from "lucide-react";
 import { motion } from "motion/react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { Logo } from "@/components/app/app-shell";
+import { ConnectPanel } from "@/components/app/connect-panel";
 import { Splash } from "@/components/app/gate";
+import { RoleCards } from "@/components/app/role-cards";
 import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/overlay";
 import { Field, Input, Segmented } from "@/components/ui/primitives";
+import { dataSourceMode } from "@/lib/data-source/config";
 import { useSabai } from "@/lib/demo/store";
-
-const ROLE_SEES: Record<string, string> = {
-  owner: "ภาพรวม · กำไรจริง · ทุกอย่าง",
-  manager: "หน้าร้าน · สต็อก · ทีม · ปิดยอด",
-  cashier: "ขายหน้าร้าน · บิลวันนี้ · จอครัว",
-  waiter: "รับออเดอร์ · ส่งเข้าครัว",
-  kitchen: "จอครัว · ของเสีย · สูตรอาหาร",
-  stock: "รับของ · นับสต็อก · สั่งซื้อ",
-  accountant: "การเงิน · กระทบยอด · รายงาน",
-};
-
-// Same colours the Avatar component uses per role, just carried onto a
-// rounded-square icon badge instead of a lettered circle — one visual
-// language for "what am I clicking" across the whole app (cf. today/page.tsx's
-// task grid).
-const ROLE_STYLE: Record<string, { icon: typeof Store; badge: string }> = {
-  owner: { icon: Crown, badge: "bg-[#ede9fe] text-[#5b21b6]" },
-  manager: { icon: UserRoundCog, badge: "bg-[#e0e7ff] text-[#3730a3]" },
-  cashier: { icon: Wallet, badge: "bg-[#d1fae5] text-[#065f46]" },
-  waiter: { icon: ClipboardList, badge: "bg-[#e0f2fe] text-[#075985]" },
-  kitchen: { icon: ChefHat, badge: "bg-[#ffedd5] text-[#9a3412]" },
-  stock: { icon: PackageCheck, badge: "bg-[#fef3c7] text-[#92400e]" },
-  accountant: { icon: Calculator, badge: "bg-[#ffe4e6] text-[#9f1239]" },
-};
 
 export default function Welcome() {
   const hydrated = useSabai((s) => s.hydrated);
@@ -69,6 +48,7 @@ export default function Welcome() {
     router.push("/setup");
   };
 
+  const apiMode = dataSourceMode() === "api";
   const sample = db.mode === "demo";
   const members = sample ? db.members : [];
 
@@ -108,7 +88,9 @@ export default function Welcome() {
           transition={{ duration: 0.5, delay: 0.1, ease: [0.22, 1, 0.36, 1] }}
           className="glass-overlay rounded-[28px] p-5 sm:p-7"
         >
-          {sample ? (
+          {apiMode ? (
+            <ConnectPanel />
+          ) : sample ? (
             <>
               <div className="flex items-center justify-between gap-3">
                 <div>
@@ -122,31 +104,7 @@ export default function Welcome() {
                 </span>
               </div>
               <p className="mb-3 mt-5 text-sm font-medium text-ink-2">เลือกว่าวันนี้คุณคือใคร — แต่ละตำแหน่งจะเห็นเฉพาะงานของตัวเอง</p>
-              <ul className="grid gap-3 sm:grid-cols-2">
-                {members.map((m, i) => {
-                  const role = db.roles.find((r) => r.key === m.roleKey);
-                  const style = ROLE_STYLE[m.roleKey];
-                  const RoleIcon = style?.icon ?? Store;
-                  return (
-                    <motion.li key={m.id} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 + i * 0.04 }}>
-                      <button
-                        onClick={() => enter(m.id)}
-                        className="glass group flex h-full w-full flex-col gap-2.5 rounded-2xl p-4 text-left transition-[box-shadow,transform,border-color,background-color] hover:-translate-y-0.5 hover:border-brand/60 hover:bg-brand-soft/25 hover:shadow-md focus-visible:border-brand/60 focus-visible:bg-brand-soft/25 focus-visible:shadow-md"
-                      >
-                        <span className={`grid h-11 w-11 shrink-0 place-items-center rounded-xl transition-transform group-hover:scale-105 ${style?.badge ?? "bg-brand-soft text-brand-soft-ink"}`}>
-                          <RoleIcon className="h-5 w-5" aria-hidden="true" />
-                        </span>
-                        <span className="min-w-0">
-                          <span className="block font-semibold leading-snug text-ink">{role?.name}</span>
-                          <span className="block text-[13px] leading-snug text-ink-3">
-                            {m.name} · {ROLE_SEES[m.roleKey]}
-                          </span>
-                        </span>
-                      </button>
-                    </motion.li>
-                  );
-                })}
-              </ul>
+              <RoleCards members={members} roles={db.roles} onPick={enter} />
               <p className="mt-3 text-xs text-ink-3">สลับผู้ใช้บนเครื่องเดียวกันได้ด้วย PIN — เจ้าของ 1234 · ผู้จัดการ 2222 · แคชเชียร์ 3333 · เสิร์ฟ 4444 · ครัว 5555 · สต็อก 6666 · บัญชี 7777</p>
             </>
           ) : (
@@ -164,16 +122,18 @@ export default function Welcome() {
             </>
           )}
 
-          <div className="mt-6 flex items-center gap-3 rounded-2xl bg-surface-2 p-4">
-            <Banknote className="h-8 w-8 shrink-0 text-brand" aria-hidden="true" />
-            <div className="min-w-0 flex-1">
-              <p className="font-semibold text-ink">เริ่มร้านของคุณเอง</p>
-              <p className="text-sm text-ink-3">ระบบพาทำทีละขั้น ใช้เวลาประมาณ 10 นาที</p>
+          {!apiMode && (
+            <div className="mt-6 flex items-center gap-3 rounded-2xl bg-surface-2 p-4">
+              <Banknote className="h-8 w-8 shrink-0 text-brand" aria-hidden="true" />
+              <div className="min-w-0 flex-1">
+                <p className="font-semibold text-ink">เริ่มร้านของคุณเอง</p>
+                <p className="text-sm text-ink-3">ระบบพาทำทีละขั้น ใช้เวลาประมาณ 10 นาที</p>
+              </div>
+              <Button variant="secondary" onClick={() => setFreshOpen(true)}>
+                เริ่มเลย
+              </Button>
             </div>
-            <Button variant="secondary" onClick={() => setFreshOpen(true)}>
-              เริ่มเลย
-            </Button>
-          </div>
+          )}
         </motion.section>
       </div>
 
