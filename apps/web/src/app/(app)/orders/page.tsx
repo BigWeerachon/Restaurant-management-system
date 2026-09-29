@@ -4,13 +4,15 @@ import { Banknote, Bike, CreditCard, Printer, QrCode, RotateCcw, ShoppingBag, Ut
 import { motion } from "motion/react";
 import { useSearchParams } from "next/navigation";
 import { Suspense, useState } from "react";
+import { LoadBanner } from "@/components/app/load-banner";
 import { PageHeader } from "@/components/app/page-header";
 import { Button, LinkButton } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/feedback";
 import { Dialog, Switch } from "@/components/ui/overlay";
 import { Badge, Card, Input, SearchInput, Segmented } from "@/components/ui/primitives";
-import { useAccess, useAction, useBusinessDate } from "@/hooks/use-sabai";
-import { actorName, refundOrder } from "@/lib/demo/engine";
+import { useDsAction, useLoad } from "@/hooks/use-data-source";
+import { useAccess, useBusinessDate } from "@/hooks/use-sabai";
+import { actorName } from "@/lib/demo/engine";
 import { formatBaht } from "@/lib/demo/selectors";
 import { useSabai } from "@/lib/demo/store";
 import type { Order } from "@/lib/demo/types";
@@ -29,7 +31,8 @@ function OrdersInner() {
   const { branch, can } = useAccess();
   const date = useBusinessDate();
   const params = useSearchParams();
-  const { exec, pending } = useAction();
+  const { exec, pending } = useDsAction();
+  const load = useLoad(["orders"]);
   const [status, setStatus] = useState<"all" | Order["status"]>((params.get("status") as Order["status"]) ?? "all");
   const [q, setQ] = useState("");
   const [open, setOpen] = useState<Order | null>(null);
@@ -44,7 +47,7 @@ function OrdersInner() {
 
   const doRefund = async () => {
     if (!current) return;
-    const r = await exec((d, c, approver) => refundOrder(d, c, current.id, reason, restock, approver), {
+    const r = await exec((ds, approval) => ds.refundOrder(current.id, reason, restock, approval), {
       approval: { permission: "pos.refund", title: `คืนเงินบิล ${current.receiptNo} ${formatBaht(current.totals.total)}`, detail: `เหตุผล: ${reason}` },
       success: "คืนเงินแล้ว",
       successDetail: restock ? "คืนวัตถุดิบเข้าสต็อกให้แล้ว" : "บันทึกเป็นรายการคืนเงินของวันนี้",
@@ -58,6 +61,7 @@ function OrdersInner() {
   return (
     <>
       <PageHeader title="บิลวันนี้" description={`${branch.name} · ทุกบิลของวันทำการนี้ แตะเพื่อดูรายละเอียด พิมพ์ซ้ำ หรือคืนเงิน`} actions={can("pos.order") && <LinkButton href="/pos">ไปหน้าขาย</LinkButton>} />
+      <LoadBanner state={load} className="mb-4" />
       <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center">
         <Segmented
           label="สถานะบิล"
