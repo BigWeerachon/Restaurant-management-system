@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { useSabai } from "../demo/store";
-import { resetAccountForTests, signInAccount } from "../auth/session";
-import { listShops, openShop } from "./connect";
+import { getAccount, resetAccountForTests, setAccount, signInAccount } from "../auth/session";
+import { createShop, listShops, openShop } from "./connect";
 import { clearApiSession, getApiSession, setApiSession } from "./http-client";
 import { demoDataSource } from "./demo-data-source";
 import { httpDataSource } from "./http-data-source";
@@ -92,6 +92,64 @@ describe("HttpDataSource", () => {
     );
     await httpDataSource.load(["bootstrap"]);
     expect((await httpDataSource.pinSwitch("br-1", "3333")).id).toBe("m-2");
+  });
+
+  describe("the account behind the till", () => {
+    const acct = { accessToken: "account-token", refreshToken: "r", expiresAt: 4_000_000_000, userId: "u-1", email: "owner@sabai.dev" };
+    const me = (tenantId = "t-1") => ({ memberships: [{ membershipId: "m-1", tenantId, tenantName: "ร้านทดสอบ", displayName: "คุณเอ", branches: [{ id: "br-1", name: "อารีย์", code: "A" }] }] });
+
+    it("signing out sends the till back to 'who is here?' but keeps the account signed in", async () => {
+      setAccount(acct);
+      setApiSession({ token: "staff-token", tenantId: "t-1" });
+      useSabai.getState().signIn("m-owner");
+      await httpDataSource.signOut();
+      expect(useSabai.getState().session.memberId).toBeNull();
+      expect(getApiSession()).toEqual({ token: "account-token", tenantId: "t-1" });
+      expect(getAccount()).not.toBeNull();
+    });
+
+    it("with no account behind it (nothing to fall back on) signing out forgets everything", async () => {
+      setApiSession({ token: "staff-token", tenantId: "t-1" });
+      await httpDataSource.signOut();
+      expect(getApiSession()).toEqual({ token: null, tenantId: null });
+    });
+
+    it("enters as the person who owns the account — no PIN — using the account's own token", async () => {
+      setAccount(acct);
+      setApiSession({ token: "some-staff-token", tenantId: "t-1" });
+      const fetchMock = vi.fn().mockResolvedValueOnce(json(200, me())).mockResolvedValueOnce(json(200, shop([owner, cashier])));
+      vi.stubGlobal("fetch", fetchMock);
+      const member = await httpDataSource.signInAsAccount();
+      expect(member).toMatchObject({ id: "m-1", roleKey: "owner" });
+      expect(fetchMock.mock.calls[0]![1].headers.Authorization).toBe("Bearer account-token");
+      expect(getApiSession().token).toBe("account-token");
+      expect(useSabai.getState().session).toEqual({ memberId: "m-1", branchId: "br-1" });
+    });
+
+    it("refuses when the account is not one of this shop's people, or when nobody is signed in", async () => {
+      setAccount(acct);
+      setApiSession({ token: "account-token", tenantId: "t-OTHER" });
+      vi.stubGlobal("fetch", vi.fn().mockResolvedValue(json(200, me("t-1"))));
+      await expect(httpDataSource.signInAsAccount()).rejects.toMatchObject({ code: "PERMISSION_DENIED" });
+      resetAccountForTests();
+      await expect(httpDataSource.signInAsAccount()).rejects.toMatchObject({ code: "AUTH_REQUIRED" });
+    });
+
+    it("opens a shop with one call that has no shop yet, keeping the key it was given, and then loads that shop", async () => {
+      setAccount(acct);
+      setApiSession({ token: "account-token", tenantId: null });
+      const fetchMock = vi.fn().mockResolvedValueOnce(json(201, { tenant_id: "t-9", branch_id: "br-1", membership_id: "m-1" })).mockResolvedValueOnce(json(200, shop([owner])));
+      vi.stubGlobal("fetch", fetchMock);
+      const id = await createShop({ name: "ร้านใหม่", businessType: "cafe", ownerName: "คุณเอ", vatRegistered: false, pricesIncludeVat: true }, "key-for-this-attempt");
+      expect(id).toBe("t-9");
+      const [url, init] = fetchMock.mock.calls[0]!;
+      expect(String(url)).toContain("/v1/tenants");
+      expect(init.headers["Idempotency-Key"]).toBe("key-for-this-attempt");
+      expect(init.headers["X-Tenant-Id"]).toBeUndefined();
+      expect(JSON.parse(init.body)).toMatchObject({ name: "ร้านใหม่", businessType: "cafe" });
+      expect(getApiSession().tenantId).toBe("t-9");
+      expect(fetchMock.mock.calls[1]![1].headers["X-Tenant-Id"]).toBe("t-9");
+    });
   });
 
   it("reports a wrong PIN with the API's own error and keeps the earlier token", async () => {

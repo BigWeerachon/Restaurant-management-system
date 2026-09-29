@@ -82,7 +82,7 @@ export function registerIdentity(app: Hono<Env>, deps: Deps) {
     }),
   );
 
-  route(app, deps, { method: "POST", path: "/v1/auth/pin", tag: "Identity", summary: "สลับผู้ใช้บนเครื่องร้านด้วย PIN (ไม่ต้องมีอีเมล)", body: PinSwitchBody }, async ({ c, body, tx }) => {
+  route(app, deps, { method: "POST", path: "/v1/auth/pin", tag: "Identity", summary: "สลับผู้ใช้บนเครื่องร้านด้วย PIN (ไม่ต้องมีอีเมล)", body: PinSwitchBody, idempotent: false }, async ({ c, body, tx }) => {
     pinLimiter.check(`${c.req.header("x-forwarded-for") ?? "local"}:${body.branchId}`);
     const found = await tx(async (t) => {
       const tenantId = await branchTenant(t, body.branchId);
@@ -103,7 +103,7 @@ export function registerIdentity(app: Hono<Env>, deps: Deps) {
     return { ...token, membership: { id: found.membershipId, displayName: found.display_name, role: found.role_key, home: found.home } };
   });
 
-  route(app, deps, { method: "POST", path: "/v1/approvals", tag: "Identity", summary: "ผู้จัดการอนุมัติด้วย PIN (ใช้ได้ครั้งเดียวภายใน 5 นาที)", body: ApprovalBody, status: 201 }, async ({ c, body, tx }) => {
+  route(app, deps, { method: "POST", path: "/v1/approvals", tag: "Identity", summary: "ผู้จัดการอนุมัติด้วย PIN (ใช้ได้ครั้งเดียวภายใน 5 นาที)", body: ApprovalBody, status: 201, idempotent: false }, async ({ c, body, tx }) => {
     pinLimiter.check(`${c.req.header("x-forwarded-for") ?? "local"}:${body.branchId}:approve`);
     const id = await tx(async (t) => {
       const [row] = await t<{ id: string }[]>`

@@ -78,6 +78,12 @@ describe("DemoDataSource", () => {
     expect(useSabai.getState().db.orders.find((o) => o.id === orderId)!.discount?.approvedBy).toBe(manager.id);
   });
 
+  it("has no accounts, so 'enter with my account' enters as the owner", async () => {
+    const member = await ds.signInAsAccount();
+    expect(member.roleKey).toBe("owner");
+    expect(useSabai.getState().session.memberId).toBe(member.id);
+  });
+
   it("toggles one kitchen ticket item without bumping the rest", async () => {
     const db0 = useSabai.getState().db;
     const owner = db0.members.find((m) => m.roleKey === "owner")!;

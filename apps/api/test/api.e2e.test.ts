@@ -131,6 +131,27 @@ describe("a café's first day, through the API", () => {
     expect(m.navigation.primary[0].key).toBe("today");
   });
 
+  it("opening a shop is safe to retry: the same key gives the same shop, never a second one", async () => {
+    const user = await ctx.newUser();
+    const call = ctx.client(user.token);
+    const body = { name: "ร้านลองซ้ำ", ownerName: "คุณซ้ำ" };
+    const key = "signup-retry-key-0001";
+    const first = await call("POST", "/v1/tenants", body, { "idempotency-key": key });
+    expect(first.status).toBe(201);
+    // The answer was lost on the way and the person pressed the button again.
+    const again = await call("POST", "/v1/tenants", body, { "idempotency-key": key });
+    expect(again.status).toBe(201);
+    expect(again.headers.get("idempotent-replayed")).toBe("true");
+    expect(again.json.tenant_id).toBe(first.json.tenant_id);
+    expect((await call("GET", "/v1/me")).json.memberships).toHaveLength(1);
+    // Different details under the same key is a mistake, not a retry.
+    expect((await call("POST", "/v1/tenants", { ...body, name: "อีกร้าน" }, { "idempotency-key": key })).status).toBe(409);
+    // Someone else using the same key text does not get this shop.
+    const other = await ctx.newUser();
+    const theirs = await ctx.client(other.token)("POST", "/v1/tenants", body, { "idempotency-key": key });
+    expect(theirs.json.tenant_id).not.toBe(first.json.tenant_id);
+  });
+
   it("shows onboarding progress computed from data, with a clear next step", async () => {
     const r = await s.call("GET", "/v1/onboarding");
     expect(r.json.percent).toBe(0);
@@ -551,10 +572,13 @@ describe("staff on a shared device", () => {
     expect(wrong.status).toBe(401);
     expect(wrong.json.error.code).toBe("PIN_INVALID");
 
-    const ok = await s.call("POST", "/v1/auth/pin", { branchId: s.branchId, pin: "1111" });
+    const ok = await s.call("POST", "/v1/auth/pin", { branchId: s.branchId, pin: "1111" }, { "idempotency-key": "pin-signin-key-0001" });
     expect(ok.json.membership.role).toBe("cashier");
     expect(ok.json.membership.home).toBe("pos");
     s.cashierCall = ctx.client(ok.json.token, s.tenantId);
+    // A sign-in mints a credential: its answer must never sit in the replay table, key or no key.
+    const [stored] = await ctx.sql<{ n: string }[]>`select count(*) as n from app.api_idempotency where path in ('/v1/auth/pin', '/v1/approvals')`;
+    expect(Number(stored!.n)).toBe(0);
   });
 
   it("gives the cashier only the cashier's world", async () => {

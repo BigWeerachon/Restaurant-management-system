@@ -37,6 +37,12 @@ export const demoDataSource: DataSource = {
     useSabai.getState().signIn(member.id, branchId);
     return member;
   },
+  async signInAsAccount() {
+    const { db } = useSabai.getState();
+    const owner = db.members.find((m) => db.roles.find((r) => r.key === m.roleKey)?.grantsAll) ?? db.members[0]!;
+    useSabai.getState().signIn(owner.id, db.branches[0]?.id);
+    return owner;
+  },
   async approve(permission, pin, _target, _reason) {
     const { db, session } = useSabai.getState();
     const branchId = session.branchId ?? db.branches[0]!.id;

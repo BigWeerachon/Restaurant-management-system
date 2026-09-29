@@ -8,7 +8,8 @@
 import { DomainError } from "../demo/engine";
 import { useSabai } from "../demo/store";
 import type { Member } from "../demo/types";
-import { apiFetch, clearApiSession, setApiSession } from "./http-client";
+import { getAccount } from "../auth/session";
+import { apiFetch, clearApiSession, getApiSession, setApiSession } from "./http-client";
 import { loadShop, loadSlices } from "./http-context";
 import { financeCommands } from "./http-finance";
 import { kdsCommands } from "./http-kds";
@@ -43,8 +44,12 @@ const implemented = {
   },
 
   async signOut() {
-    clearApiSession();
+    // Nobody is at the till any more. The account behind the device stays signed in, so the next person only needs
+    // their PIN; signing the account itself out is "ใช้บัญชีอื่น" on the welcome page.
     useSabai.getState().signOut();
+    const account = getAccount();
+    if (account) setApiSession({ token: account.accessToken });
+    else clearApiSession();
   },
 
   async setBranch(branchId: string) {
@@ -62,6 +67,25 @@ const implemented = {
     }
     if (!member) throw new DomainError("INTERNAL", { feature: "pinSwitch: member missing from shop" });
     useSabai.getState().signIn(member.id, branchId);
+    return member;
+  },
+
+  async signInAsAccount(): Promise<Member> {
+    const account = getAccount();
+    if (!account) throw new DomainError("AUTH_REQUIRED");
+    const { tenantId } = getApiSession();
+    // Requests go out as the account itself (a staff token from an earlier PIN sign-in would be somebody else).
+    setApiSession({ token: account.accessToken });
+    const me = await apiFetch<{ memberships: { membershipId: string; tenantId: string; branches: { id: string }[] }[] }>("/v1/me", { tenant: false });
+    const mine = me.memberships.find((m) => m.tenantId === tenantId);
+    if (!mine) throw new DomainError("PERMISSION_DENIED");
+    let member = useSabai.getState().db.members.find((m) => m.id === mine.membershipId);
+    if (!member) {
+      await loadShop({ reset: false });
+      member = useSabai.getState().db.members.find((m) => m.id === mine.membershipId);
+    }
+    if (!member) throw new DomainError("INTERNAL", { feature: "signInAsAccount: member missing from shop" });
+    useSabai.getState().signIn(member.id, mine.branches[0]?.id);
     return member;
   },
 

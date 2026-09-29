@@ -30,12 +30,12 @@ export function createSupabaseAuth(cfg: { url: string; anonKey: string; fetchImp
   const base = cfg.url.replace(/\/+$/, "");
   const now = cfg.now ?? (() => Math.floor(Date.now() / 1000));
 
-  const call = async (path: string, body: unknown, bearer?: string): Promise<{ status: number; json: any }> => {
+  const call = async (path: string, body: unknown, bearer?: string, method: "POST" | "PUT" = "POST"): Promise<{ status: number; json: any }> => {
     const doFetch = cfg.fetchImpl ?? fetch;
     let res: Response;
     try {
       res = await doFetch(`${base}/auth/v1/${path}`, {
-        method: "POST",
+        method,
         headers: { "content-type": "application/json", apikey: cfg.anonKey, ...(bearer ? { authorization: `Bearer ${bearer}` } : {}) },
         body: JSON.stringify(body),
       });
@@ -92,6 +92,9 @@ export function createSupabaseAuth(cfg: { url: string; anonKey: string; fetchImp
     },
     async resetPassword(email) {
       await call("recover", { email });
+    },
+    async updatePassword(session, password) {
+      await call("user", { password }, session.accessToken, "PUT");
     },
   };
 }

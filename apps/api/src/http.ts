@@ -39,6 +39,11 @@ export interface RouteMeta<B extends ZodType | undefined = undefined, Q extends 
   /** Documented permission (enforced by the database). */
   permission?: string;
   status?: 200 | 201 | 202;
+  /**
+   * Whether a repeated POST with the same Idempotency-Key is answered with the first result. Default true. Off for
+   * calls that mint a credential (PIN sign-in): their answer must not sit in the replay table.
+   */
+  idempotent?: boolean;
 }
 
 export interface RouteCtx<B, Q> {
@@ -94,7 +99,9 @@ export function route<B extends ZodType | undefined = undefined, Q extends ZodTy
 
     // Idempotent replay for retried POSTs (flaky shop Wi-Fi, double taps).
     const idemKey = c.req.header("idempotency-key");
-    const idemScope = UUID.safeParse(rawTenant).success ? rawTenant : null;
+    // A call made inside a shop is scoped to the shop. One made before any shop exists (opening the first one) is scoped
+    // to the signed-in person — without that, a retried "create my shop" made a second, third… shop.
+    const idemScope = meta.idempotent === false ? null : UUID.safeParse(rawTenant).success ? rawTenant : (actor?.userId ?? null);
     let requestHash: string | null = null;
     if (meta.method === "POST" && idemKey && idemScope) {
       requestHash = createHash("sha256").update(`${meta.method} ${c.req.path}\n${JSON.stringify(rawBody ?? null)}`).digest("hex");

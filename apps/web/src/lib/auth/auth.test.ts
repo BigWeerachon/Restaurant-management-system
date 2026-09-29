@@ -4,7 +4,8 @@ import { authKind, setAuthProviderForTests, type AuthProvider, type AuthSession 
 import { createLocalAuth } from "./local";
 import { getAccount, installAuthRenewer, recoverFromUnauthorized, renewAccount, resetAccountForTests, setAccount, signInAccount, signOutAccount } from "./session";
 import { createSupabaseAuth, mapSupabaseError } from "./supabase";
-import { jwtExpiry } from "./types";
+import { parseAuthFragment } from "./fragment";
+import { jwtExpiry, jwtIdentity } from "./types";
 
 const json = (status: number, body: unknown) => new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
 const jwt = (payload: object) => `h.${btoa(JSON.stringify(payload)).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "")}.s`;
@@ -24,6 +25,37 @@ describe("jwtExpiry", () => {
     expect(jwtExpiry(jwt({ exp: 1_900_000_000 }))).toBe(1_900_000_000);
     expect(jwtExpiry(jwt({ sub: "u" }))).toBeNull();
     expect(jwtExpiry("not-a-token")).toBeNull();
+  });
+});
+
+describe("the link in a confirmation or reset e-mail", () => {
+  const token = jwt({ sub: "u-9", email: "o@x.th", exp: 1_900_000_000 });
+
+  it("brings back a session, and says what the link was for", () => {
+    expect(parseAuthFragment(`#access_token=${token}&refresh_token=rt&expires_in=3600&token_type=bearer&type=signup`)).toEqual({
+      type: "signup",
+      session: { accessToken: token, refreshToken: "rt", expiresAt: 1_900_000_000, userId: "u-9", email: "o@x.th" },
+    });
+    expect(parseAuthFragment(`#access_token=${token}&refresh_token=rt&type=recovery`)).toMatchObject({ type: "recovery" });
+  });
+
+  it("works out the expiry from expires_in when the token does not say", () => {
+    const plain = jwt({ sub: "u" });
+    expect(parseAuthFragment(`#access_token=${plain}&expires_in=3600&type=magiclink`, () => 1_000)).toMatchObject({ session: { expiresAt: 4_600 } });
+  });
+
+  it("reports a link that was old or already used", () => {
+    expect(parseAuthFragment("#error=access_denied&error_code=otp_expired&error_description=Email+link+is+invalid+or+has+expired")).toEqual({ error: "Email link is invalid or has expired" });
+  });
+
+  it("is null for any other address", () => {
+    expect(parseAuthFragment("")).toBeNull();
+    expect(parseAuthFragment("#section-2")).toBeNull();
+  });
+
+  it("reads who a token is for", () => {
+    expect(jwtIdentity(token)).toEqual({ userId: "u-9", email: "o@x.th" });
+    expect(jwtIdentity("garbage")).toEqual({ userId: null, email: "" });
   });
 });
 
@@ -112,6 +144,17 @@ describe("supabase auth (production)", () => {
     expect(url).toBe("https://abc.supabase.co/auth/v1/logout?scope=local");
     expect(init.headers.authorization).toBe("Bearer at");
     await expect(make((async () => Promise.reject(new TypeError("offline"))) as typeof fetch).signOut({ accessToken: "at", refreshToken: null, expiresAt: 1, userId: null, email: "e" })).resolves.toBeUndefined();
+  });
+
+  it("sets a new password for the session the reset link gave", async () => {
+    const fetchImpl = vi.fn(async () => json(200, { id: "u-1" })) as unknown as typeof fetch;
+    await make(fetchImpl).updatePassword!({ accessToken: "at", refreshToken: "rt", expiresAt: 1, userId: "u-1", email: "o@x.th" }, "brand new pw 42");
+    const [url, init] = (fetchImpl as any).mock.calls[0];
+    expect(url).toBe("https://abc.supabase.co/auth/v1/user");
+    expect(init.method).toBe("PUT");
+    expect(init.headers.authorization).toBe("Bearer at");
+    expect(init.headers.apikey).toBe("anon-key");
+    expect(JSON.parse(init.body)).toEqual({ password: "brand new pw 42" });
   });
 
   it("asks for a password-reset e-mail", async () => {

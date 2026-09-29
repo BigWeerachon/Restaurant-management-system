@@ -33,6 +33,8 @@ export interface AuthProvider {
   signOut(session: AuthSession): Promise<void>;
   /** Sends a "set a new password" e-mail. Absent where there are no passwords. */
   resetPassword?(email: string): Promise<void>;
+  /** Sets a new password for a signed-in session (the one the reset e-mail's link gives). */
+  updatePassword?(session: AuthSession, password: string): Promise<void>;
 }
 
 /** The expiry (`exp`, seconds) inside a JWT, without checking its signature — only used to know when to renew. */
@@ -44,5 +46,16 @@ export function jwtExpiry(token: string): number | null {
     return typeof json.exp === "number" ? json.exp : null;
   } catch {
     return null;
+  }
+}
+
+/** The e-mail (`email`) and person (`sub`) inside a JWT, for a session that arrived as a link and not through a form. */
+export function jwtIdentity(token: string): { userId: string | null; email: string } {
+  try {
+    const payload = token.split(".")[1]!;
+    const json = JSON.parse(atob(payload.replace(/-/g, "+").replace(/_/g, "/").padEnd(Math.ceil(payload.length / 4) * 4, "="))) as { sub?: unknown; email?: unknown };
+    return { userId: typeof json.sub === "string" ? json.sub : null, email: typeof json.email === "string" ? json.email : "" };
+  } catch {
+    return { userId: null, email: "" };
   }
 }

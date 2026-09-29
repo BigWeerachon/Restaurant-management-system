@@ -87,6 +87,11 @@ export interface DataSource {
   setBranch(branchId: string): Promise<void>;
   /** Switch the active user on a shared device by PIN. Returns the member switched to. */
   pinSwitch(branchId: string, pin: string): Promise<Member>;
+  /**
+   * Enters as the person who owns the signed-in account — no PIN, they already proved who they are with their e-mail
+   * (a new owner has no PIN yet). The demo has no accounts and enters as its owner.
+   */
+  signInAsAccount(): Promise<Member>;
   /** A manager approves a sensitive action by PIN. The token is passed to the command that needed it. */
   approve(permission: string, pin: string, target?: { type: string; id: string }, reason?: string): Promise<ApprovalToken>;
 
