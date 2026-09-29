@@ -328,6 +328,31 @@ describe("a café's first day, through the API", () => {
       { ingredientId: s.milk, packName: "ขวด 2 ลิตร", packQty: 2000, lastPrice: "100.00", isPreferred: true },
     ]);
 
+    // The full list carries what the purchasing screen needs: who it is from, its lines, and how much of each has arrived.
+    const full = await s.call("GET", `/v1/purchase-orders?branchId=${s.branchId}&detail=full`);
+    const listed = full.json.find((x: any) => x.id === po.json.id);
+    expect(listed).toMatchObject({ supplier_id: supplier!.id, branch_id: s.branchId, status: "draft", total: "500.00" });
+    expect(listed.lines).toEqual([expect.objectContaining({ ingredient_id: s.milk, pack_name: "ขวด 2 ลิตร", pack_qty: 2000, qty_packs: 5, unit_price: "100.00", received_packs: 0, id: expect.any(String) })]);
+    expect(draftList.json[0].lines).toBeUndefined();
+
+    // Approve, send, then receive against the order by naming its line: the order then knows what has arrived.
+    const approved = await s.call("POST", `/v1/purchase-orders/${po.json.id}/status`, { status: "approved" });
+    expect(approved.status).toBe(200);
+    await s.call("POST", `/v1/purchase-orders/${po.json.id}/status`, { status: "sent" });
+    const partly = await s.call("POST", "/v1/receipts", {
+      branchId: s.branchId,
+      poId: po.json.id,
+      lines: [{ ingredientId: s.milk, packName: "ขวด 2 ลิตร", packQty: 2000, qtyPacks: 2, unitPrice: 100, poLineId: listed.lines[0].id }],
+    });
+    expect(partly.status).toBe(201);
+    const afterPart = (await s.call("GET", `/v1/purchase-orders?branchId=${s.branchId}&detail=full`)).json.find((x: any) => x.id === po.json.id);
+    expect(afterPart).toMatchObject({ status: "partially_received" });
+    expect(afterPart.lines[0].received_packs).toBe(2);
+    await s.call("POST", "/v1/receipts", { branchId: s.branchId, poId: po.json.id, lines: [{ ingredientId: s.milk, packName: "ขวด 2 ลิตร", packQty: 2000, qtyPacks: 3, unitPrice: 100, poLineId: listed.lines[0].id }] });
+    const done = (await s.call("GET", `/v1/purchase-orders?branchId=${s.branchId}&detail=full`)).json.find((x: any) => x.id === po.json.id);
+    expect(done).toMatchObject({ status: "received" });
+    expect(done.lines[0].received_packs).toBe(5);
+
     const count = await s.call("POST", "/v1/stock-counts", { locationId: location!.id, scope: "partial", ingredientIds: [s.coffee] });
     expect(count.status).toBe(201);
     const counts = await s.call("GET", `/v1/stock-counts?branchId=${s.branchId}`);

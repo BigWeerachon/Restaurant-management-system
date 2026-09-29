@@ -291,6 +291,8 @@ export interface StockCount {
 }
 
 export interface PurchaseOrderLine {
+  /** Only known when the order comes from the API: receiving against the order names its lines. */
+  id?: ID;
   ingredientId: ID;
   packName: string;
   packQty: number;

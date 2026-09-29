@@ -28,7 +28,7 @@ export default function ReceivePage() {
   const db = useSabai((s) => s.db);
   const { branch } = useAccess();
   const { exec, pending } = useDsAction();
-  const load = useLoad(["stock"]);
+  const load = useLoad(["stock", "purchasing"]);
   const [step, setStep] = useState(0);
   const [supplierId, setSupplierId] = useState<string | null>(null);
   const [poId, setPoId] = useState<string | null>(null);

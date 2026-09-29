@@ -5,13 +5,14 @@ import { Check, Copy, MessageCircle, Minus, PackageCheck, Plus, Truck } from "lu
 import { motion } from "motion/react";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
+import { LoadBanner } from "@/components/app/load-banner";
 import { PageHeader } from "@/components/app/page-header";
 import { Button, LinkButton } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/feedback";
 import { Dialog, TabPanel, Tabs } from "@/components/ui/overlay";
 import { Badge, Card, CardHeader } from "@/components/ui/primitives";
-import { useAccess, useAction } from "@/hooks/use-sabai";
-import { createPurchaseOrder, setPurchaseOrderStatus } from "@/lib/demo/engine";
+import { useDsAction, useLoad } from "@/hooks/use-data-source";
+import { useAccess } from "@/hooks/use-sabai";
 import { formatBaht, stockRows } from "@/lib/demo/selectors";
 import { useSabai } from "@/lib/demo/store";
 import type { PurchaseOrder } from "@/lib/demo/types";
@@ -28,7 +29,8 @@ const PO_STATUS: Record<PurchaseOrder["status"], { label: string; tone: "neutral
 export default function PurchasingPage() {
   const db = useSabai((s) => s.db);
   const { branch, can } = useAccess();
-  const { exec, pending } = useAction();
+  const { exec, pending } = useDsAction();
+  const load = useLoad(["stock", "purchasing"]);
   const [tab, setTab] = useState("suggest");
   const [overrides, setOverrides] = useState<Record<string, number>>({});
   const [lineMsg, setLineMsg] = useState<PurchaseOrder | null>(null);
@@ -58,6 +60,7 @@ export default function PurchasingPage() {
   return (
     <>
       <PageHeader title="สั่งซื้อ" description="ระบบดูของที่ใกล้หมด คิดจำนวนเป็นแพ็กให้ และหักของที่สั่งไปแล้ว — แค่ตรวจแล้วกดสั่ง" actions={can("inventory.receive") && <LinkButton href="/inventory/receive" variant="secondary" icon={<PackageCheck className="h-4 w-4" />}>รับของเข้า</LinkButton>} />
+      <LoadBanner state={load} className="mb-4" />
       <Tabs value={tab} onValueChange={setTab} tabs={[{ value: "suggest", label: "ควรสั่ง", count: suggestions.length }, { value: "pos", label: "ใบสั่งซื้อ", count: pos.filter((p) => !["received", "cancelled"].includes(p.status)).length }, { value: "suppliers", label: "ผู้ขาย" }]}>
         <TabPanel value="suggest" className="space-y-4 pt-4">
           {groups.length === 0 ? (
@@ -80,7 +83,7 @@ export default function PurchasingPage() {
                           <Button
                             loading={pending}
                             onClick={async () => {
-                              const r = await exec((d, c) => createPurchaseOrder(d, c, sup.id, rows.map((x) => ({ ingredientId: x.ingredient.id, qtyPacks: overrides[x.ingredient.id] ?? x.suggestion!.packs }))), { success: "สร้างใบสั่งซื้อแล้ว" });
+                              const r = await exec((ds) => ds.createPurchaseOrder(sup.id, rows.map((x) => ({ ingredientId: x.ingredient.id, qtyPacks: overrides[x.ingredient.id] ?? x.suggestion!.packs }))), { success: "สร้างใบสั่งซื้อแล้ว" });
                               if (r.ok) {
                                 setTab("pos");
                                 if (r.value.status === "approved") setLineMsg(r.value);
@@ -153,7 +156,7 @@ export default function PurchasingPage() {
                       <span className="w-24 text-right font-semibold tabular">{formatBaht(p.total)}</span>
                       <span className="flex gap-2">
                         {p.status === "draft" && can("purchasing.approve") && (
-                          <Button size="sm" icon={<Check className="h-4 w-4" />} onClick={() => exec((d, c) => setPurchaseOrderStatus(d, c, p.id, "approved"), { success: "อนุมัติแล้ว" })}>
+                          <Button size="sm" icon={<Check className="h-4 w-4" />} onClick={() => exec((ds) => ds.setPurchaseOrderStatus(p.id, "approved"), { success: "อนุมัติแล้ว" })}>
                             อนุมัติ
                           </Button>
                         )}
@@ -214,7 +217,7 @@ export default function PurchasingPage() {
           </Button>
           <Button
             onClick={async () => {
-              const r = await exec((d, c) => setPurchaseOrderStatus(d, c, lineMsg.id, "sent"), { success: "บันทึกว่าส่งแล้ว" });
+              const r = await exec((ds) => ds.setPurchaseOrderStatus(lineMsg.id, "sent"), { success: "บันทึกว่าส่งแล้ว" });
               if (r.ok) setLineMsg(null);
             }}
           >

@@ -12,6 +12,7 @@ import { loadShop, loadSlices } from "./http-context";
 import { kdsCommands } from "./http-kds";
 import { menuCommands } from "./http-menu";
 import { posCommands } from "./http-pos";
+import { purchasingCommands } from "./http-purchasing";
 import { stockCommands } from "./http-stock";
 import type { DataSource, Slice } from "./types";
 
@@ -74,12 +75,10 @@ const implemented = {
   ...kdsCommands,
   ...stockCommands,
   ...menuCommands,
+  ...purchasingCommands,
 } satisfies Partial<DataSource>;
 
 const NOT_YET = [
-  "createPurchaseOrder",
-  "createPOFromSuggestions",
-  "setPurchaseOrderStatus",
   "closeDay",
   "addExpense",
   "payBill",

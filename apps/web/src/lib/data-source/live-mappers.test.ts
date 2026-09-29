@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { orderApi, ticketApi } from "./fixtures";
-import { mapBalances, mapClosedShift, mapCount, mapCurrentShift, mapMovement, mapOrder, mapTicket } from "./live-mappers";
+import { mapBalances, mapClosedShift, mapCount, mapCurrentShift, mapMovement, mapOrder, mapPurchaseOrder, mapTicket } from "./live-mappers";
 
 const menu = [{ id: "mi-latte", emoji: "🥤" }];
 
@@ -134,5 +134,39 @@ describe("mapCount", () => {
     expect(c.status).toBe("submitted");
     expect(c.submittedAt).toBe("2026-09-29T03:00:00.000Z");
     expect(c.lines[0]).toEqual({ ingredientId: "ing-1", counted: 800, expected: 1000, unitCost: 0.03 });
+  });
+});
+
+describe("mapPurchaseOrder", () => {
+  const api = {
+    id: "po-1",
+    po_no: "PO2609-0001",
+    status: "sent" as const,
+    expected_date: "2026-09-30",
+    total: "500.00",
+    created_at: "2026-09-29T03:00:00.000Z",
+    branch_id: "br-1",
+    supplier_id: "su-1",
+    lines: [{ id: "pol-1", ingredient_id: "ing-milk", pack_name: "ขวด 2 ลิตร", pack_qty: 2000, qty_packs: 5, unit_price: "100.00", received_packs: 2 }],
+  };
+
+  it("keeps the order's lines with their own ids, prices in satang and how much has arrived", () => {
+    expect(mapPurchaseOrder(api)).toEqual({
+      id: "po-1",
+      poNo: "PO2609-0001",
+      branchId: "br-1",
+      supplierId: "su-1",
+      status: "sent",
+      createdAt: "2026-09-29T03:00:00.000Z",
+      expectedDate: "2026-09-30",
+      total: 50000,
+      lines: [{ id: "pol-1", ingredientId: "ing-milk", packName: "ขวด 2 ลิตร", packQty: 2000, qtyPacks: 5, unitPrice: 10000, receivedPacks: 2 }],
+    });
+  });
+
+  it("shows an order waiting for approval the same way whether or not it was formally submitted", () => {
+    expect(mapPurchaseOrder({ ...api, status: "submitted" }).status).toBe("draft");
+    expect(mapPurchaseOrder({ ...api, status: "draft" }).status).toBe("draft");
+    expect(mapPurchaseOrder({ ...api, expected_date: null }).expectedDate).toBeUndefined();
   });
 });

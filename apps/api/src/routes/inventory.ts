@@ -210,15 +210,25 @@ export function registerInventory(app: Hono<Env>, deps: Deps) {
     }),
   );
 
-  route(app, deps, { method: "GET", path: "/v1/purchase-orders", tag: "Purchasing", summary: "ใบสั่งซื้อของสาขา", query: BranchQuery.extend({ status: z.enum(["draft", "submitted", "approved", "sent", "partially_received", "received", "cancelled"]).optional() }), permission: "purchasing.view" }, async ({ query, tx }) =>
+  route(app, deps, { method: "GET", path: "/v1/purchase-orders", tag: "Purchasing", summary: "ใบสั่งซื้อของสาขา (detail=full: พร้อมรายการและจำนวนที่รับแล้ว)", query: BranchQuery.extend({ status: z.enum(["draft", "submitted", "approved", "sent", "partially_received", "received", "cancelled"]).optional(), detail: z.enum(["full"]).optional() }), permission: "purchasing.view" }, async ({ query, tx }) =>
     tx(async (t) => {
       const rows = await t`
-        select po.id, po.po_no, po.status, po.expected_date::text, po.total, po.created_at, s.name as supplier
+        select po.id, po.po_no, po.status, po.expected_date::text, po.total, po.created_at, po.branch_id, po.supplier_id, s.name as supplier
           from app.purchase_orders po join app.suppliers s on s.id = po.supplier_id
          where po.branch_id = ${query.branchId}
            and (${query.status ?? null}::text is null or po.status = ${query.status ?? null})
          order by po.created_at desc limit 200`;
-      return rows.map((r) => ({ ...r, total: money(r.total) }));
+      if (query.detail !== "full") return rows.map((r) => ({ ...r, total: money(r.total) }));
+      const lines = rows.length
+        ? await t<{ id: string; po_id: string; ingredient_id: string; pack_name: string; pack_qty: string; qty_packs: string; unit_price: string; received_packs: string }[]>`
+            select id, po_id, ingredient_id, pack_name, pack_qty, qty_packs, unit_price, received_packs
+              from app.purchase_order_lines where po_id = any(${rows.map((r) => r.id as string)}::uuid[]) order by id`
+        : [];
+      return rows.map((r) => ({
+        ...r,
+        total: money(r.total),
+        lines: lines.filter((l) => l.po_id === r.id).map((l) => ({ id: l.id, ingredient_id: l.ingredient_id, pack_name: l.pack_name, pack_qty: num(l.pack_qty), qty_packs: num(l.qty_packs), unit_price: money(l.unit_price), received_packs: num(l.received_packs) })),
+      }));
     }),
   );
 

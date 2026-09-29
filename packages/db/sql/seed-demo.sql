@@ -110,6 +110,16 @@ insert into app.ingredients (tenant_id, name, base_unit, kind, track_stock, stan
   (seed.id('tenant'), 'ช็อกโกแลต',    'g',   'raw', true, 0.55,  2000, 4000),
   (seed.id('tenant'), 'ผงฟู',         'g',   'raw', true, 0.10,  300,  600);
 
+-- The picture staff know each ingredient by.
+update app.ingredients i set emoji = v.emoji
+  from (values
+    ('เมล็ดกาแฟคั่ว','☕'), ('นมสด','🥛'), ('นมข้นหวาน','🥫'), ('น้ำเชื่อม','🍯'), ('ใบชาไทย','🍂'), ('ผงมัทฉะ','🍵'),
+    ('ผงโกโก้','🍫'), ('น้ำแข็ง','🧊'), ('ข้าวหอมมะลิ','🍚'), ('อกไก่','🍗'), ('หมูสับ','🥩'), ('กุ้ง','🦐'),
+    ('ไข่ไก่','🥚'), ('ใบกะเพรา','🌿'), ('กระเทียม','🧄'), ('พริกขี้หนู','🌶️'), ('น้ำปลา','🫙'), ('ซีอิ๊วขาว','🫙'),
+    ('แป้งสาลี','🌾'), ('เนยสด','🧈'), ('น้ำตาลทราย','🧂'), ('ช็อกโกแลต','🍫'), ('ผงฟู','🥄')
+  ) as v(name, emoji)
+ where i.tenant_id = seed.id('tenant') and i.name = v.name;
+
 -- Stock starts at zero, same as a real new shop — `stock_balances` is written
 -- only by the `apply_stock_movement` trigger (RLS grants it no direct writes).
 -- Receive goods from the app (or see item 1.2b) to get opening stock in.

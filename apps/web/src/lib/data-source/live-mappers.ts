@@ -4,7 +4,7 @@
  * as they are, snake_case becomes camelCase. Per-unit costs stay in baht.
  */
 import { toSatang } from "@sabai/domain";
-import type { MenuItem, Movement, Order, Shift, StockCount, Ticket } from "../demo/types";
+import type { MenuItem, Movement, Order, PurchaseOrder, Shift, StockCount, Ticket } from "../demo/types";
 
 // ---------------------------------------------------------------------------
 // Orders — GET /v1/orders?detail=full and GET /v1/orders/{id}
@@ -293,5 +293,35 @@ export function mapClosedShift(s: ShiftRowApi, branchId: string): Shift {
     variance: s.cash_variance === null ? undefined : toSatang(s.cash_variance),
     cashMoves: [],
     businessDate: s.business_date,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Purchase orders — GET /v1/purchase-orders?detail=full
+// ---------------------------------------------------------------------------
+export interface PurchaseOrderApi {
+  id: string;
+  po_no: string;
+  status: "draft" | "submitted" | "approved" | "sent" | "partially_received" | "received" | "cancelled";
+  expected_date: string | null;
+  total: string;
+  created_at: string;
+  branch_id: string;
+  supplier_id: string;
+  lines: { id: string; ingredient_id: string; pack_name: string; pack_qty: number; qty_packs: number; unit_price: string; received_packs: number }[];
+}
+
+export function mapPurchaseOrder(o: PurchaseOrderApi): PurchaseOrder {
+  return {
+    id: o.id,
+    poNo: o.po_no,
+    branchId: o.branch_id,
+    supplierId: o.supplier_id,
+    // Waiting to be approved is one state on screen, whether or not it was formally "submitted" first.
+    status: o.status === "submitted" ? "draft" : o.status,
+    createdAt: o.created_at,
+    expectedDate: o.expected_date ?? undefined,
+    lines: o.lines.map((l) => ({ id: l.id, ingredientId: l.ingredient_id, packName: l.pack_name, packQty: l.pack_qty, qtyPacks: l.qty_packs, unitPrice: toSatang(l.unit_price), receivedPacks: l.received_packs })),
+    total: toSatang(o.total),
   };
 }

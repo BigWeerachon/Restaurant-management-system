@@ -17,12 +17,14 @@ import {
   mapCurrentShift,
   mapMovement,
   mapOrder,
+  mapPurchaseOrder,
   mapTicket,
   type CountDetailApi,
   type CountRowApi,
   type CurrentShiftApi,
   type MovementApi,
   type OrderApi,
+  type PurchaseOrderApi,
   type ShiftRowApi,
   type StockRowApi,
   type TicketApi,
@@ -118,6 +120,14 @@ const loaders: Partial<Record<Exclude<Slice, "bootstrap">, (branchId: string) =>
     const details = await Promise.all(active.map((r) => apiFetch<CountDetailApi>(`/v1/stock-counts/${r.id}`)));
     return (d) => {
       d.counts = [...d.counts.filter((c) => c.branchId !== branchId), ...details.map((c, i) => mapCount(c, active[i]!, branchId))];
+    };
+  },
+
+  // This branch's purchase orders with their lines and how much of each has arrived, newest first like the demo keeps them.
+  async purchasing(branchId) {
+    const rows = await apiFetch<PurchaseOrderApi[]>("/v1/purchase-orders", { query: { branchId, detail: "full" } });
+    return (d) => {
+      d.purchaseOrders = [...rows.map(mapPurchaseOrder), ...d.purchaseOrders.filter((p) => p.branchId !== branchId)];
     };
   },
 

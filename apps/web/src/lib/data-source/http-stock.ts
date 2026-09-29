@@ -25,6 +25,9 @@ export const stockCommands = {
       const unitCost = l.packQty > 0 ? l.unitPrice / 100 / l.packQty : 0;
       if (ing && old > 0 && unitCost > old * 1.05) priceAlerts.push({ ingredientId: ing.id, oldCost: old, newCost: unitCost, pct: Math.round((unitCost / old - 1) * 1000) / 10 });
     }
+    // Receiving against an order names the order's line each row belongs to, so the order can tell what has arrived.
+    const po = input.poId ? db.purchaseOrders.find((p) => p.id === input.poId) : undefined;
+    const poLineId = (ingredientId: string, packName: string) => (po?.lines.find((pl) => pl.ingredientId === ingredientId && pl.packName === packName) ?? po?.lines.find((pl) => pl.ingredientId === ingredientId))?.id;
     const r = await apiFetch<{ id: string; grNo: string; total: string }>("/v1/receipts", {
       method: "POST",
       body: {
@@ -32,7 +35,7 @@ export const stockCommands = {
         supplierId: input.supplierId,
         poId: input.poId,
         paymentMode: input.paymentMode,
-        lines: input.lines.filter((l) => l.qtyPacks > 0).map((l) => ({ ingredientId: l.ingredientId, packName: l.packName, packQty: l.packQty, qtyPacks: l.qtyPacks, unitPrice: baht(l.unitPrice) })),
+        lines: input.lines.filter((l) => l.qtyPacks > 0).map((l) => ({ ingredientId: l.ingredientId, packName: l.packName, packQty: l.packQty, qtyPacks: l.qtyPacks, unitPrice: baht(l.unitPrice), poLineId: poLineId(l.ingredientId, l.packName) })),
       },
     });
     // Receiving changes what things cost (and the supplier's usual pack), so the shop's own data is reloaded too.
