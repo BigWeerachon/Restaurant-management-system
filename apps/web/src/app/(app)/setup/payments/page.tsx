@@ -6,13 +6,13 @@ import { AnimatePresence, motion } from "motion/react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState, type ReactNode } from "react";
+import { LoadBanner } from "@/components/app/load-banner";
 import { PageHeader } from "@/components/app/page-header";
 import { PromptPayQr } from "@/components/app/promptpay-qr";
 import { Button } from "@/components/ui/button";
 import { Badge, Card, Field, Input } from "@/components/ui/primitives";
-import { useAction } from "@/hooks/use-sabai";
+import { useDsAction, useLoad } from "@/hooks/use-data-source";
 import { cn } from "@/lib/cn";
-import { confirmCashOnly, updateChannel, updatePaymentMethod } from "@/lib/demo/engine";
 import { useSabai } from "@/lib/demo/store";
 
 function Choice({ icon, title, detail, on, onToggle, locked, children }: { icon: ReactNode; title: string; detail: string; on: boolean; onToggle?: () => void; locked?: boolean; children?: ReactNode }) {
@@ -47,7 +47,8 @@ function Choice({ icon, title, detail, on, onToggle, locked, children }: { icon:
 export default function SetupPaymentsPage() {
   const db = useSabai((s) => s.db);
   const router = useRouter();
-  const { exec, pending } = useAction();
+  const { exec, pending } = useDsAction();
+  const load = useLoad(["settings"]);
   const pp = db.paymentMethods.find((m) => m.kind === "promptpay");
   const card = db.paymentMethods.find((m) => m.kind === "card");
   const platforms = db.channels.filter((c) => c.kind === "delivery_platform");
@@ -63,11 +64,12 @@ export default function SetupPaymentsPage() {
     if (usePp && !ppValid) return setError("ใส่เบอร์มือถือ 10 หลัก หรือเลขผู้เสียภาษี 13 หลักที่ผูกพร้อมเพย์ไว้");
     setError("");
     const r = await exec(
-      (d, c) => {
-        if (pp) updatePaymentMethod(d, c, pp.id, usePp ? { promptpayId: ppId, active: true } : { active: false });
-        if (card) updatePaymentMethod(d, c, card.id, { active: useCard });
-        for (const ch of platforms) if (ch.active !== chan[ch.id]) updateChannel(d, c, ch.id, { active: !!chan[ch.id] });
-        if (!usePp && !useCard) confirmCashOnly(d, c);
+      async (ds) => {
+        // One request after another: the first that fails stops the rest, and the screen says what went wrong.
+        if (pp) await ds.updatePaymentMethod(pp.id, usePp ? { promptpayId: ppId, active: true } : { active: false });
+        if (card) await ds.updatePaymentMethod(card.id, { active: useCard });
+        for (const ch of platforms) if (ch.active !== chan[ch.id]) await ds.updateChannel(ch.id, { active: !!chan[ch.id] });
+        if (!usePp && !useCard) await ds.confirmCashOnly();
       },
       { success: "ตั้งค่าการรับเงินเรียบร้อย", successDetail: usePp ? "หน้าขายจะสร้าง QR ตามยอดบิลให้อัตโนมัติ" : undefined },
     );
@@ -77,6 +79,7 @@ export default function SetupPaymentsPage() {
   return (
     <div className="mx-auto max-w-2xl">
       <PageHeader eyebrow={<Link href="/setup" className="inline-flex items-center gap-1 hover:text-ink"><ArrowLeft className="h-4 w-4" /> เริ่มต้นใช้งาน</Link>} title="ลูกค้าจ่ายเงินด้วยอะไรบ้าง" description="เลือกที่ร้านรับจริง เปลี่ยนภายหลังได้ในหน้าตั้งค่า" />
+      <LoadBanner state={load} className="mb-4" />
       <div className="space-y-3">
         <Choice icon={<Banknote className="h-6 w-6" />} title="เงินสด" detail="นับเงินตอนปิดกะ ระบบบอกยอดที่ควรมีในลิ้นชัก" on locked />
         <Choice icon={<QrCode className="h-6 w-6" />} title="พร้อมเพย์ / QR" detail="ไม่มีค่าธรรมเนียม เงินเข้าทันที — ยอดล็อกตามบิล" on={usePp} onToggle={() => setUsePp(!usePp)}>

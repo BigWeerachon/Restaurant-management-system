@@ -80,7 +80,8 @@ export function onboardingFacts(state: DemoState): OnboardingFacts {
 }
 
 export function onboarding(state: DemoState) {
-  return onboardingProgress(onboardingFacts(state));
+  // On the API the server has the whole story (a first sale from last week, staff on other branches); this device only holds today.
+  return state.onboardingProgress ?? onboardingProgress(onboardingFacts(state));
 }
 
 // ---------------------------------------------------------------------------

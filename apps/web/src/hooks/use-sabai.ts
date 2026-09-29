@@ -1,13 +1,11 @@
 "use client";
 
 import { accessFromRole, can as canDo, homeFor, humanizeError, navigationFor, type Home, type Permission } from "@sabai/domain";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { create } from "zustand";
-import type { Ctx } from "@/lib/demo/engine";
 import { currentBusinessDate } from "@/lib/demo/engine";
 import { getHistory, isDomainError, useSabai } from "@/lib/demo/store";
-import type { DemoState } from "@/lib/demo/types";
 
 // ---------------------------------------------------------------------------
 // Who am I, what can I do, where do I work
@@ -106,53 +104,3 @@ export function showError(err: unknown) {
   return human;
 }
 
-type Command<T> = (draft: DemoState, ctx: Ctx, approverId?: string) => T;
-
-export function useAction() {
-  const run = useSabai((s) => s.run);
-  const requestApproval = useUi((s) => s.requestApproval);
-  const [pending, setPending] = useState(false);
-
-  const exec = useCallback(
-    async <T,>(
-      command: Command<T>,
-      opts: {
-        success?: string | ((r: T) => string);
-        successDetail?: string | ((r: T) => string);
-        approval?: { permission: Permission; title: string; detail?: string };
-        latencyMs?: number;
-        silentError?: boolean;
-      } = {},
-    ): Promise<{ ok: true; value: T } | { ok: false; code: string }> => {
-      setPending(true);
-      try {
-        let value: T;
-        try {
-          value = await run((d, c) => command(d, c), { latencyMs: opts.latencyMs });
-        } catch (err) {
-          if (isDomainError(err) && err.code === "APPROVAL_REQUIRED" && opts.approval) {
-            const approver = await requestApproval(opts.approval.permission, opts.approval.title, opts.approval.detail);
-            if (!approver) return { ok: false, code: "CANCELLED" };
-            value = await run((d, c) => command(d, c, approver));
-          } else {
-            throw err;
-          }
-        }
-        if (opts.success) {
-          toast.success(typeof opts.success === "function" ? opts.success(value) : opts.success, {
-            description: typeof opts.successDetail === "function" ? opts.successDetail(value) : opts.successDetail,
-          });
-        }
-        return { ok: true, value };
-      } catch (err) {
-        if (!opts.silentError) showError(err);
-        return { ok: false, code: isDomainError(err) ? err.code : "INTERNAL" };
-      } finally {
-        setPending(false);
-      }
-    },
-    [run, requestApproval],
-  );
-
-  return { exec, pending };
-}

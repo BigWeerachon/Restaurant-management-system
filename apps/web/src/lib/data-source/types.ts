@@ -61,6 +61,7 @@ export type Slice =
   | "finance"
   | "team"
   | "settings"
+  | "onboarding"
   | "reports";
 
 export interface ReportFilter {

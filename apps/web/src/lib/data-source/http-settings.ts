@@ -87,6 +87,17 @@ export const settingsCommands = {
     await refresh(["settings"]);
   },
 
+  async skipOnboardingStep(key) {
+    await apiFetch("/v1/onboarding/skip", { method: "POST", body: { step: key } });
+    await refresh(["onboarding"]);
+  },
+
+  async confirmCashOnly() {
+    await apiFetch("/v1/settings/payments/confirm-cash-only", { method: "POST" });
+    // Whether payments count as set up is part of the shop's own data and of the checklist.
+    await refresh(["settings", "onboarding"]);
+  },
+
   async changePlan(plan) {
     await apiFetch("/v1/settings/plan", { method: "POST", body: { planCode: plan } });
     await refresh(["settings"]);

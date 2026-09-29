@@ -12,6 +12,7 @@ import { Dialog } from "@/components/ui/overlay";
 import { ProgressRing } from "@/components/ui/feedback";
 import { Icon } from "@/components/ui/icon";
 import { Avatar, Kbd } from "@/components/ui/primitives";
+import { useLoad } from "@/hooks/use-data-source";
 import { useAccess, useBusinessDate, useUi } from "@/hooks/use-sabai";
 import { cn } from "@/lib/cn";
 import { dataSourceMode, getDataSource } from "@/lib/data-source";
@@ -168,10 +169,15 @@ function UserMenu({ side = "top", compact }: { side?: "top" | "bottom"; compact?
 }
 
 function SetupProgress() {
-  const db = useSabai((s) => s.db);
   const { can } = useAccess();
+  return can("settings.manage") ? <SetupProgressCard /> : null;
+}
+
+function SetupProgressCard() {
+  const db = useSabai((s) => s.db);
+  useLoad(["onboarding"]);
   const p = onboarding(db);
-  if (p.isComplete || !can("settings.manage")) return null;
+  if (p.isComplete) return null;
   return (
     <Link href="/setup" className="flex items-center gap-3 rounded-2xl border border-line bg-surface p-3 shadow-xs transition-shadow hover:shadow-md">
       <ProgressRing value={p.percent} size={44} stroke={5} label="ความคืบหน้าการตั้งค่าร้าน">

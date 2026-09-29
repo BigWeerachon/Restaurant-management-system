@@ -48,7 +48,7 @@ export default function TodayPage() {
   const date = useBusinessDate();
   // The alerts below are worked out from what the shop holds, so the home page asks for everything they read
   // (the loader skips whatever this person may not see).
-  const load = useLoad(["orders", "tickets", "stock", "purchasing", "finance", "reports"]);
+  const load = useLoad(["orders", "tickets", "stock", "purchasing", "finance", "reports", "onboarding"]);
   const query = useTodayStats(branch.id, now);
   const stats = query.data ?? EMPTY_STATS;
   const ready = !!query.data;

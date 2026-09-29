@@ -4,13 +4,14 @@ import type { StepKey } from "@sabai/domain";
 import { ArrowRight, Check, Clock, PartyPopper } from "lucide-react";
 import { motion } from "motion/react";
 import Link from "next/link";
+import { LoadBanner } from "@/components/app/load-banner";
 import { PageHeader } from "@/components/app/page-header";
 import { Button, LinkButton } from "@/components/ui/button";
 import { ProgressRing } from "@/components/ui/feedback";
 import { Badge, Card } from "@/components/ui/primitives";
-import { useAccess, useAction } from "@/hooks/use-sabai";
+import { useDsAction, useLoad } from "@/hooks/use-data-source";
+import { useAccess } from "@/hooks/use-sabai";
 import { cn } from "@/lib/cn";
-import { skipOnboardingStep } from "@/lib/demo/engine";
 import { onboarding } from "@/lib/demo/selectors";
 import { useSabai } from "@/lib/demo/store";
 
@@ -20,12 +21,14 @@ const EMOJI: Record<StepKey, string> = { branch: "🏪", payments: "💳", ingre
 export default function SetupPage() {
   const db = useSabai((s) => s.db);
   const { can } = useAccess();
-  const { exec } = useAction();
+  const { exec } = useDsAction();
+  const load = useLoad(["onboarding"]);
   const p = onboarding(db);
 
   return (
     <div className="mx-auto max-w-3xl">
       <PageHeader title="เริ่มต้นใช้งาน" description="ทำตามทีละขั้น ส่วนใหญ่ใช้เวลาไม่ถึง 2 นาที — ข้ามขั้นที่ไม่จำเป็นได้ และกลับมาทำต่อเมื่อไรก็ได้" />
+      <LoadBanner state={load} className="mb-4" />
       <Card className="mb-6 flex items-center gap-5 overflow-hidden bg-grain p-5 sm:p-6">
         <ProgressRing value={p.percent} size={96} stroke={9} label="ความคืบหน้าการตั้งค่าร้าน">
           <span className="text-xl font-bold text-ink">{p.percent}%</span>
@@ -88,7 +91,7 @@ export default function SetupPage() {
                       <Clock className="h-3.5 w-3.5" aria-hidden="true" /> {s.minutes} นาที
                     </span>
                     {s.optional && s.status === "todo" && can("settings.manage") && (
-                      <Button variant="ghost" size="sm" onClick={() => exec((d, c) => skipOnboardingStep(d, c, s.key), { success: "ข้ามไว้ก่อน", successDetail: "กลับมาทำได้จากหน้านี้" })}>
+                      <Button variant="ghost" size="sm" onClick={() => exec((ds) => ds.skipOnboardingStep(s.key), { success: "ข้ามไว้ก่อน", successDetail: "กลับมาทำได้จากหน้านี้" })}>
                         ข้าม
                       </Button>
                     )}

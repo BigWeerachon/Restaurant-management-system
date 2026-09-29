@@ -4,7 +4,7 @@
  * one API endpoint — swapping the demo adapter for the HTTP client is a
  * data-source change, not a UI rewrite.
  */
-import type { OrderTotals, Recipe, RoleKey, Satang, StockReason } from "@sabai/domain";
+import type { OnboardingProgress, OrderTotals, Recipe, RoleKey, Satang, StockReason } from "@sabai/domain";
 
 export type ID = string;
 
@@ -433,6 +433,8 @@ export interface DemoState {
   bills: Bill[];
   expected: ExpectedReceipt[];
   statementLines: StatementLine[];
+  /** Where the shop stands on the first-run checklist, as the server works it out from real data. API mode only; the demo works it out itself. */
+  onboardingProgress?: OnboardingProgress;
   activity: ActivityEvent[];
   seq: Record<string, number>;
 }

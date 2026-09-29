@@ -5,7 +5,7 @@
  * A loader fetches first and returns a patch, and all patches are applied in a
  * single store update — so a failed request leaves the store as it was.
  */
-import { satangToDecimalString } from "@sabai/domain";
+import { satangToDecimalString, type OnboardingProgress } from "@sabai/domain";
 import { DomainError } from "../demo/engine";
 import { isDomainError, useSabai } from "../demo/store";
 import type { DemoState } from "../demo/types";
@@ -197,6 +197,14 @@ const loaders: Partial<Record<Exclude<Slice, "bootstrap">, (branchId: string) =>
     };
   },
 
+  // How far the shop has got with the first-run checklist, worked out by the server from real data.
+  async onboarding() {
+    const progress = await apiFetch<OnboardingProgress>("/v1/onboarding");
+    return (d) => {
+      d.onboardingProgress = progress;
+    };
+  },
+
   // The people who work here and what each role may do (they come with the shop's own data).
   async team() {
     const { members, roles } = await fetchShop();
@@ -243,7 +251,10 @@ export async function loadSlices(slices: Slice[]): Promise<void> {
  * failed (a retry could repeat it); the next poll or page load brings the screen up to date.
  */
 export async function refresh(slices: Slice[]): Promise<void> {
+  // Almost anything a command does can finish a step of the first-run checklist, so while it is still open it is read again too.
+  const pending = useSabai.getState().db.onboardingProgress;
+  const wanted = pending && !pending.isComplete && !slices.includes("onboarding") ? [...slices, "onboarding" as const] : slices;
   // One slice at a time, so a slice this person may not read (the kitchen screen, for a waiter) cannot hold back the others.
-  const results = await Promise.allSettled(slices.filter((s) => s !== "bootstrap" && s in loaders).map((s) => loadSlices([s])));
+  const results = await Promise.allSettled(wanted.filter((s) => s !== "bootstrap" && s in loaders).map((s) => loadSlices([s])));
   for (const r of results) if (r.status === "rejected") console.warn("reload after command failed", r.reason);
 }

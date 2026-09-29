@@ -1,8 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { DomainError } from "../demo/engine";
 import { useSabai } from "../demo/store";
 import { devLogin, listShops, openShop } from "./connect";
 import { clearApiSession, getApiSession, setApiSession } from "./http-client";
+import { demoDataSource } from "./demo-data-source";
 import { httpDataSource } from "./http-data-source";
 import type { ShopApiResponse } from "./mappers";
 
@@ -129,11 +129,11 @@ describe("HttpDataSource", () => {
     expect(getApiSession()).toEqual({ token: null, tenantId: null });
   });
 
-  it("refuses commands that are not wired to the API yet instead of changing only the local copy", async () => {
-    const ds = httpDataSource;
-    await expect(ds.skipOnboardingStep("recipe")).rejects.toBeInstanceOf(DomainError);
-    await expect(ds.skipOnboardingStep("recipe")).rejects.toMatchObject({ code: "INTERNAL", params: { feature: "skipOnboardingStep" } });
-    await expect(ds.confirmCashOnly()).rejects.toMatchObject({ code: "INTERNAL", params: { feature: "confirmCashOnly" } });
-    await expect(ds.signIn("m-1")).rejects.toMatchObject({ code: "AUTH_REQUIRED" });
+  it("has every method the demo has, so no screen can meet a command that only exists in one mode", () => {
+    expect(Object.keys(httpDataSource).sort()).toEqual(Object.keys(demoDataSource).sort());
+  });
+
+  it("does not sign in as somebody by id: on the API that takes their PIN", async () => {
+    await expect(httpDataSource.signIn("m-1")).rejects.toMatchObject({ code: "AUTH_REQUIRED" });
   });
 });

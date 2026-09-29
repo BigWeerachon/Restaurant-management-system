@@ -4,12 +4,12 @@ import { ArrowLeft, Check, Moon } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { LoadBanner } from "@/components/app/load-banner";
 import { PageHeader } from "@/components/app/page-header";
 import { Button } from "@/components/ui/button";
 import { Callout, Card, Field, Input } from "@/components/ui/primitives";
-import { useAction } from "@/hooks/use-sabai";
+import { useDsAction, useLoad } from "@/hooks/use-data-source";
 import { cn } from "@/lib/cn";
-import { updateBranch } from "@/lib/demo/engine";
 import { useSabai } from "@/lib/demo/store";
 
 const HOURS = [
@@ -23,7 +23,8 @@ export default function SetupBranchPage() {
   const db = useSabai((s) => s.db);
   const branch = db.branches[0]!;
   const router = useRouter();
-  const { exec, pending } = useAction();
+  const { exec, pending } = useDsAction();
+  const load = useLoad(["settings"]);
   const [name, setName] = useState(branch.name);
   const [address, setAddress] = useState(branch.address ?? "");
   const [phone, setPhone] = useState(branch.phone ?? "");
@@ -39,13 +40,14 @@ export default function SetupBranchPage() {
     if (!address.trim() && !phone.trim()) e.address = "ใส่ที่อยู่หรือเบอร์โทรอย่างน้อย 1 อย่าง เพื่อแสดงบนใบเสร็จ";
     setErrors(e);
     if (Object.keys(e).length) return;
-    const r = await exec((d, c) => updateBranch(d, c, branch.id, { name, address, phone, openingHours: hours, dayCutoff: "05:00" }), { success: "ตั้งค่าสาขาเรียบร้อย", successDetail: "ขั้นต่อไป: เลือกช่องทางรับเงิน" });
+    const r = await exec((ds) => ds.updateBranch(branch.id, { name, address, phone, openingHours: hours, dayCutoff: "05:00" }), { success: "ตั้งค่าสาขาเรียบร้อย", successDetail: "ขั้นต่อไป: เลือกช่องทางรับเงิน" });
     if (r.ok) router.push("/setup");
   };
 
   return (
     <div className="mx-auto max-w-xl">
       <PageHeader eyebrow={<Link href="/setup" className="inline-flex items-center gap-1 hover:text-ink"><ArrowLeft className="h-4 w-4" /> เริ่มต้นใช้งาน</Link>} title="ตั้งค่าสาขาแรก" description="ข้อมูลนี้จะอยู่บนใบเสร็จ ใช้เวลาไม่ถึงนาที" />
+      <LoadBanner state={load} className="mb-4" />
       <Card className="space-y-5 p-5 sm:p-6">
         <Field label="ชื่อสาขา" required error={errors.name} htmlFor="n">
           <Input id="n" value={name} invalid={!!errors.name} onChange={(e) => setName(e.target.value)} />

@@ -1,8 +1,9 @@
 /**
- * The API adapter (ADR-0009). Session and shop loading are real; every other
- * command is filled in alongside the page that uses it (checklist phase 4) and
- * until then fails loudly with `INTERNAL` rather than quietly changing only the
- * local copy of the shop.
+ * The API adapter (ADR-0009): every `DataSource` method, implemented against the
+ * API. Commands live next to the screen they belong to (`http-pos.ts`,
+ * `http-stock.ts`, ...); this file holds sessions and the shop load, and puts
+ * them together. A method added to `DataSource` without an implementation here
+ * is a compile error, so the app never quietly edits only the local copy.
  */
 import { DomainError } from "../demo/engine";
 import { useSabai } from "../demo/store";
@@ -86,19 +87,5 @@ const implemented = {
   ...settingsCommands,
 } satisfies Partial<DataSource>;
 
-const NOT_YET = [
-  "skipOnboardingStep",
-  "confirmCashOnly",
-] as const satisfies readonly Exclude<keyof DataSource, keyof typeof implemented>[];
-
-const notYet = Object.fromEntries(
-  NOT_YET.map((name) => [
-    name,
-    async () => {
-      throw new DomainError("INTERNAL", { feature: name });
-    },
-  ]),
-) as Record<(typeof NOT_YET)[number], () => Promise<never>>;
-
-// Fails to compile if a DataSource method is neither implemented above nor listed in NOT_YET.
-export const httpDataSource: DataSource = { ...implemented, ...notYet };
+// Fails to compile if a DataSource method is added without being implemented here.
+export const httpDataSource: DataSource = implemented;
