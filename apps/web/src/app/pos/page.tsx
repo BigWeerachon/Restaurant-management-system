@@ -17,6 +17,7 @@ import { Dialog } from "@/components/ui/overlay";
 import { Avatar, Badge, SearchInput } from "@/components/ui/primitives";
 import { useAccess, useUi } from "@/hooks/use-sabai";
 import { cn } from "@/lib/cn";
+import { ConnectionBadge, ConnectionBanner } from "@/components/app/connection-badge";
 import { LoadBanner } from "@/components/app/load-banner";
 import { useDsAction, useLoad } from "@/hooks/use-data-source";
 import { newClientId } from "@/lib/data-source/ids";
@@ -340,6 +341,7 @@ function PosScreen() {
             {shift ? "กะเปิดอยู่" : "ยังไม่เปิดกะ"}
           </button>
         )}
+        <ConnectionBadge compact className="shrink-0" />
         <button onClick={() => openSwitch(true)} className="flex h-11 shrink-0 items-center gap-2 rounded-xl px-1.5 hover:bg-surface-2" aria-label={`ผู้ใช้ ${member?.name} แตะเพื่อสลับผู้ใช้`}>
           <Avatar name={member?.name ?? "?"} color={member?.color} size={34} />
           <UserRoundCog className="hidden h-4 w-4 text-ink-3 sm:block" aria-hidden="true" />
@@ -347,6 +349,7 @@ function PosScreen() {
       </header>
 
       <LoadBanner state={load} className="mx-3 mt-2 shrink-0" />
+      <ConnectionBanner className="mx-3 mt-2 shrink-0">ยอดของเครื่องอื่นอาจยังไม่ขึ้นบนหน้านี้</ConnectionBanner>
 
       <div className="flex min-h-0 flex-1">
         {/* Categories */}

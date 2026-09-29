@@ -675,6 +675,61 @@ describe("staff on a shared device", () => {
   });
 });
 
+describe("live events", () => {
+  /** Reads the branch's event stream until `until` returns true for the text so far (or time runs out). */
+  async function listen(headers: Record<string, string>, branchId: string, act: () => Promise<unknown>, until: (text: string) => boolean) {
+    const abort = new AbortController();
+    const res = await ctx.app.request(`/v1/events?branchId=${branchId}`, { headers, signal: abort.signal });
+    expect(res.status).toBe(200);
+    expect(res.headers.get("content-type")).toContain("text/event-stream");
+    const reader = res.body!.getReader();
+    const decoder = new TextDecoder();
+    let text = "";
+    const read = (async () => {
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        text += decoder.decode(value, { stream: true });
+        if (until(text)) break;
+      }
+    })();
+    // The stream says "ready" before anything is done, so nothing that follows can be missed.
+    for (let i = 0; i < 100 && !text.includes("event: ready"); i++) await new Promise((r) => setTimeout(r, 10));
+    await act();
+    await Promise.race([read, new Promise((r) => setTimeout(r, 4000))]);
+    abort.abort();
+    return text;
+  }
+
+  it("tells every open screen of the branch what just happened, with ids only", async () => {
+    const headers = { authorization: `Bearer ${s.owner.token}`, "x-tenant-id": s.tenantId };
+    const id = uuidv7();
+    const text = await listen(headers, s.branchId, () => s.call("POST", "/v1/orders", { id, branchId: s.branchId, items: [{ id: uuidv7(), menuItemId: s.latte, qty: 1 }] }), (t) => t.includes("order.opened") && t.includes("kitchen.ticket_fired"));
+    expect(text).toContain("event: ready");
+    const events = [...text.matchAll(/event: domain\ndata: (.*)\n/g)].map((m) => JSON.parse(m[1]!));
+    expect(events.map((e) => e.type)).toEqual(expect.arrayContaining(["order.opened"]));
+    expect(events.find((e) => e.type === "order.opened")).toEqual({ id: expect.any(String), type: "order.opened", aggregateId: id });
+    // Ids only: no names, no money.
+    expect(JSON.stringify(events)).not.toMatch(/ลาเต้|total|price/);
+    await s.call("POST", `/v1/orders/${id}/void`, { reason: "ทดสอบ" });
+  });
+
+  it("does not tell a screen about another shop, and needs a signed-in person", async () => {
+    const other = await ctx.newUser();
+    const created = await ctx.client(other.token)("POST", "/v1/tenants", { name: "ร้านข้างบ้านสอง", ownerName: "ซี" });
+    const theirs = ctx.client(other.token, created.json.tenant_id);
+    const ourHeaders = { authorization: `Bearer ${s.owner.token}`, "x-tenant-id": s.tenantId };
+    const text = await listen(ourHeaders, s.branchId, () => theirs("POST", "/v1/branches", { code: "ZZ9", name: "สาขาของเขา" }), (t) => t.includes("branch.created"));
+    expect(text).not.toContain("branch.created");
+
+    const anon = await ctx.app.request(`/v1/events?branchId=${s.branchId}`);
+    expect(anon.status).toBe(401);
+    // Someone from another shop cannot open this branch's stream.
+    const peek = await ctx.app.request(`/v1/events?branchId=${s.branchId}`, { headers: { authorization: `Bearer ${other.token}`, "x-tenant-id": created.json.tenant_id } });
+    expect([403, 404]).toContain(peek.status);
+  });
+});
+
 describe("tenant isolation", () => {
   it("never shows or changes another shop's data", async () => {
     const other = await ctx.newUser();

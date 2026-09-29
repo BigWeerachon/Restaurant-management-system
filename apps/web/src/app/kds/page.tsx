@@ -7,6 +7,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Gate, RouteGuard } from "@/components/app/gate";
+import { ConnectionBadge, ConnectionBanner } from "@/components/app/connection-badge";
 import { LoadBanner } from "@/components/app/load-banner";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/feedback";
@@ -214,11 +215,11 @@ function KdsScreen() {
         )}
         <div className="flex items-center gap-2">
           <ChefHat className="h-7 w-7 text-brand" aria-hidden="true" />
-          <h1 className="text-xl font-bold">จอครัว</h1>
+          <h1 className="whitespace-nowrap text-xl font-bold">จอครัว</h1>
         </div>
         <Segmented label="สถานี" value={station} onChange={setStation} size="lg" className="ml-2 hidden md:inline-flex" options={[{ value: "all", label: "ทั้งหมด" }, ...stations.map((s) => ({ value: s.id, label: s.name }))]} />
         <div className="ml-auto flex items-center gap-2">
-          <div className="hidden items-center gap-4 rounded-2xl bg-surface-2 px-4 py-2 text-sm lg:flex" aria-live="polite">
+          <div className="hidden items-center gap-4 whitespace-nowrap rounded-2xl bg-surface-2 px-4 py-2 text-sm lg:flex" aria-live="polite">
             <span>
               รอทำ <strong className="text-lg tabular">{tickets.filter((t) => t.status === "new").length}</strong>
             </span>
@@ -238,13 +239,14 @@ function KdsScreen() {
             </Button>
           )}
           {can("inventory.waste") && (
-            <Link href="/inventory/waste" className="hidden h-12 items-center gap-2 rounded-xl border border-line px-4 font-medium text-ink hover:bg-surface-2 sm:flex">
+            <Link href="/inventory/waste" className="hidden h-12 items-center gap-2 whitespace-nowrap rounded-xl border border-line px-4 font-medium text-ink hover:bg-surface-2 sm:flex">
               <Trash2 className="h-5 w-5" aria-hidden="true" /> ของเสีย
             </Link>
           )}
           <Button variant="ghost" size="icon-lg" onClick={() => setSound((v) => !v)} aria-label={sound ? "ปิดเสียงแจ้งเตือน" : "เปิดเสียงแจ้งเตือน"} aria-pressed={sound}>
             {sound ? <Bell className="h-6 w-6" /> : <BellOff className="h-6 w-6" />}
           </Button>
+          <ConnectionBadge compact className="shrink-0" />
           <span className="hidden text-2xl font-semibold tabular text-ink-2 xl:block">{clock}</span>
           <button onClick={() => openSwitch(true)} className="rounded-xl p-1 hover:bg-surface-2" aria-label={`ผู้ใช้ ${member?.name} แตะเพื่อสลับผู้ใช้`}>
             <Avatar name={member?.name ?? "?"} color={member?.color} size={40} />
@@ -253,6 +255,7 @@ function KdsScreen() {
       </header>
 
       <LoadBanner state={load} className="mx-4 mt-2 shrink-0" />
+      <ConnectionBanner className="mx-4 mt-2 shrink-0">ออเดอร์ใหม่อาจยังไม่ขึ้นบนจอนี้ จะอัปเดตทันทีที่ต่อได้</ConnectionBanner>
 
       {counts.length > 0 && (
         <div className="no-scrollbar flex shrink-0 items-center gap-2 overflow-x-auto border-b border-line bg-surface px-4 py-2 outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring" role="region" tabIndex={0} aria-label="รวมทุกออเดอร์ที่ต้องทำ">

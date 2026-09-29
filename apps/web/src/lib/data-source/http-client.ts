@@ -13,7 +13,7 @@ const DEFAULT_TIMEOUT_MS = 15_000;
 const MAX_RETRIES = 2;
 const RETRY_DELAY_MS = 500;
 
-function apiBaseUrl(): string {
+export function apiBaseUrl(): string {
   return process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8787";
 }
 

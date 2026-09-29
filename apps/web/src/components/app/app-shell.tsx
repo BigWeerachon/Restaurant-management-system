@@ -2,7 +2,7 @@
 
 import * as DM from "@radix-ui/react-dropdown-menu";
 import { formatThaiDate } from "@sabai/domain";
-import { Check, ChevronDown, ChevronsUpDown, CloudCheck, LogOut, Monitor, MoonStar, MoreHorizontal, RefreshCcw, Search, Sun, UserRoundCog } from "lucide-react";
+import { Check, ChevronDown, ChevronsUpDown, LogOut, Monitor, MoonStar, MoreHorizontal, RefreshCcw, Search, Sun, UserRoundCog } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
 import Image from "next/image";
 import Link from "next/link";
@@ -13,6 +13,7 @@ import { ProgressRing } from "@/components/ui/feedback";
 import { Icon } from "@/components/ui/icon";
 import { Avatar, Kbd } from "@/components/ui/primitives";
 import { useLoad } from "@/hooks/use-data-source";
+import { ConnectionBadge } from "./connection-badge";
 import { useAccess, useBusinessDate, useUi } from "@/hooks/use-sabai";
 import { cn } from "@/lib/cn";
 import { dataSourceMode, getDataSource } from "@/lib/data-source";
@@ -274,9 +275,7 @@ export function AppShell({ children }: { children: ReactNode }) {
               {mode === "fresh" && <span className="rounded-full bg-accent-soft px-2 py-0.5 text-xs font-medium text-accent-ink">ร้านทดลอง</span>}
             </div>
             <div className="ml-auto flex items-center gap-2">
-              <span className="hidden items-center gap-1.5 text-xs text-ink-3 md:flex" title="ข้อมูลบันทึกในเครื่องนี้อัตโนมัติ">
-                <CloudCheck className="h-4 w-4 text-success" aria-hidden="true" /> บันทึกอัตโนมัติ
-              </span>
+              <ConnectionBadge className="hidden md:flex" />
               <button onClick={() => setCommand(true)} className="flex h-11 items-center gap-2 rounded-xl border border-line bg-surface px-3 text-sm text-ink-3 shadow-xs hover:border-line-strong" aria-keyshortcuts="Control+K Meta+K">
                 <Search className="h-4 w-4" aria-hidden="true" />
                 <span className="sr-only sm:not-sr-only">ค้นหา</span>

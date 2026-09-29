@@ -4,6 +4,7 @@ import type { Permission } from "@sabai/domain";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { dataSourceMode, getDataSource } from "@/lib/data-source";
+import { registerActiveSlices, useRealtimeStatus } from "@/lib/data-source/realtime";
 import type { ApprovalToken, DataSource, ReportFilter, ReportSummary, Slice, TodayStats } from "@/lib/data-source/types";
 import { reportSummary as selectReportSummary, todayStats as selectTodayStats } from "@/lib/demo/selectors";
 import { getHistory, isDomainError, useSabai } from "@/lib/demo/store";
@@ -69,10 +70,16 @@ export interface LoadState {
   reload: () => Promise<void>;
 }
 
+/** How often to read again while the live line is up: only a safety net, since events say what changed. */
+const HEARTBEAT_MS = 60_000;
+
 /**
  * Keeps slices of the store fresh from the API (a no-op in demo mode, where the
- * store already holds everything). Reloads when the signed-in person or branch
- * changes, and every `everyMs` if given — until live events arrive (phase 5).
+ * store already holds everything). Reads them when the screen opens, when the
+ * signed-in person or branch changes, and whenever a live event says they changed.
+ * `everyMs` is how often to read them anyway while there is no live line — a screen
+ * that must not go stale (the kitchen) asks for a short one; with the line up it
+ * relaxes to a slow heartbeat.
  */
 export function useLoad(slices: Slice[], opts: { everyMs?: number } = {}): LoadState {
   const api = dataSourceMode() === "api";
@@ -82,6 +89,11 @@ export function useLoad(slices: Slice[], opts: { everyMs?: number } = {}): LoadS
   const key = slices.join(",");
   const [state, setState] = useState<{ loading: boolean; error: unknown }>({ loading: api, error: null });
   const first = useRef(true);
+  const live = useRealtimeStatus() === "live";
+  const pollMs = opts.everyMs ? (live ? Math.max(opts.everyMs, HEARTBEAT_MS) : opts.everyMs) : undefined;
+
+  // While this screen is up, events that change what it shows are worth reading again.
+  useEffect(() => (api ? registerActiveSlices(key.split(",") as Slice[]) : undefined), [api, key]);
 
   const run = useCallback(
     async (silent = false) => {
@@ -103,10 +115,10 @@ export function useLoad(slices: Slice[], opts: { everyMs?: number } = {}): LoadS
     if (!api || !hydrated || !memberId) return;
     first.current = true;
     void run();
-    if (!opts.everyMs) return;
-    const id = setInterval(() => void run(true), opts.everyMs);
+    if (!pollMs) return;
+    const id = setInterval(() => void run(true), pollMs);
     return () => clearInterval(id);
-  }, [api, hydrated, memberId, branchId, run, opts.everyMs]);
+  }, [api, hydrated, memberId, branchId, run, pollMs]);
 
   return { ...state, reload: () => run() };
 }
