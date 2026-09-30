@@ -5,7 +5,7 @@ import lighthouse from "lighthouse";
 import desktopConfig from "lighthouse/core/config/desktop-config.js";
 import { spawn } from "node:child_process";
 import { tmpdir } from "node:os";
-import { writeFileSync } from "node:fs";
+import { rmSync, writeFileSync } from "node:fs";
 const base = process.env.BASE ?? "http://localhost:3100";
 const form = process.env.FORM ?? "mobile";
 const port = 9333 + (form === "desktop" ? 1 : 0);
@@ -18,12 +18,28 @@ const budget =
   form === "desktop"
     ? { perf: num("BUDGET_PERF", 85), a11y: num("BUDGET_A11Y", 100), bp: num("BUDGET_BP", 95), seo: num("BUDGET_SEO", 95), lcpMs: num("BUDGET_LCP_MS", 2500), cls: num("BUDGET_CLS", 0.1), tbtMs: num("BUDGET_TBT_MS", 400) }
     : { perf: num("BUDGET_PERF", 70), a11y: num("BUDGET_A11Y", 100), bp: num("BUDGET_BP", 95), seo: num("BUDGET_SEO", 95), lcpMs: num("BUDGET_LCP_MS", 3500), cls: num("BUDGET_CLS", 0.1), tbtMs: num("BUDGET_TBT_MS", 1000) };
-const chrome = spawn(process.env.CHROME_PATH ?? "chromium", [`--remote-debugging-port=${port}`, "--headless=new", "--no-sandbox", "--disable-gpu", "--user-data-dir=" + tmpdir() + "/sabai-lh-" + form, "about:blank"], { stdio: "ignore" });
+// A fresh browser profile every time: one left over from an earlier run is already signed in (or holds an old service worker),
+// and the sign-in below would wait for a screen that is not there.
+const profile = tmpdir() + "/sabai-lh-" + form;
+rmSync(profile, { recursive: true, force: true });
+const chrome = spawn(process.env.CHROME_PATH ?? "chromium", [`--remote-debugging-port=${port}`, "--headless=new", "--no-sandbox", "--disable-gpu", "--user-data-dir=" + profile, "about:blank"], { stdio: "ignore" });
+// Whatever happens below, the browser goes with the script: one left behind keeps the debugging port, and the next run talks to it.
+process.on("exit", () => chrome.kill());
 await new Promise((r) => setTimeout(r, 2500));
 const browser = await chromium.connectOverCDP(`http://127.0.0.1:${port}`);
 const page = browser.contexts()[0].pages()[0] ?? (await browser.contexts()[0].newPage());
 await page.goto(base + "/", { waitUntil: "networkidle" });
-await page.getByRole("button", { name: /เจ้าของ/ }).first().click();
+if (process.env.MODE === "api") {
+  // The app connected to the API (a build with NEXT_PUBLIC_DATA_SOURCE=api, the API and a seeded database running):
+  // connect with the seeded account, pick the owner's card, enter the PIN — as a person would.
+  await page.getByLabel("อีเมล").fill(process.env.EMAIL ?? "owner@sabai.dev");
+  await page.getByRole("button", { name: /เชื่อมต่อ/ }).click();
+  await page.getByText("เชื่อมต่อกับระบบจริงแล้ว").waitFor();
+  await page.getByRole("button", { name: /คุณปิยะ/ }).filter({ hasNotText: /เข้าเป็น/ }).first().click();
+  for (const d of process.env.PIN ?? "1234") await page.getByRole("dialog").getByRole("button", { name: new RegExp(`^${d}$`) }).first().click();
+} else {
+  await page.getByRole("button", { name: /เจ้าของ/ }).first().click();
+}
 await page.waitForTimeout(1500);
 const routes = (process.env.ROUTES ?? "/,/today,/reports,/pos,/kds,/inventory,/menu,/finance").split(",");
 const rows = [];
@@ -59,7 +75,7 @@ for (const r of routes) {
   rows.push(best);
 }
 console.table(rows.map(({ lcpMs, clsValue, tbtMs, ...shown }) => shown));
-writeFileSync(`lh-${form}.json`, JSON.stringify(rows, null, 2));
+writeFileSync(`lh-${process.env.MODE === "api" ? "api-" : ""}${form}.json`, JSON.stringify(rows, null, 2));
 await browser.close();
 chrome.kill();
 

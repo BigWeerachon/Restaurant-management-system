@@ -57,7 +57,7 @@ function ReceiptDetails() {
   return (
     <Card className="space-y-4 p-5">
       <div>
-        <h3 className="font-semibold text-ink">ข้อมูลบนใบเสร็จและใบกำกับภาษี</h3>
+        <h2 className="font-semibold text-ink">ข้อมูลบนใบเสร็จและใบกำกับภาษี</h2>
         <p className="text-sm text-ink-3">ที่อยู่และเบอร์โทรตั้งที่แต่ละสาขา ส่วนชื่อนิติบุคคลและเลขผู้เสียภาษีตั้งที่นี่ครั้งเดียว</p>
       </div>
       <div className="grid gap-4 sm:grid-cols-2">

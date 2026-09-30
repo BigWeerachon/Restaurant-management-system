@@ -1,9 +1,11 @@
 import AxeBuilder from "@axe-core/playwright";
 import { expect, type Page } from "@playwright/test";
 
-const TAGS = ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"];
+// WCAG 2.2 AA, and axe's "best practice" rules (heading order, landmarks, …): Lighthouse's accessibility score counts those
+// too, and a page that passes the first and fails the second is what a person running Lighthouse will find.
+const TAGS = ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa", "best-practice"];
 
-/** WCAG 2.2 AA on what is on screen right now: zero violations, and if there are some, which and where. */
+/** WCAG 2.2 AA and best practice on what is on screen right now: zero violations, and if there are some, which and where. */
 export async function expectAccessible(page: Page, label: string): Promise<void> {
   // Parts of a long page that are far below the screen are not drawn until they come near it (`.offscreen-lazy`), and a
   // part that is not drawn cannot be measured for contrast. The whole page is checked, so draw all of it for the scan.

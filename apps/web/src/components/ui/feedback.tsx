@@ -110,7 +110,9 @@ export function EmptyState({ emoji, title, description, action, secondary, class
           {emoji}
         </motion.span>
       </div>
-      <h3 className={cn("font-semibold text-ink", compact ? "text-base" : "text-xl")}>{title}</h3>
+      {/* Not a heading: an empty state sits wherever the page has nothing to show — straight under the page's <h1> as often as
+          inside a card — so any fixed level skips one somewhere (and Lighthouse's "heading order" fails the page). */}
+      <p className={cn("font-semibold text-ink", compact ? "text-base" : "text-xl")}>{title}</p>
       {description && <p className="mt-1.5 max-w-md text-[15px] text-ink-3">{description}</p>}
       {(action || secondary) && (
         <div className="mt-5 flex flex-wrap items-center justify-center gap-2">

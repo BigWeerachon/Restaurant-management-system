@@ -300,6 +300,8 @@ function PosScreen() {
     <div className="glass-field flex h-dvh flex-col bg-bg">
       {/* Top bar */}
       <header className="flex h-16 shrink-0 items-center gap-2 border-b border-[var(--glass-border)] bg-[var(--glass-bg-strong)] px-3 backdrop-blur-xl backdrop-saturate-150 sm:gap-3 sm:px-4">
+        {/* The till has no page title on screen; a screen reader still needs to be told which page this is. */}
+        <h1 className="sr-only">ขายหน้าร้าน</h1>
         {hasHome ? (
           <Link href={nav.primary.find((n) => n.key !== "pos")?.href ?? "/"} className="grid h-11 w-11 place-items-center rounded-xl text-ink-2 hover:bg-surface-2" aria-label="กลับหน้าหลัก">
             <ArrowLeft className="h-5 w-5" />

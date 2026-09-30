@@ -272,6 +272,10 @@
   from { opacity: 0; transform: translateY(6px); }
   to { opacity: 1; transform: none; }
 }
+@keyframes loading-bar {
+  from { background-position: -60% 0; }
+  to { background-position: 160% 0; }
+}
 
 @layer base {
   html {
@@ -320,6 +324,12 @@
    * drawn at once). `auto` in the size makes the browser remember the real height once a part has been drawn.
    */
   .offscreen-lazy { content-visibility: auto; contain-intrinsic-size: auto 600px; }
+  /* Shown along the top edge of the window while a page reads its data (`LoadBanner`): it takes no room, so nothing below it moves. */
+  .loading-bar {
+    background: linear-gradient(90deg, transparent, var(--brand), transparent) no-repeat;
+    background-size: 40% 100%;
+    animation: loading-bar 1.1s ease-in-out infinite;
+  }
   .bg-grain {
     background-image: radial-gradient(ellipse at top left, var(--brand-soft), transparent 55%),
       radial-gradient(ellipse at bottom right, var(--accent-soft), transparent 50%);
@@ -395,6 +405,8 @@
     transition-duration: 1ms !important;
     scroll-behavior: auto !important;
   }
+  /* Nothing sweeps: the bar is simply there, while the page loads. */
+  .loading-bar { background: var(--brand); opacity: 0.45; animation: none !important; }
 }
 
 @media (forced-colors: active) {

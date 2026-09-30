@@ -177,7 +177,7 @@ export function BillingPanel({ onPay }: { onPay: (invoice: BillingInvoice) => vo
 
       {billing.invoices.length > 0 && (
         <Card className="mt-4 p-5">
-          <h3 className="mb-2 font-semibold text-ink">ประวัติใบแจ้งหนี้</h3>
+          <h2 className="mb-2 font-semibold text-ink">ประวัติใบแจ้งหนี้</h2>
           <ul className="divide-y divide-line">
             {billing.invoices.map((i) => {
               const st = INVOICE_STATUS[i.status];

@@ -19,7 +19,7 @@ export function PaperSettings() {
     <div className="space-y-4">
       <Card className="space-y-4 p-5">
         <div>
-          <h3 className="font-semibold text-ink">เครื่องพิมพ์ใบเสร็จของเครื่องนี้</h3>
+          <h2 className="font-semibold text-ink">เครื่องพิมพ์ใบเสร็จของเครื่องนี้</h2>
           <p className="text-sm text-ink-3">แต่ละเครื่องในร้านตั้งของตัวเอง เพราะแต่ละเครื่องต่อเครื่องพิมพ์คนละตัว</p>
         </div>
         <Segmented
@@ -58,7 +58,7 @@ function DirectPrinter() {
   if (supported.length === 0) {
     return (
       <Card className="space-y-3 p-5">
-        <h3 className="font-semibold text-ink">ต่อเครื่องพิมพ์ตรง</h3>
+        <h2 className="font-semibold text-ink">ต่อเครื่องพิมพ์ตรง</h2>
         <Callout tone="info" title="เบราว์เซอร์นี้ยังต่อเครื่องพิมพ์ตรงไม่ได้">
           การต่อ USB, Serial หรือบลูทูธเข้ากับเครื่องพิมพ์ใช้ได้ใน Chrome และ Edge (คอมพิวเตอร์ และแอนดรอยด์) ส่วน Safari/iPad ยังไม่รองรับ ระหว่างนี้พิมพ์ผ่านหน้าต่างพิมพ์ของเครื่องได้ตามปกติ
         </Callout>
@@ -71,7 +71,7 @@ function DirectPrinter() {
   return (
     <Card className="space-y-4 p-5">
       <div>
-        <h3 className="font-semibold text-ink">ต่อเครื่องพิมพ์ตรง</h3>
+        <h2 className="font-semibold text-ink">ต่อเครื่องพิมพ์ตรง</h2>
         <p className="text-sm text-ink-3">พิมพ์ใบเสร็จและใบครัวได้ทันทีไม่ต้องเปิดหน้าต่างพิมพ์ และสั่งเปิดลิ้นชักเก็บเงินได้ (เครื่องพิมพ์ความร้อนแบบ ESC/POS)</p>
       </div>
 
