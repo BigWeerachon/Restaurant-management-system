@@ -16,9 +16,10 @@ import { route, type Deps, type Env } from "../http";
 import { RateLimiter } from "../rate-limit";
 import { branchTenant, callJson } from "./support";
 
-const pinLimiter = new RateLimiter(10, 60_000);
-
 export function registerIdentity(app: Hono<Env>, deps: Deps) {
+  // Tries a minute per address and branch (10 unless the deployment says otherwise): enough for a shop changing hands at
+  // the till, too few for guessing a PIN.
+  const pinLimiter = new RateLimiter(deps.config.limits.pinAttemptsPerMinute, 60_000);
   route(app, deps, { method: "POST", path: "/v1/tenants", tag: "Identity", summary: "สมัครใช้งาน: สร้างร้านพร้อมค่าเริ่มต้นที่พร้อมขาย", body: CreateTenantBody, status: 201 }, async ({ body, actor, tx }) => {
     if (!actor.userId) throw new ApiFailure("AUTH_REQUIRED", 401);
     return tx((t) =>

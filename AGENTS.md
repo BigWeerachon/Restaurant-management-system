@@ -12,7 +12,8 @@ Sabai is a restaurant & café management SaaS (Thai-first). Read `docs/00-master
 | Database tests | `pnpm db:test` — rebuilds `sabai_test` from `supabase/migrations` and runs `packages/db/tests/*.sql` |
 | Web dev | `pnpm --filter @sabai/web dev` (demo data, no server needed) |
 | API dev | `pnpm --filter @sabai/api dev` |
-| Accessibility + Lighthouse | see `tools/qa/README.md` |
+| Browser tests (Playwright) | `pnpm e2e demo` or `pnpm e2e api` — builds, starts what it needs, runs `apps/web/e2e`; this is what CI runs. `api` needs Postgres 16 on localhost. `CHROME_PATH=…` reuses an installed Chromium |
+| Lighthouse budget | see `tools/qa/README.md` (CI runs it too) |
 
 ## Rules that tests enforce
 

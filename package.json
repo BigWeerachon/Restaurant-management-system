@@ -17,6 +17,7 @@
     "db:reset": "pnpm --filter @sabai/db reset",
     "db:seed": "pnpm --filter @sabai/db seed",
     "db:test": "pnpm --filter @sabai/db test:sql",
+    "e2e": "bash ./scripts/e2e.sh",
     "stack:dev": "bash ./scripts/stack-dev.sh"
   },
   "devDependencies": {

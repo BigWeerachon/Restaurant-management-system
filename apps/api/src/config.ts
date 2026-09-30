@@ -38,6 +38,10 @@ export interface Config {
   staffTokenTtlSeconds: number;
   billing: BillingConfig;
   observability: ObservabilityConfig;
+  limits: {
+    /** PIN sign-ins and approvals per minute, per address and branch. Brute-force protection: keep it low in production. */
+    pinAttemptsPerMinute: number;
+  };
 }
 
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
@@ -69,6 +73,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     jwtSecret,
     corsOrigins: (env.CORS_ORIGINS ?? "http://localhost:3000").split(",").map((s) => s.trim()).filter(Boolean),
     staffTokenTtlSeconds: Number(env.STAFF_TOKEN_TTL ?? 12 * 3600),
+    limits: { pinAttemptsPerMinute: Math.max(1, Math.floor(Number(env.PIN_ATTEMPTS_PER_MINUTE ?? 10)) || 10) },
     observability: {
       serviceName: env.OTEL_SERVICE_NAME?.trim() || "sabai-api",
       environment: mode,

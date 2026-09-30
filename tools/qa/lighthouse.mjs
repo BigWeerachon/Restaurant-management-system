@@ -9,6 +9,15 @@ import { writeFileSync } from "node:fs";
 const base = process.env.BASE ?? "http://localhost:3100";
 const form = process.env.FORM ?? "mobile";
 const port = 9333 + (form === "desktop" ? 1 : 0);
+// The budget: what a page may not fall below (scores, 0–100) or above (the metrics). On a quiet machine the scores are
+// 93–100 and LCP ≤ 1.4 s, but total blocking time swings by half between identical runs on a busy one (a shared CI
+// runner), so the budget is there to catch a real regression, not to police noise; a route that misses it is measured
+// again (ATTEMPTS, default 3) and its best run counts. Anything can be overridden, e.g. BUDGET_PERF=90.
+const num = (name, fallback) => (process.env[name] !== undefined ? Number(process.env[name]) : fallback);
+const budget =
+  form === "desktop"
+    ? { perf: num("BUDGET_PERF", 85), a11y: num("BUDGET_A11Y", 100), bp: num("BUDGET_BP", 95), seo: num("BUDGET_SEO", 95), lcpMs: num("BUDGET_LCP_MS", 2500), cls: num("BUDGET_CLS", 0.1), tbtMs: num("BUDGET_TBT_MS", 400) }
+    : { perf: num("BUDGET_PERF", 70), a11y: num("BUDGET_A11Y", 100), bp: num("BUDGET_BP", 95), seo: num("BUDGET_SEO", 95), lcpMs: num("BUDGET_LCP_MS", 3500), cls: num("BUDGET_CLS", 0.1), tbtMs: num("BUDGET_TBT_MS", 1000) };
 const chrome = spawn(process.env.CHROME_PATH ?? "chromium", [`--remote-debugging-port=${port}`, "--headless=new", "--no-sandbox", "--disable-gpu", "--user-data-dir=" + tmpdir() + "/sabai-lh-" + form, "about:blank"], { stdio: "ignore" });
 await new Promise((r) => setTimeout(r, 2500));
 const browser = await chromium.connectOverCDP(`http://127.0.0.1:${port}`);
@@ -18,18 +27,47 @@ await page.getByRole("button", { name: /เจ้าของ/ }).first().click(
 await page.waitForTimeout(1500);
 const routes = (process.env.ROUTES ?? "/,/today,/reports,/pos,/kds,/inventory,/menu,/finance").split(",");
 const rows = [];
-for (const r of routes) {
-  const config = form === "desktop"
-    ? { ...desktopConfig, settings: { ...desktopConfig.settings, disableStorageReset: true } }
-    : { extends: "lighthouse:default", settings: { disableStorageReset: true } };
+const attempts = num("ATTEMPTS", 3);
+const config = form === "desktop"
+  ? { ...desktopConfig, settings: { ...desktopConfig.settings, disableStorageReset: true } }
+  : { extends: "lighthouse:default", settings: { disableStorageReset: true } };
+
+async function measure(r) {
   const res = await lighthouse(base + r, { port, output: "json", logLevel: "error", disableStorageReset: true }, config);
   const c = res.lhr.categories;
   const a = res.lhr.audits;
-  rows.push({ route: r, perf: Math.round(c.performance.score * 100), a11y: Math.round(c.accessibility.score * 100), bp: Math.round(c["best-practices"].score * 100), seo: Math.round(c.seo.score * 100), lcp: a["largest-contentful-paint"].displayValue, cls: a["cumulative-layout-shift"].displayValue, tbt: a["total-blocking-time"].displayValue, finalUrl: res.lhr.finalDisplayedUrl });
+  const row = { route: r, perf: Math.round(c.performance.score * 100), a11y: Math.round(c.accessibility.score * 100), bp: Math.round(c["best-practices"].score * 100), seo: Math.round(c.seo.score * 100), lcp: a["largest-contentful-paint"].displayValue, cls: a["cumulative-layout-shift"].displayValue, tbt: a["total-blocking-time"].displayValue, finalUrl: res.lhr.finalDisplayedUrl, lcpMs: Math.round(a["largest-contentful-paint"].numericValue), clsValue: a["cumulative-layout-shift"].numericValue, tbtMs: Math.round(a["total-blocking-time"].numericValue) };
   const fails = Object.values(a).filter((x) => x.score !== null && x.score < 0.9 && x.scoreDisplayMode === "binary").map((x) => x.id);
-  if (fails.length) rows[rows.length - 1].fails = fails.join(",");
+  if (fails.length) row.fails = fails.join(",");
+  return row;
 }
-console.table(rows);
+const problemsOf = (row) => {
+  const out = [];
+  if (new URL(row.finalUrl).pathname !== new URL(base + row.route).pathname) out.push(`${row.route}: ended up on ${new URL(row.finalUrl).pathname}`);
+  for (const [key, min] of [["perf", budget.perf], ["a11y", budget.a11y], ["bp", budget.bp], ["seo", budget.seo]]) if (row[key] < min) out.push(`${row.route}: ${key} ${row[key]} < ${min}`);
+  if (row.lcpMs > budget.lcpMs) out.push(`${row.route}: LCP ${row.lcpMs} ms > ${budget.lcpMs} ms`);
+  if (row.clsValue > budget.cls) out.push(`${row.route}: CLS ${row.clsValue} > ${budget.cls}`);
+  if (row.tbtMs > budget.tbtMs) out.push(`${row.route}: TBT ${row.tbtMs} ms > ${budget.tbtMs} ms`);
+  return out;
+};
+for (const r of routes) {
+  let best = await measure(r);
+  for (let n = 1; n < attempts && problemsOf(best).length; n++) {
+    const again = await measure(r);
+    if (again.perf > best.perf) best = again;
+  }
+  rows.push(best);
+}
+console.table(rows.map(({ lcpMs, clsValue, tbtMs, ...shown }) => shown));
 writeFileSync(`lh-${form}.json`, JSON.stringify(rows, null, 2));
 await browser.close();
 chrome.kill();
+
+// Held to the budget. A page that redirected to the welcome screen (the sign-in did not work) is a failure too: it
+// would otherwise pass with the welcome screen's good numbers.
+const broken = rows.flatMap(problemsOf);
+if (broken.length) {
+  console.error(`\nOVER BUDGET (${form}):\n  ${broken.join("\n  ")}`);
+  process.exit(1);
+}
+console.log(`\nWithin budget (${form}): ${JSON.stringify(budget)}`);

@@ -1,7 +1,7 @@
 "use client";
 
 import { allDayCounts, elapsedSeconds, formatElapsed, URGENCY_COPY, urgency, type Urgency } from "@sabai/domain";
-import { AlertTriangle, ArrowLeft, Bell, BellOff, Bike, Check, ChefHat, Clock, Flame, History, Printer, ShoppingBag, Trash2, Undo2, Utensils } from "lucide-react";
+import { AlertTriangle, ArrowLeft, Bell, BellOff, Bike, Check, ChefHat, Clock, Flame, History, PackageX, Printer, ShoppingBag, Trash2, Undo2, Utensils } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -215,18 +215,18 @@ function KdsScreen() {
 
   return (
     <div className="kds flex h-dvh flex-col bg-bg text-ink">
-      <header className="flex h-[72px] shrink-0 items-center gap-3 border-b border-line bg-surface px-4">
+      <header className="flex h-[72px] shrink-0 items-center gap-2 border-b border-line bg-surface px-3 sm:gap-3 sm:px-4">
         {hasHome && (
           <Link href={nav.primary.find((n) => n.key !== "kds")?.href ?? "/"} className="grid h-12 w-12 place-items-center rounded-xl text-ink-2 hover:bg-surface-2" aria-label="กลับหน้าหลัก">
             <ArrowLeft className="h-5 w-5" />
           </Link>
         )}
-        <div className="flex items-center gap-2">
-          <ChefHat className="h-7 w-7 text-brand" aria-hidden="true" />
-          <h1 className="whitespace-nowrap text-xl font-bold">จอครัว</h1>
+        <div className="flex min-w-0 items-center gap-2">
+          <ChefHat className="hidden h-7 w-7 shrink-0 text-brand sm:block" aria-hidden="true" />
+          <h1 className="truncate text-xl font-bold">จอครัว</h1>
         </div>
         <Segmented label="สถานี" value={station} onChange={setStation} size="lg" className="ml-2 hidden md:inline-flex" options={[{ value: "all", label: "ทั้งหมด" }, ...stations.map((s) => ({ value: s.id, label: s.name }))]} />
-        <div className="ml-auto flex items-center gap-2">
+        <div className="ml-auto flex shrink-0 items-center gap-1.5 sm:gap-2">
           <div className="hidden items-center gap-4 whitespace-nowrap rounded-2xl bg-surface-2 px-4 py-2 text-sm lg:flex" aria-live="polite">
             <span>
               รอทำ <strong className="text-lg tabular">{tickets.filter((t) => t.status === "new").length}</strong>
@@ -238,12 +238,12 @@ function KdsScreen() {
               เกินเวลา <strong className="text-lg tabular">{late}</strong>
             </span>
           </div>
-          <Button variant="secondary" size="lg" onClick={() => setRecallOpen(true)} icon={<History className="h-5 w-5" />} aria-label="เรียกคืนออเดอร์ที่ส่งแล้ว">
+          <Button variant="secondary" size="lg" className="px-3 sm:px-6" onClick={() => setRecallOpen(true)} icon={<History className="h-5 w-5" />} aria-label="เรียกคืนออเดอร์ที่ส่งแล้ว">
             <span className="hidden sm:inline">เรียกคืน</span>
           </Button>
           {can("menu.availability") && (
-            <Button variant="secondary" size="lg" onClick={() => setSoldOutOpen(true)}>
-              ของหมด
+            <Button variant="secondary" size="lg" className="px-3 sm:px-6" onClick={() => setSoldOutOpen(true)} icon={<PackageX className="h-5 w-5 sm:hidden" aria-hidden="true" />}>
+              <span className="sr-only sm:not-sr-only">ของหมด</span>
             </Button>
           )}
           {can("inventory.waste") && (
@@ -251,7 +251,7 @@ function KdsScreen() {
               <Trash2 className="h-5 w-5" aria-hidden="true" /> ของเสีย
             </Link>
           )}
-          <Button variant="ghost" size="icon-lg" onClick={() => setSound((v) => !v)} aria-label={sound ? "ปิดเสียงแจ้งเตือน" : "เปิดเสียงแจ้งเตือน"} aria-pressed={sound}>
+          <Button variant="ghost" size="icon-lg" className="h-11 w-11 sm:h-14 sm:w-14" onClick={() => setSound((v) => !v)} aria-label={sound ? "ปิดเสียงแจ้งเตือน" : "เปิดเสียงแจ้งเตือน"} aria-pressed={sound}>
             {sound ? <Bell className="h-6 w-6" /> : <BellOff className="h-6 w-6" />}
           </Button>
           <ConnectionBadge compact className="shrink-0" />

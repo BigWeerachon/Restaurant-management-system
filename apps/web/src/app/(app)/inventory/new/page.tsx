@@ -45,7 +45,7 @@ export default function NewIngredientPage() {
   const [saved, setSaved] = useState<string | null>(null);
 
   const emoji = EMOJI.find(([re]) => re.test(name))?.[1] ?? "📦";
-  const categories = useMemo(() => [...new Set(["เนื้อสัตว์", "ผักและผลไม้", "ของแห้งและเครื่องปรุง", "นมและเครื่องดื่ม", "บรรจุภัณฑ์", ...db.ingredients.map((i) => i.category)])], [db.ingredients]);
+  const categories = useMemo(() => [...new Set(["เนื้อสัตว์", "ผักและผลไม้", "ของแห้งและเครื่องปรุง", "นมและเครื่องดื่ม", "บรรจุภัณฑ์", ...db.ingredients.map((i) => i.category)].filter(Boolean))], [db.ingredients]);
   const packUnits = base === "g" ? ["kg", "g"] : base === "ml" ? ["l", "ml"] : ["pcs", "dozen"];
   const packBase = Number(packSize) > 0 ? convert(Number(packSize), packUnit, base) : 0;
   const perUnit = packBase > 0 && Number(price) > 0 ? Number(price) / packBase : 0;

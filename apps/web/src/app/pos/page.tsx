@@ -375,7 +375,7 @@ function PosScreen() {
         </nav>
 
         {/* Menu */}
-        <section aria-label="เมนู" className="flex min-w-0 flex-1 flex-col">
+        <main aria-label="เมนู" className="flex min-w-0 flex-1 flex-col">
           <div className="flex gap-2 p-3 pb-2">
             <SearchInput value={q} onChange={setQ} placeholder="ค้นหาเมนู" className="flex-1" />
           </div>
@@ -439,7 +439,7 @@ function PosScreen() {
               </ul>
             )}
           </div>
-        </section>
+        </main>
 
         {/* Cart (desktop/tablet) */}
         <aside aria-label="บิล" className="hidden w-[380px] shrink-0 border-l border-[var(--glass-border)] bg-[var(--glass-bg-strong)] backdrop-blur-xl backdrop-saturate-150 lg:block">

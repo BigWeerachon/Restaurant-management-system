@@ -143,7 +143,7 @@ export default function TodayPage() {
         ))}
       </section>
 
-      <div className="mt-6 grid gap-6 xl:grid-cols-[1.35fr_1fr]">
+      <div className="mt-6 grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)]">
         <div className="space-y-6">
           <Card as="section" aria-labelledby="todo">
             <CardHeader title={<span id="todo">สิ่งที่ควรทำตอนนี้</span>} description="เรียงจากเรื่องที่สำคัญที่สุด" icon={<BellRing className="h-5 w-5" />} />

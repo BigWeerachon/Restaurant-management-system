@@ -43,3 +43,94 @@ jobs:
       # SQL e2e (packages/db), domain, API integration (real Postgres) and web tests
       - run: pnpm test
       - run: pnpm build
+
+  # The app in a real browser, in both of its modes: on its in-browser demo data, and connected to the API and a
+  # freshly seeded Postgres. The same command runs locally (`bash scripts/e2e.sh demo|api`). The specs cover every
+  # page (opens, nothing throws or fails in the background, WCAG 2.2 AA in light and dark, phone width without
+  # sideways scrolling), the till → kitchen → books flow, full tax invoices, and — API only — the shop's own bill.
+  e2e:
+    name: Browser tests · ${{ matrix.mode }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    strategy:
+      fail-fast: false
+      matrix:
+        mode: [demo, api]
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      PGHOST: localhost
+      PGUSER: postgres
+      PGPASSWORD: postgres
+      NEXT_TELEMETRY_DISABLED: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - name: Postgres client
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq postgresql-client
+      - run: pnpm install --frozen-lockfile
+      - name: Browser
+        run: pnpm --filter @sabai/web exec playwright install --with-deps chromium
+      - name: Browser tests (${{ matrix.mode }})
+        run: bash scripts/e2e.sh ${{ matrix.mode }}
+      - name: Report and traces of what failed
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-${{ matrix.mode }}
+          path: |
+            apps/web/playwright-report
+            apps/web/test-results
+          retention-days: 7
+
+  # Lighthouse on the signed-in pages of a production build, mobile and desktop, held to a budget (tools/qa/lighthouse.mjs):
+  # accessibility 100, best practices and SEO >= 95, performance and the Core Web Vitals within limits loose enough for a
+  # shared runner. (Accessibility of every page and dialog is also checked, with axe, by the browser tests above.)
+  lighthouse:
+    name: Lighthouse budget
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      NEXT_TELEMETRY_DISABLED: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @sabai/web build
+      - name: QA tools and a browser
+        working-directory: tools/qa
+        run: |
+          npm ci --no-audit --no-fund
+          npx playwright-core install --with-deps chromium
+      - name: Lighthouse, mobile and desktop
+        run: |
+          pnpm --filter @sabai/web exec next start --port 3100 &
+          for i in $(seq 1 60); do curl -sf -o /dev/null http://localhost:3100 && break; sleep 1; done
+          cd tools/qa
+          export CHROME_PATH="$(node -e "console.log(require('playwright-core').chromium.executablePath())")"
+          npm run lighthouse
+      - name: The numbers
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: lighthouse
+          path: tools/qa/lh-*.json
+          retention-days: 14
+

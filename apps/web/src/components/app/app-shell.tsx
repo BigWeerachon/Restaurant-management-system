@@ -308,7 +308,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           {nav.primary.slice(0, nav.more.length ? 4 : 5).map((n) => {
             const active = isActive(n.href);
             return (
-              <Link key={n.key} href={n.href} aria-current={active ? "page" : undefined} className={cn("relative flex h-16 flex-1 flex-col items-center justify-center gap-1 text-[11px] font-medium", active ? "text-brand" : "text-ink-3")}>
+              <Link key={n.key} href={n.href} aria-current={active ? "page" : undefined} className={cn("relative flex h-16 flex-1 flex-col items-center justify-center gap-1 text-[11px] font-medium", active ? "text-brand" : "text-ink-2")}>
                 {active && <motion.span layoutId="tab-nav" className="absolute top-0 h-[3px] w-10 rounded-full bg-brand" />}
                 <Icon name={n.icon} className="h-6 w-6" />
                 {n.th}
@@ -316,7 +316,7 @@ export function AppShell({ children }: { children: ReactNode }) {
             );
           })}
           {nav.more.length > 0 && (
-            <button onClick={() => setMoreOpen(true)} className={cn("flex h-16 flex-1 flex-col items-center justify-center gap-1 text-[11px] font-medium", moreActive ? "text-brand" : "text-ink-3")}>
+            <button onClick={() => setMoreOpen(true)} className={cn("flex h-16 flex-1 flex-col items-center justify-center gap-1 text-[11px] font-medium", moreActive ? "text-brand" : "text-ink-2")}>
               <MoreHorizontal className="h-6 w-6" aria-hidden="true" />
               เพิ่มเติม
             </button>

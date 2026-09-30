@@ -1,0 +1,23 @@
+/** Every back-office page an owner can open. */
+export const BACK_OFFICE_ROUTES = [
+  "/today",
+  "/pos",
+  "/kds",
+  "/orders",
+  "/inventory",
+  "/inventory/receive",
+  "/inventory/waste",
+  "/inventory/count",
+  "/inventory/new",
+  "/menu",
+  "/menu/new",
+  "/purchasing",
+  "/finance",
+  "/finance/close",
+  "/reports",
+  "/team",
+  "/settings",
+  "/setup",
+  "/setup/branch",
+  "/setup/payments",
+] as const;

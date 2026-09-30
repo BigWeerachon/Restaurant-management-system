@@ -6,6 +6,7 @@ import { loadConfig } from "./config";
 import { createDb } from "./db";
 import { EventHub } from "./events";
 import { createLogger } from "./logger";
+import { installProcessGuards } from "./process-guards";
 import { startTelemetry } from "./observability/telemetry";
 
 const config = loadConfig();
@@ -43,14 +44,4 @@ async function shutdown(signal: string) {
 process.on("SIGTERM", () => void shutdown("SIGTERM"));
 process.on("SIGINT", () => void shutdown("SIGINT"));
 
-// What nothing else caught. A rejection is logged and reported and the server carries on; an exception leaves it in
-// an unknown state, so it is reported and the process exits for the platform to start a fresh one.
-process.on("unhandledRejection", (reason) => {
-  log.error("unhandled_rejection", { error: reason instanceof Error ? { name: reason.name, message: reason.message, stack: reason.stack } : String(reason) });
-  reporter.capture(reason, { code: "UNHANDLED_REJECTION" });
-});
-process.on("uncaughtException", (error) => {
-  log.error("uncaught_exception", { error: { name: error.name, message: error.message, stack: error.stack } });
-  reporter.capture(error, { code: "UNCAUGHT_EXCEPTION" });
-  void reporter.flush().finally(() => process.exit(1));
-});
+installProcessGuards({ log, reporter });
