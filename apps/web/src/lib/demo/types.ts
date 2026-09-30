@@ -516,7 +516,8 @@ export interface DemoState {
   modifierGroups: ModifierGroup[];
   roles: Role[];
   members: Member[];
-  balances: Record<string, { qty: number; avgCost: number }>;
+  /** Per `branchId:ingredientId`. `usage7d` is only set when the server counted the week's usage (API mode); the demo works it out from `movements`. */
+  balances: Record<string, { qty: number; avgCost: number; usage7d?: number }>;
   movements: Movement[];
   orders: Order[];
   taxInvoices: TaxInvoice[];

@@ -24,6 +24,10 @@ POS · จอครัว · สูตรและต้นทุน · สต�
 | ![ออกใบกำกับภาษีเต็มรูป](docs/screenshots/23-tax-invoice-issued.jpg) | ![ใบกำกับภาษี A4](docs/screenshots/24-tax-invoice-paper.jpg) |
 | ![คิวที่รอส่งเมื่อเน็ตหลุด](docs/screenshots/25-offline-queue.jpg) | ![บนมือถือ](docs/screenshots/26-phone-offline-queue.jpg) |
 
+โหมด API บน Postgres จริงกับประวัติขาย 30 วัน (`pnpm db:seed:history`) — รายงาน "เหลือเงินจริงเท่าไร":
+
+![รายงานในโหมด API กับประวัติขาย 30 วัน](docs/screenshots/27-api-reports-history.jpg)
+
 ## คุณภาพที่วัดได้
 
 | | ผล |
@@ -32,7 +36,7 @@ POS · จอครัว · สูตรและต้นทุน · สต�
 | Lighthouse mobile (จำลอง 4G + CPU 4×) | Performance **85–94** (กลาง ~90) · Accessibility / Best practices / SEO **100** · LCP 1.1–1.5 s · TBT 0.3–0.6 s — ต่ำกว่า V1 (93–100) เพราะฟีเจอร์ V1.1 ([ที่มา](docs/04-architecture.md#5e-หน้าจอแรกบนมือถือ-ประสิทธิภาพที่วัดแล้วและกฎที่ต้องรักษา)) |
 | Lighthouse โหมด API (ต่อ API + Postgres จริง) | Desktop Performance **96–100** · Mobile Performance **71–85** (ทุกหน้ารอข้อมูลจาก API บนเครือข่ายจำลอง 4G; ยังไม่ได้วัดบนมือถือจริง) · Accessibility / Best practices / SEO **100**, CLS ≤ 0.015 |
 | axe-core WCAG 2.2 AA | **0 violations** — 21 หน้า × สว่าง/มืด, มือถือ, dialog/wizard/ใบเสร็จ อยู่ใน browser tests ที่ **ขวางการ merge** |
-| Tests | SQL e2e 233 assertions · domain 114 · API 101 (กับ Postgres จริง) · web 392 · observability 17 · browser tests 72 (โหมดเดโม) + 68 (โหมด API) — ผ่านทั้งหมด |
+| Tests | SQL 275 assertions (231 end-to-end + 44 ประวัติขาย) · domain 114 · API 101 (กับ Postgres จริง) · web 393 · observability 17 · browser tests 72 (โหมดเดโม) + 68 (โหมด API) — ผ่านทั้งหมด |
 | CI ทุก push | `check` (typecheck + tests + SQL + build) · `e2e` ทั้งสองโหมด · `lighthouse` (งบประมาณคะแนน) |
 | คะแนนประเมิน | ฟังก์ชัน **96** · หน้าตา **96** · animation **95** · รวมทั้งโปรเจกต์ 95.1 ([scorecard](docs/08-scorecard.md) — พร้อมข้อจำกัดที่ยังเหลือ) |
 
@@ -45,19 +49,20 @@ pnpm install
 # 1) โหมดเดโม — ทดลองหน้าเว็บทันที (ร้านตัวอย่าง + ข้อมูล 30 วัน ข้อมูลอยู่ในเบราว์เซอร์ ไม่ต้องมีเซิร์ฟเวอร์)
 pnpm --filter @sabai/web dev            # http://localhost:3000
 
-# 2) โหมด API — ทุกหน้าอ่าน/เขียนผ่าน API บน Postgres จริง (reset DB → seed ร้านตัวอย่าง → API + web พร้อมกัน)
-pnpm stack:dev                          # API http://localhost:8787 · web http://localhost:3000
+# 2) โหมด API — ทุกหน้าอ่าน/เขียนผ่าน API บน Postgres จริง (reset DB → seed ร้านตัวอย่าง + ประวัติขาย 30 วัน → API + web พร้อมกัน)
+pnpm stack:dev                          # API http://localhost:8787 · web http://localhost:3000 · SEED_HISTORY=0 = เริ่มจากร้านที่ยังไม่เคยขาย
 
 # ฐานข้อมูล + API แยกทีละส่วน (เทียบเท่าข้อ 2 แต่คุมเองได้)
 pnpm db:test                            # สร้าง DB ทดสอบ รันทุก migration และ SQL e2e
 pnpm db:reset                           # ติดตั้ง migrations ลง sabai_dev
 pnpm db:seed                            # ใส่ร้านตัวอย่างเดียวกับเดโม (เมนู/สูตร/พนักงาน/PIN)
+pnpm db:seed:history                    # (ไม่บังคับ) เติมประวัติขาย 30 วัน ~7,000 บิล ให้รายงาน/สต็อก/หน้าแรกมีข้อมูล — ทำซ้ำได้ผลเดิม
 pnpm --filter @sabai/api dev            # http://localhost:8787 · OpenAPI: /v1/openapi.json
 
 # ตรวจทั้งหมด
 pnpm typecheck && pnpm test && pnpm build
 pnpm e2e demo                           # browser tests (Playwright + axe) บน production build — โหมดเดโม
-pnpm e2e api                            # เหมือนกัน บน API + Postgres ที่ seed ใหม่
+pnpm e2e api                            # เหมือนกัน บน API + Postgres ที่ seed ใหม่ (ไม่มีประวัติขาย — เทสต์ต้องการร้านที่ยังไม่เคยขาย)
 ```
 
 `DATABASE_URL`/`JWT_SECRET` มีค่าเริ่มต้นที่ใช้กับ `sabai_dev` ได้ทันที ไม่ต้องสร้าง `.env`

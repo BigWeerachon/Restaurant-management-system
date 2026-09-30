@@ -6,6 +6,7 @@
   "scripts": {
     "reset": "bash ./scripts/reset.sh",
     "seed": "bash ./scripts/seed.sh",
+    "seed:history": "bash ./scripts/seed-history.sh",
     "test:sql": "bash ./run-sql-tests.sh",
     "test": "bash ./run-sql-tests.sh"
   }

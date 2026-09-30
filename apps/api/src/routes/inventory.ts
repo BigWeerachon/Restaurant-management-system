@@ -19,20 +19,30 @@ import { branchTenant, callJson, hasPermission, money, num } from "./support";
 const BranchQuery = z.object({ branchId: z.uuid() });
 
 export function registerInventory(app: Hono<Env>, deps: Deps) {
-  route(app, deps, { method: "GET", path: "/v1/stock", tag: "Inventory", summary: "สต็อกคงเหลือพร้อมสถานะ (หมด/ใกล้หมด/ติดลบ)", query: BranchQuery, permission: "inventory.view" }, async ({ query, tx }) =>
+  route(app, deps, { method: "GET", path: "/v1/stock", tag: "Inventory", summary: "สต็อกคงเหลือพร้อมสถานะ (หมด/ใกล้หมด/ติดลบ) และยอดที่ขายตัดสต็อกในสัปดาห์ที่ผ่านมา", query: BranchQuery, permission: "inventory.view" }, async ({ query, tx }) =>
     tx(async (t) => {
       const tenantId = await branchTenant(t, query.branchId);
       const showValue = await hasPermission(t, tenantId, "costs.view");
+      // What the till took off the shelf over the last week, per ingredient: the screen's "enough for ~N days". It is worked
+      // out here because the screen only ever holds the latest few hundred movements — a busy shop makes that many in a day.
       const rows = await t`
+        with usage as (
+          select m.ingredient_id, -sum(m.qty) as used
+            from app.stock_movements m
+           where m.branch_id = ${query.branchId} and m.reason = 'sale' and m.business_date >= app.business_date(${query.branchId}) - 7
+           group by m.ingredient_id
+        )
         select s.ingredient_id, s.name, s.base_unit, s.display_unit, s.storage_zone, s.qty_on_hand, s.unit_cost, s.stock_value,
-               s.reorder_point, s.par_level, s.status, s.last_movement_at
+               s.reorder_point, s.par_level, s.status, s.last_movement_at, coalesce(u.used, 0) as usage_7d
           from app.v_stock_status s
           join app.stock_locations l on l.id = s.location_id and l.is_default
+          left join usage u on u.ingredient_id = s.ingredient_id
          where s.branch_id = ${query.branchId}
          order by case s.status when 'negative' then 0 when 'out' then 1 when 'low' then 2 else 3 end, s.name`;
       return rows.map(({ unit_cost, stock_value, ...r }) => ({
         ...r,
         qty_on_hand: num(r.qty_on_hand),
+        usage_7d: num(r.usage_7d),
         ...(showValue ? { unit_cost: num(unit_cost), stock_value: money(stock_value) } : {}),
       }));
     }),

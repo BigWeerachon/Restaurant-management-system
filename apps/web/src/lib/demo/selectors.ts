@@ -47,9 +47,10 @@ export function stockRows(state: DemoState, branchId: string, now = new Date()):
   return state.ingredients
     .filter((i) => i.trackStock)
     .map((ingredient) => {
-      const qty = state.balances[balanceKey(branchId, ingredient.id)]?.qty ?? 0;
+      const balance = state.balances[balanceKey(branchId, ingredient.id)];
+      const qty = balance?.qty ?? 0;
       const unitCost = unitCostOf(state, ingredient, branchId);
-      const daily = (usage.get(ingredient.id) ?? 0) / 7;
+      const daily = (balance?.usage7d ?? usage.get(ingredient.id) ?? 0) / 7;
       return {
         ingredient,
         qty,

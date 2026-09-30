@@ -503,6 +503,15 @@ describe("a café's first day, through the API", () => {
     expect(one.payments[0]).toMatchObject({ method_id: s.cash, kind: "payment", fee_amount: "0.00" });
     expect(one.openedBy).toBeTruthy();
     expect(one.paidAt).toBeTruthy();
+
+    // The stock screen's "enough for ~N days" comes from what the till took off the shelf over the week, counted here — the
+    // screen only holds the latest few hundred movements, and a busy shop makes that many in a day.
+    const stockNow = await s.call("GET", `/v1/stock?branchId=${s.branchId}`);
+    const coffeeMoves = await s.call("GET", `/v1/stock-movements?branchId=${s.branchId}&ingredientId=${s.coffee}`);
+    const soldCoffee = -coffeeMoves.json.filter((m: any) => m.reason === "sale").reduce((sum: number, m: any) => sum + m.qty, 0);
+    expect(soldCoffee).toBeGreaterThan(0);
+    expect(stockNow.json.find((x: any) => x.ingredient_id === s.coffee).usage_7d).toBeCloseTo(soldCoffee, 4);
+    expect(stockNow.json.every((x: any) => typeof x.usage_7d === "number")).toBe(true);
   });
 
   it("keeps kitchen in the loop and lets cooks undo a mistaken bump", async () => {

@@ -134,11 +134,18 @@ export interface StockRowApi {
   qty_on_hand: number;
   /** Only sent to people who may see costs. */
   unit_cost?: number;
+  /** What the till took off the shelf over the last week, in base units (the screen only holds the latest movements). */
+  usage_7d?: number;
 }
 
-/** `balances` keeps quantity and average cost (฿ per base unit) per branch and ingredient. */
-export function mapBalances(rows: StockRowApi[], branchId: string): Record<string, { qty: number; avgCost: number }> {
-  return Object.fromEntries(rows.map((r) => [`${branchId}:${r.ingredient_id}`, { qty: r.qty_on_hand, avgCost: r.unit_cost ?? 0 }]));
+/**
+ * `balances` keeps quantity and average cost (฿ per base unit) per branch and ingredient — and, when the server says, the
+ * week's usage, because "enough for ~N days" cannot be worked out from the few hundred latest movements a busy shop makes in a day.
+ */
+export function mapBalances(rows: StockRowApi[], branchId: string): Record<string, { qty: number; avgCost: number; usage7d?: number }> {
+  return Object.fromEntries(
+    rows.map((r) => [`${branchId}:${r.ingredient_id}`, { qty: r.qty_on_hand, avgCost: r.unit_cost ?? 0, ...(r.usage_7d === undefined ? {} : { usage7d: r.usage_7d }) }]),
+  );
 }
 
 export interface MovementApi {

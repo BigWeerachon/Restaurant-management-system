@@ -9,6 +9,9 @@ cd "$(dirname "$0")/.."
 
 pnpm db:reset
 pnpm db:seed
+# Thirty days of sales history, so the reports have something to show (docs/v1.1-checklist.md 1.2b).
+# SEED_HISTORY=0 starts from a shop that has sold nothing, which is what the browser tests in CI use.
+if [ "${SEED_HISTORY:-1}" != "0" ]; then pnpm db:seed:history; fi
 
 pids=()
 cleanup() {

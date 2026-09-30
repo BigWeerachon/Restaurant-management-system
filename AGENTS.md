@@ -13,7 +13,8 @@ Sabai is a restaurant & café management SaaS (Thai-first). Read `docs/00-master
 | Web dev | `pnpm --filter @sabai/web dev` (demo data, no server needed) |
 | API dev | `pnpm --filter @sabai/api dev` |
 | Browser tests (Playwright) | `pnpm e2e demo` or `pnpm e2e api` — builds, starts what it needs, runs `apps/web/e2e`; this is what CI runs. `api` needs Postgres 16 on localhost. `CHROME_PATH=…` reuses an installed Chromium |
-| Full local stack on Postgres | `pnpm stack:dev` (reset DB, seed, API + web in API mode) |
+| Full local stack on Postgres | `pnpm stack:dev` (reset DB, seed, thirty days of sales history, API + web in API mode; `SEED_HISTORY=0` skips the history) |
+| Sales history on an existing seed | `pnpm db:seed:history` — opt-in (the browser tests assume a shop that has sold nothing); rows are written directly and shaped like the commands' own; deterministic |
 | Lighthouse budget | see `tools/qa/README.md` (CI runs it too) — also how to chase a score that dropped |
 
 ## Rules that tests enforce

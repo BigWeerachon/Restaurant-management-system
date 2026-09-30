@@ -89,6 +89,24 @@ describe("demo shop", () => {
     expect(stockRows(s, "br-ari", now).some((r) => r.status === "low")).toBe(true);
   });
 
+  it("takes 'enough for ~N days' from the week's usage the server counted, when it sends one — not from the movements it happens to hold", () => {
+    const s = sample();
+    const row = stockRows(s, "br-ari", now).find((r) => r.qty > 0)!;
+    const key = `br-ari:${row.ingredient.id}`;
+    // A busy shop holds only the last few hundred movements, which say almost nothing about the week: the server's count wins.
+    const counted = produce(s, (d) => {
+      d.movements = [];
+      d.balances[key] = { ...d.balances[key]!, usage7d: row.qty * 7 / 4 };
+    });
+    expect(stockRows(counted, "br-ari", now).find((r) => r.ingredient.id === row.ingredient.id)!.daysLeft).toBeCloseTo(4, 6);
+    // Nothing used all week: no estimate, rather than "forever".
+    const unused = produce(counted, (d) => { d.balances[key]!.usage7d = 0; });
+    expect(stockRows(unused, "br-ari", now).find((r) => r.ingredient.id === row.ingredient.id)!.daysLeft).toBeNull();
+    // The demo never sends one and keeps working it out from its own movements.
+    const worked = produce(s, (d) => { delete d.balances[key]!.usage7d; });
+    expect(stockRows(worked, "br-ari", now).find((r) => r.ingredient.id === row.ingredient.id)!.daysLeft).toEqual(row.daysLeft);
+  });
+
   it("enforces the same rules as the database", () => {
     let s = sample();
     const ctx = (actorId: string): E.Ctx => ({ now, actorId, branchId: "br-ari" });

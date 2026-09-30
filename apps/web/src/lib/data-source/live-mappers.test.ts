@@ -105,6 +105,9 @@ describe("stock", () => {
         "br-1",
       ),
     ).toEqual({ "br-1:ing-1": { qty: 2500, avgCost: 0.032 }, "br-1:ing-2": { qty: -30, avgCost: 0 } });
+    // The server counts the week's usage (the screen holds only the latest movements): kept when sent, never invented when not.
+    expect(mapBalances([{ ingredient_id: "ing-1", qty_on_hand: 900, usage_7d: 630 }], "br-1")).toEqual({ "br-1:ing-1": { qty: 900, avgCost: 0, usage7d: 630 } });
+    expect(mapBalances([{ ingredient_id: "ing-1", qty_on_hand: 900, usage_7d: 0 }], "br-1")["br-1:ing-1"]).toHaveProperty("usage7d", 0);
   });
 
   it("maps a movement with its own cost per unit and the reason code, if any", () => {
