@@ -2,6 +2,7 @@ import {
   CashMovementBody,
   CloseShiftBody,
   DiscountBody,
+  IssueTaxInvoiceBody,
   OpenShiftBody,
   PayOrderBody,
   RefundBody,
@@ -13,6 +14,7 @@ import { z } from "zod";
 import { ApiFailure } from "../errors";
 import type { Tx } from "../db";
 import { route, type Deps, type Env } from "../http";
+import { isValidThaiTaxId } from "@sabai/domain";
 import { callJson, money, num } from "./support";
 
 const toOrderResult = (r: Record<string, unknown>) => ({
@@ -49,6 +51,8 @@ async function orderDetails(t: Tx, ids: string[]) {
   const payments = await t`
     select p.order_id, p.id, p.method_id, p.kind, p.amount, p.tendered, p.change_given, p.fee_amount, p.reference, pm.name as method, pm.kind as method_kind, p.created_at
       from app.payments p join app.payment_methods pm on pm.id = p.method_id where p.order_id = any(${ids}::uuid[]) order by p.created_at`;
+  const invoices = await t`select order_id, invoice_no from app.tax_invoices where order_id = any(${ids}::uuid[])`;
+  const invoiceNo = new Map(invoices.map((i) => [i.order_id as string, i.invoice_no as string]));
   const byId = new Map(orders.map((o) => [o.id as string, o]));
   return ids.flatMap((id) => {
     const o = byId.get(id);
@@ -56,7 +60,7 @@ async function orderDetails(t: Tx, ids: string[]) {
     const m = (k: string) => money(o[k]);
     return [
       {
-        id: o.id, orderNo: o.order_no, receiptNo: o.receipt_no, status: o.status, businessDate: o.business_date, version: o.version,
+        id: o.id, orderNo: o.order_no, receiptNo: o.receipt_no, taxInvoiceNo: invoiceNo.get(id) ?? null, status: o.status, businessDate: o.business_date, version: o.version,
         branchId: o.branch_id, channelId: o.channel_id, tableId: o.table_id, shiftId: o.shift_id, guestCount: o.guest_count, note: o.note,
         openedBy: o.opened_by, openedAt: o.opened_at, paidAt: o.paid_at,
         discount: o.discount_type ? { type: o.discount_type, value: num(o.discount_value), reason: o.discount_reason } : null,
@@ -74,6 +78,33 @@ async function orderDetails(t: Tx, ids: string[]) {
       },
     ];
   });
+}
+
+/** A full tax invoice as the wire has it: the seller and buyer as they were on the day, the lines and amounts as they were paid. */
+function toTaxInvoice(r: Record<string, unknown>, issuedByName: string | null = null) {
+  const lines = (r.lines as Record<string, unknown>[]) ?? [];
+  return {
+    id: r.id as string,
+    invoiceNo: r.invoice_no as string,
+    orderId: r.order_id as string,
+    branchId: r.branch_id as string,
+    receiptNo: (r.receipt_no as string | null) ?? null,
+    issuedAt: r.issued_at as string,
+    issuedByName,
+    seller: { name: r.seller_name as string, taxId: r.seller_tax_id as string, branchNo: r.seller_branch_no as string, address: r.seller_address as string },
+    buyer: { name: r.buyer_name as string, taxId: r.buyer_tax_id as string, branchNo: r.buyer_branch_no as string, address: r.buyer_address as string },
+    lines: lines.map((l) => ({ name: l.name as string, qty: num(l.qty), unitPrice: money(l.unit_price), modifiersTotal: money(l.modifiers_total), amount: money(l.line_total), modifiers: (l.modifiers as string[]) ?? [] })),
+    itemsTotal: money(r.items_total),
+    discountTotal: money(r.discount_total),
+    discountReason: (r.discount_reason as string | null) ?? null,
+    serviceCharge: money(r.service_charge),
+    amountBeforeVat: money(r.amount_before_vat),
+    vatRate: num(r.vat_rate),
+    vatAmount: money(r.vat_amount),
+    rounding: money(r.rounding),
+    total: money(r.total),
+    pricesIncludeVat: r.prices_include_vat as boolean,
+  };
 }
 
 export function registerPos(app: Hono<Env>, deps: Deps) {
@@ -201,6 +232,28 @@ export function registerPos(app: Hono<Env>, deps: Deps) {
       const [r] = await t<{ r: Record<string, unknown> }[]>`
         select app.pay_order(${params.id}, ${t.json(body.payments.map((p) => ({ method_id: p.methodId, amount: p.amount, tendered: p.tendered, reference: p.reference })))}::jsonb) as r`;
       return toOrderResult(r!.r);
+    }),
+  );
+
+  route(app, deps, { method: "POST", path: "/v1/orders/{id}/tax-invoice", tag: "POS", summary: "ออกใบกำกับภาษีเต็มรูปตามที่ลูกค้าขอ (บิลละหนึ่งใบ) — ส่งซ้ำได้ปลอดภัย", body: IssueTaxInvoiceBody, permission: "pos.pay", status: 201 }, async ({ params, body, tx }) => {
+    // The same rule the browser and the database apply; a wrong number is refused here with the field named.
+    if (!isValidThaiTaxId(body.buyerTaxId)) throw new ApiFailure("VALIDATION", 422, {}, { buyerTaxId: "เลขประจำตัวผู้เสียภาษีต้องมี 13 หลักและตัวเลขถูกต้อง ตรวจอีกครั้ง" });
+    return tx(async (t) => {
+      const [r] = await t<{ r: Record<string, unknown> }[]>`
+        select app.issue_tax_invoice(${params.id}, ${body.buyerName}, ${body.buyerTaxId}, ${body.buyerAddress}, ${body.buyerBranchNo}) as r`;
+      const [who] = await t<{ display_name: string | null }[]>`select display_name from app.memberships where id = ${(r!.r.issued_by as string | null) ?? null}`;
+      return toTaxInvoice(r!.r, who?.display_name ?? null);
+    });
+  });
+
+  route(app, deps, { method: "GET", path: "/v1/orders/{id}/tax-invoice", tag: "POS", summary: "ใบกำกับภาษีเต็มรูปของบิล (ไม่พบ = ยังไม่เคยออก)" }, async ({ params, tx }) =>
+    tx(async (t) => {
+      const [r] = await t`
+        select ti.*, m.display_name as issued_by_name
+          from app.tax_invoices ti left join app.memberships m on m.tenant_id = ti.tenant_id and m.id = ti.issued_by
+         where ti.order_id = ${params.id}`;
+      if (!r) throw new ApiFailure("NOT_FOUND", 404);
+      return toTaxInvoice(r, (r.issued_by_name as string | null) ?? null);
     }),
   );
 

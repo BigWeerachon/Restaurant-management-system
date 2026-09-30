@@ -30,6 +30,9 @@ import {
   planLimit,
   type PlanCode,
   isValidThaiTaxId,
+  amountBeforeVat,
+  checkTaxInvoiceBuyer,
+  lineTotal,
 } from "@sabai/domain";
 import { defaultStations } from "./seed";
 import type {
@@ -45,6 +48,8 @@ import type {
   Role,
   Tenant,
   Branch,
+  TaxInvoice,
+  TaxInvoiceParty,
   Ticket,
 } from "./types";
 
@@ -575,6 +580,60 @@ export function refundOrder(state: DemoState, ctx: Ctx, orderId: string, reason:
   }
   order.status = "refunded";
   log(state, ctx, "order.refunded", `${actorName(state, ctx.actorId)} คืนเงินบิล ${order.receiptNo} ฿${(order.totals.total / 100).toFixed(2)} (${reason})${who !== ctx.actorId ? ` · อนุมัติโดย ${actorName(state, who)}` : ""}`, "bad");
+}
+
+/**
+ * A full tax invoice on request — the demo twin of `app.issue_tax_invoice`, with the same conditions and the same
+ * error codes: the shop must be VAT-registered with a valid taxpayer number and a branch address; the bill must be
+ * paid (and not refunded); one invoice per bill; the buyer's number must be one that can be right.
+ */
+export function issueTaxInvoice(state: DemoState, ctx: Ctx, orderId: string, buyer: TaxInvoiceParty): TaxInvoice {
+  const order = state.orders.find((o) => o.id === orderId);
+  if (!order) throw new DomainError("NOT_FOUND");
+  requirePerm(state, ctx, "pos.pay");
+  const existing = state.taxInvoices.find((i) => i.orderId === order.id);
+  if (existing) throw new DomainError("TAX_INVOICE_EXISTS", { invoice_no: existing.invoiceNo });
+  const { tenant } = state;
+  const branch = state.branches.find((b) => b.id === order.branchId);
+  if (!branch || !tenant.vatRegistered || !tenant.taxId || !isValidThaiTaxId(tenant.taxId) || !branch.address?.trim()) throw new DomainError("TAX_INVOICE_NOT_AVAILABLE");
+  if (order.status !== "paid" || !order.receiptNo) throw new DomainError("TAX_INVOICE_ORDER_NOT_PAID");
+  const clean = { name: buyer.name.trim(), taxId: buyer.taxId, address: buyer.address.trim(), branchNo: buyer.branchNo.trim() || "00000" };
+  const problems = checkTaxInvoiceBuyer(clean);
+  if (Object.keys(problems).length) throw new DomainError("VALIDATION", { fields: problems });
+
+  const bd = order.businessDate;
+  const t = order.totals;
+  const invoice: TaxInvoice = {
+    id: newId("ti"),
+    invoiceNo: `${branch.code ?? "HQ"}-TI-${bd.slice(2, 4)}${bd.slice(5, 7)}-${String(nextSeq(state, `tax_invoice:${branch.id}:${bd.slice(0, 7)}`)).padStart(5, "0")}`,
+    orderId: order.id,
+    branchId: order.branchId,
+    receiptNo: order.receiptNo,
+    issuedAt: ctx.now.toISOString(),
+    issuedByName: actorName(state, ctx.actorId),
+    seller: { name: tenant.legalName?.trim() || tenant.name, taxId: tenant.taxId, branchNo: branch.taxBranchNo ?? "00000", address: branch.address.trim() },
+    buyer: { name: clean.name, taxId: clean.taxId, branchNo: clean.branchNo, address: clean.address },
+    lines: order.items
+      .filter((i) => i.status !== "voided")
+      .map((i) => {
+        const mods = i.modifiers.reduce((n, m) => n + m.priceDelta, 0);
+        return { name: i.name, qty: i.qty, modifiers: i.modifiers.map((m) => m.name), unitPrice: i.unitPrice + mods, amount: lineTotal({ qty: i.qty, unitPrice: i.unitPrice, modifiersTotal: mods }) };
+      }),
+    itemsTotal: t.itemsTotal,
+    discountTotal: t.discountTotal,
+    discountReason: order.discount?.reason || undefined,
+    serviceCharge: t.serviceCharge,
+    amountBeforeVat: amountBeforeVat({ itemsTotal: t.itemsTotal, discountTotal: t.discountTotal, serviceCharge: t.serviceCharge, vatAmount: t.vatAmount, pricesIncludeVat: tenant.pricesIncludeVat }),
+    vatRate: tenant.vatRate,
+    vatAmount: t.vatAmount,
+    rounding: t.rounding,
+    total: t.total,
+    pricesIncludeVat: tenant.pricesIncludeVat,
+  };
+  state.taxInvoices.push(invoice);
+  order.taxInvoiceNo = invoice.invoiceNo;
+  log(state, ctx, "order.tax_invoiced", `${actorName(state, ctx.actorId)} ออกใบกำกับภาษี ${invoice.invoiceNo} (บิล ${order.receiptNo})`, "good");
+  return invoice;
 }
 
 // ---------------------------------------------------------------------------

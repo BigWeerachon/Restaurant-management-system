@@ -1,15 +1,16 @@
 "use client";
 
-import { Banknote, Bike, CreditCard, Printer, QrCode, RotateCcw, ShoppingBag, Utensils } from "lucide-react";
+import { Banknote, Bike, CreditCard, FileText, Printer, QrCode, RotateCcw, ShoppingBag, Utensils } from "lucide-react";
 import { motion } from "motion/react";
 import { useSearchParams } from "next/navigation";
 import { Suspense, useState } from "react";
 import { LoadBanner } from "@/components/app/load-banner";
+import { TaxInvoiceDialog } from "@/components/app/tax-invoice-dialog";
 import { PageHeader } from "@/components/app/page-header";
 import { Button, LinkButton } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/feedback";
 import { Dialog, Switch } from "@/components/ui/overlay";
-import { Badge, Card, Input, SearchInput, Segmented } from "@/components/ui/primitives";
+import { Badge, Callout, Card, Input, SearchInput, Segmented } from "@/components/ui/primitives";
 import { useDsAction, useLoad } from "@/hooks/use-data-source";
 import { printReceipt } from "@/lib/print";
 import { useAccess, useBusinessDate } from "@/hooks/use-sabai";
@@ -17,6 +18,7 @@ import { actorName } from "@/lib/demo/engine";
 import { formatBaht } from "@/lib/demo/selectors";
 import { useSabai } from "@/lib/demo/store";
 import type { Order } from "@/lib/demo/types";
+import { canAskTaxInvoice } from "@/lib/tax-invoice";
 
 const STATUS: Record<Order["status"], { label: string; tone: "success" | "info" | "danger" | "neutral" }> = {
   open: { label: "ยังไม่ชำระ", tone: "info" },
@@ -38,6 +40,7 @@ function OrdersInner() {
   const [q, setQ] = useState("");
   const [open, setOpen] = useState<Order | null>(null);
   const [refund, setRefund] = useState(false);
+  const [taxOpen, setTaxOpen] = useState(false);
   const [reason, setReason] = useState("");
   const [restock, setRestock] = useState(false);
 
@@ -111,11 +114,16 @@ function OrdersInner() {
         )}
       </Card>
 
-      <Dialog open={!!current && !refund} onOpenChange={(v) => !v && setOpen(null)} title={current ? `บิล #${current.orderNo}` : ""} description={current?.receiptNo ? `ใบเสร็จ ${current.receiptNo}` : "ยังไม่ออกใบเสร็จ"} size="md" footer={current && (
+      <Dialog open={!!current && !refund && !taxOpen} onOpenChange={(v) => !v && setOpen(null)} title={current ? `บิล #${current.orderNo}` : ""} description={current?.receiptNo ? `ใบเสร็จ ${current.receiptNo}` : "ยังไม่ออกใบเสร็จ"} size="md" footer={current && (
         <>
           <Button variant="secondary" icon={<Printer className="h-4 w-4" />} onClick={() => printReceipt(current.id, { copy: true })}>
             พิมพ์ซ้ำ
           </Button>
+          {canAskTaxInvoice(current) && can("pos.pay") && (
+            <Button variant="secondary" icon={<FileText className="h-4 w-4" />} onClick={() => setTaxOpen(true)}>
+              {current.taxInvoiceNo ? "ใบกำกับภาษีเต็มรูป" : "ขอใบกำกับภาษีเต็มรูป"}
+            </Button>
+          )}
           {current.status === "paid" && (can("pos.refund") || can("pos.pay")) && (
             <Button variant="danger" icon={<RotateCcw className="h-4 w-4" />} onClick={() => setRefund(true)}>
               คืนเงิน
@@ -174,6 +182,12 @@ function OrdersInner() {
                 })}
               </div>
             )}
+            {current.taxInvoiceNo && (
+              <p className="flex items-center gap-2 rounded-2xl bg-success-soft px-3 py-2 text-sm font-medium text-success">
+                <FileText className="h-4 w-4 shrink-0" aria-hidden="true" />
+                ออกใบกำกับภาษีเต็มรูปแล้ว เลขที่ {current.taxInvoiceNo}
+              </p>
+            )}
             <p className="text-xs text-ink-3">
               เปิดบิลโดย {actorName(db, current.openedBy)} เวลา {new Date(current.openedAt).toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit" })} น.
             </p>
@@ -201,9 +215,15 @@ function OrdersInner() {
           </div>
           <Input value={reason} onChange={(e) => setReason(e.target.value)} placeholder="เหตุผล" aria-label="เหตุผล" />
           <Switch checked={restock} onCheckedChange={setRestock} label="คืนวัตถุดิบเข้าสต็อก" description="เปิดเฉพาะถ้ายังไม่ได้ทำอาหาร (เช่น คิดเงินผิด)" />
+          {current?.taxInvoiceNo && (
+            <Callout tone="warning" title={`บิลนี้ออกใบกำกับภาษีเต็มรูปแล้ว (${current.taxInvoiceNo})`}>
+              คืนเงินแล้วต้องออกใบลดหนี้ให้ลูกค้าด้วย ระบบยังไม่ออกใบลดหนี้ให้ ปรึกษานักบัญชีของร้านก่อนคืนเงิน
+            </Callout>
+          )}
           <p className="text-sm text-ink-3">การคืนเงินต้องให้ผู้จัดการอนุมัติด้วย PIN — บันทึกไว้ให้เจ้าของร้านตรวจย้อนหลังได้</p>
         </div>
       </Dialog>
+      <TaxInvoiceDialog orderId={current?.id ?? null} open={taxOpen} onOpenChange={setTaxOpen} />
     </>
   );
 }

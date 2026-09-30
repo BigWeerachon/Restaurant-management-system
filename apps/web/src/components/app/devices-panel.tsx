@@ -119,6 +119,11 @@ export function DevicesPanel() {
                           ใช้ล่าสุด {seen(d.last_seen_at)}
                           {d.registered_by_name ? ` · ลงทะเบียนโดย ${d.registered_by_name}` : ""}
                         </p>
+                        {d.kind === "pos" && (
+                          <p className="text-xs text-ink-3">
+                            {d.receipt_code ? `เลขใบเสร็จของเครื่องนี้ขึ้นต้นด้วย ${branches.find((b) => b.id === d.branch_id)?.code ?? "HQ"}-${d.receipt_code}` : "เลขใบเสร็จของเครื่องนี้จะแยกชุดเมื่อขายครั้งแรก"}
+                          </p>
+                        )}
                       </div>
                     </div>
                     <Button size="sm" variant="ghost" className="self-start" icon={<Trash2 className="h-4 w-4" />} onClick={() => setRevoking(d)}>

@@ -38,7 +38,7 @@ export function registerDevices(app: Hono<Env>, deps: Deps) {
       // Reading devices is open to anyone in the shop as far as row security goes; who registered what and when is for those who manage settings.
       await t`select app.assert_permission(${tenantId}, 'settings.manage')`;
       return t`
-      select d.id, d.name, d.kind, d.branch_id, d.station_id, d.is_active, d.last_seen_at, d.registered_at, d.revoked_at,
+      select d.id, d.name, d.kind, d.branch_id, d.station_id, d.is_active, d.last_seen_at, d.registered_at, d.revoked_at, d.receipt_code,
              m.display_name as registered_by_name
         from app.devices d left join app.memberships m on m.tenant_id = d.tenant_id and m.id = d.registered_by
        where d.tenant_id = ${tenantId} and d.registered_at is not null

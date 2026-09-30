@@ -113,6 +113,12 @@ describe("a receipt", () => {
     const vat = (over: Partial<Tenant> = {}) => tenant({ vatRegistered: true, taxId: "1101700230708", legalName: "บริษัท ครัวคุณแม่ จำกัด", ...over });
     const withVat = order({ totals: { itemsTotal: 23000, discountTotal: 0, serviceCharge: 0, vatAmount: 1505, rounding: 0, total: 23000, commission: 0, commissionVat: 0, netSales: 21495 } });
 
+    it("points to the full tax invoice once one has been issued on the bill", () => {
+      expect(build(withVat, vat()).notes).toEqual(["ราคาสินค้ารวมภาษีมูลค่าเพิ่มแล้ว"]);
+      const r = build({ ...withVat, taxInvoiceNo: "HQ-TI-2609-00001" }, vat());
+      expect(r.notes).toEqual(["ราคาสินค้ารวมภาษีมูลค่าเพิ่มแล้ว", "ออกใบกำกับภาษีเต็มรูปแล้ว เลขที่ HQ-TI-2609-00001"]);
+    });
+
     it("is an abbreviated tax invoice: the seller's legal name, taxpayer number and branch, the VAT split, and the words 'prices include VAT'", () => {
       const r = build(withVat, vat());
       expect(r.title).toBe("ใบเสร็จรับเงิน / ใบกำกับภาษีอย่างย่อ");

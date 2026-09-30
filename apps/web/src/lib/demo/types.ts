@@ -229,6 +229,8 @@ export interface Order {
   tableId?: ID;
   orderNo: string;
   receiptNo?: string;
+  /** Number of the full tax invoice issued on this bill, when the customer asked for one. */
+  taxInvoiceNo?: string;
   status: "open" | "paid" | "voided" | "refunded";
   businessDate: string;
   openedAt: string;
@@ -243,6 +245,42 @@ export interface Order {
   commissionRate: number;
   cost?: number;
   shiftId?: ID;
+}
+
+/** The person or company a full tax invoice is made out to. Branch "00000" is the head office. */
+export interface TaxInvoiceParty {
+  name: string;
+  taxId: string;
+  branchNo: string;
+  address: string;
+}
+
+/**
+ * A full tax invoice (ใบกำกับภาษีเต็มรูป), as issued: seller and buyer as they were that day, the lines and amounts as
+ * paid. It never changes afterwards — the shop's later edits do not reach a document already handed out.
+ */
+export interface TaxInvoice {
+  id: ID;
+  invoiceNo: string;
+  orderId: ID;
+  branchId: ID;
+  /** The abbreviated slip it accompanies. */
+  receiptNo?: string;
+  issuedAt: string;
+  issuedByName?: string;
+  seller: TaxInvoiceParty;
+  buyer: TaxInvoiceParty;
+  lines: { name: string; qty: number; modifiers: string[]; /** Per unit, modifiers included. */ unitPrice: Satang; amount: Satang }[];
+  itemsTotal: Satang;
+  discountTotal: Satang;
+  discountReason?: string;
+  serviceCharge: Satang;
+  amountBeforeVat: Satang;
+  vatRate: number;
+  vatAmount: Satang;
+  rounding: Satang;
+  total: Satang;
+  pricesIncludeVat: boolean;
 }
 
 export interface TicketItem {
@@ -431,6 +469,7 @@ export interface DemoState {
   balances: Record<string, { qty: number; avgCost: number }>;
   movements: Movement[];
   orders: Order[];
+  taxInvoices: TaxInvoice[];
   tickets: Ticket[];
   shifts: Shift[];
   counts: StockCount[];

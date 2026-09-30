@@ -4,24 +4,28 @@ import { useEffect, useMemo } from "react";
 import { createPortal } from "react-dom";
 import { toast } from "sonner";
 import { ReceiptView } from "@/components/pos/receipt-view";
+import { TaxInvoicePages } from "@/components/pos/tax-invoice-view";
 import { directReady, printReceiptDirect } from "@/lib/escpos/printer";
 import { getPaperWidth, usePrintJob } from "@/lib/print";
 import { buildReceipt, buildSampleReceipt } from "@/lib/receipt";
+import { buildTaxInvoiceDoc } from "@/lib/tax-invoice";
 import { useSabai } from "@/lib/demo/store";
 
 /**
  * Where paper output is drawn. It sits directly under <body>, invisible on screen; while printing, the stylesheet hides
- * everything else, so the roll gets the receipt and nothing of the till's screen. One job at a time: asked for by
- * `printReceipt`, printed once the receipt is on the page, cleared when the print dialog closes.
+ * everything else, so the paper gets the document and nothing of the till's screen. One job at a time: asked for by
+ * `printReceipt` / `printTaxInvoice`, printed once the document is on the page, cleared when the print dialog closes.
+ * Receipts go to the till's own printer when one is connected; a tax invoice is A4 and always uses the print dialog.
  */
 export function PrintRoot() {
   const job = usePrintJob((s) => s.job);
   const done = usePrintJob((s) => s.done);
   const db = useSabai((s) => s.db);
-  const widthMm = job ? getPaperWidth() : 80;
+  const a4 = job?.kind === "taxInvoice";
+  const widthMm = job && !a4 ? getPaperWidth() : 80;
 
-  const data = useMemo(() => {
-    if (!job) return null;
+  const receipt = useMemo(() => {
+    if (!job || job.kind === "taxInvoice") return null;
     if (job.kind === "sample") return buildSampleReceipt({ tenant: db.tenant, branch: db.branches.find((b) => b.id === useSabai.getState().session.branchId) ?? db.branches[0]! });
     const order = db.orders.find((o) => o.id === job.orderId);
     const branch = order && db.branches.find((b) => b.id === order.branchId);
@@ -29,21 +33,29 @@ export function PrintRoot() {
     return buildReceipt({ order, tenant: db.tenant, branch, channel: db.channels.find((c) => c.id === order.channelId), methods: db.paymentMethods, members: db.members, copy: job.copy });
   }, [job, db]);
 
+  const invoice = useMemo(() => {
+    if (!job || job.kind !== "taxInvoice") return null;
+    const found = db.taxInvoices.find((i) => i.orderId === job.orderId);
+    return found ? buildTaxInvoiceDoc(found) : null;
+  }, [job, db.taxInvoices]);
+
+  const ready = a4 ? !!invoice : !!receipt;
+
   useEffect(() => {
     if (!job) return;
-    if (!data) {
+    if (!ready) {
       toast.error("พิมพ์ไม่ได้ ไม่พบบิลนี้แล้ว", { description: "ลองเปิดบิลจากรายการบิลวันนี้อีกครั้ง" });
       done();
       return;
     }
-    // The roll's own page size, so a 58 mm printer does not scale an 80 mm page down (or cut it off).
+    // The paper's own page size: a 58 mm printer must not scale an 80 mm page down (or cut it off), and a tax invoice is A4.
     const style = document.createElement("style");
     style.id = "receipt-page-size";
-    style.textContent = `@page { size: ${widthMm}mm auto; margin: 0; }`;
+    style.textContent = a4 ? "@page { size: A4; margin: 12mm; }" : `@page { size: ${widthMm}mm auto; margin: 0; }`;
     document.head.appendChild(style);
     let cancelled = false;
     const openDialog = () =>
-      // Two frames: the receipt must be laid out before the print dialog takes its picture.
+      // Two frames: the document must be laid out before the print dialog takes its picture.
       requestAnimationFrame(() =>
         requestAnimationFrame(() => {
           if (cancelled) return;
@@ -54,9 +66,9 @@ export function PrintRoot() {
           }
         }),
       );
-    if (directReady()) {
+    if (!a4 && receipt && directReady()) {
       // The till's own printer: no dialog. If it fails the receipt is still on the page, so the dialog takes over.
-      printReceiptDirect(data, { widthMm })
+      printReceiptDirect(receipt, { widthMm })
         .then(() => {
           toast.success(job.kind === "sample" ? "ส่งใบทดลองไปเครื่องพิมพ์แล้ว" : "ส่งใบเสร็จไปเครื่องพิมพ์แล้ว");
           done();
@@ -71,12 +83,12 @@ export function PrintRoot() {
       style.remove();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [job?.kind, job?.kind === "receipt" ? job.orderId : "", job?.kind === "receipt" ? job.copy : false, !!data]);
+  }, [job?.kind, job && "orderId" in job ? job.orderId : "", job?.kind === "receipt" ? job.copy : false, ready]);
 
-  if (typeof document === "undefined" || !job || !data) return null;
+  if (typeof document === "undefined" || !job || !ready) return null;
   return createPortal(
     <div id="print-root" aria-hidden="true">
-      <ReceiptView data={data} widthMm={widthMm} />
+      {a4 ? <TaxInvoicePages doc={invoice!} /> : <ReceiptView data={receipt!} widthMm={widthMm} />}
     </div>,
     document.body,
   );

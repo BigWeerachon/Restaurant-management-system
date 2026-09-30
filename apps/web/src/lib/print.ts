@@ -3,6 +3,7 @@
  * (components/app/print-root.tsx) draws just the receipt and prints it, so the till's own screen never ends up on the roll.
  */
 import { create } from "zustand";
+import { getDataSource } from "@/lib/data-source";
 
 export type PaperWidth = 58 | 80;
 
@@ -33,7 +34,9 @@ export type PrintJob =
       /** A second printing of a receipt already handed over. */
       copy: boolean;
     }
-  | { kind: "sample" };
+  | { kind: "sample" }
+  /** The full tax invoice of a bill, on A4 (checklist 7.3): the invoice must already be in the store. */
+  | { kind: "taxInvoice"; orderId: string };
 
 interface PrintStore {
   job: PrintJob | null;
@@ -55,4 +58,12 @@ export function printReceipt(orderId: string, opts: { copy?: boolean } = {}) {
 /** A made-up receipt, to check the printer and the roll. */
 export function printSampleReceipt() {
   usePrintJob.getState().start({ kind: "sample" });
+}
+
+/** Prints the full tax invoice of a bill on A4 (original and copy). Reads it first if this device has not seen it. */
+export async function printTaxInvoice(orderId: string) {
+  const invoice = await getDataSource().getTaxInvoice(orderId);
+  if (!invoice) return false;
+  usePrintJob.getState().start({ kind: "taxInvoice", orderId });
+  return true;
 }

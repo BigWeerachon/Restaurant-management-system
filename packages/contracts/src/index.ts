@@ -306,6 +306,15 @@ export const DiscountBody = z.object({
   approvalId: Id.optional(),
 }).refine((b) => b.type !== "percent" || b.value <= 100, { message: "ส่วนลดสูงสุด 100%", path: ["value"] });
 
+/** A customer's request for a full tax invoice. The number is checked again (and by the same rule) in the API and the database. */
+export const IssueTaxInvoiceBody = z.object({
+  buyerName: z.string().trim().min(1, "ใส่ชื่อผู้ซื้อ").max(200, "ชื่อยาวเกินไป (ไม่เกิน 200 ตัวอักษร)"),
+  buyerTaxId: z.string().trim().regex(/^\d{13}$/, "เลขประจำตัวผู้เสียภาษีต้องมี 13 หลัก"),
+  buyerAddress: z.string().trim().min(1, "ใส่ที่อยู่ผู้ซื้อ").max(400, "ที่อยู่ยาวเกินไป (ไม่เกิน 400 ตัวอักษร)"),
+  /** 00000 = head office. */
+  buyerBranchNo: z.string().trim().regex(/^\d{5}$/, "เลขที่สาขาต้องเป็นตัวเลข 5 หลัก").default("00000"),
+});
+
 export const VoidBody = z.object({ reason: Reason, approvalId: Id.optional() });
 export const RefundBody = z.object({ reason: Reason, restock: z.boolean().default(false), approvalId: Id.optional() });
 

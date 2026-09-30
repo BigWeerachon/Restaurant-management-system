@@ -258,6 +258,151 @@ select test.throws(format('delete from app.payments where order_id = %L', test.i
 set role authenticated;
 
 -- ---------------------------------------------------------------------------
+-- 4b. Receipt numbers per till, and full tax invoices on request (7.3)
+--     Everything here is undone at the end: later sections see the shop as it was.
+-- ---------------------------------------------------------------------------
+begin;
+
+reset role;
+create or replace function test.as_till(p_membership uuid, p_device uuid) returns void language sql as $$
+  select set_config('request.jwt.claims', json_build_object('mid', p_membership, 'did', p_device, 'role', 'authenticated')::text, false);
+$$;
+-- Sells one latte and pays it in cash; returns the receipt number. The order id is left in test.last_order.
+create or replace function test.sell() returns text language plpgsql as $$
+declare
+  oid uuid := app.uuid_v7();
+  r jsonb;
+  cash uuid := (select id from app.payment_methods where tenant_id = test.id('tenant_a') and kind = 'cash');
+begin
+  r := app.submit_order(jsonb_build_object('id', oid, 'branch_id', test.id('branch_a'),
+    'channel_id', (select id from app.sales_channels where tenant_id = test.id('tenant_a') and key = 'dine_in'),
+    'items', jsonb_build_array(jsonb_build_object('id', app.uuid_v7(), 'menu_item_id', test.id('latte'), 'qty', 1))));
+  perform test.put('last_order', oid);
+  r := app.pay_order(oid, jsonb_build_array(jsonb_build_object('method_id', cash, 'amount', (r->>'total')::numeric)));
+  return r->>'receipt_no';
+end $$;
+grant execute on function test.as_till(uuid, uuid), test.sell() to authenticated;
+set role authenticated;
+
+-- Parity with isValidThaiTaxId in @sabai/domain (packages/domain/test/tax.test.ts uses the same numbers).
+select test.ok(app.is_valid_thai_tax_id('0105536001239') and app.is_valid_thai_tax_id('1234567890121') and app.is_valid_thai_tax_id('3100456789018')
+               and app.is_valid_thai_tax_id('0000000000019') and app.is_valid_thai_tax_id('1101700230708'), 'valid taxpayer numbers pass');
+select test.ok(not app.is_valid_thai_tax_id('1101700230705') and not app.is_valid_thai_tax_id('110170023070') and not app.is_valid_thai_tax_id('11017002307083')
+               and not app.is_valid_thai_tax_id('1-1017-00230-70-8') and not app.is_valid_thai_tax_id('abcdefghijklm') and not app.is_valid_thai_tax_id('')
+               and not app.is_valid_thai_tax_id(null), 'wrong taxpayer numbers fail');
+
+-- The shop has not put its taxpayer number and branch address on file: no tax invoice yet, and nothing is written.
+select test.as_user(test.id('owner_a'));
+select test.throws(format('select app.issue_tax_invoice(%L, %L, %L, %L)', test.id('order1'), 'บริษัท ผู้ซื้อ จำกัด', '1101700230708', '99 ถ.สุขุมวิท'), 'TAX_INVOICE_NOT_AVAILABLE');
+reset role;
+update app.tenants set tax_id = '1101700230708', legal_name = 'บริษัท สบายคาเฟ่ จำกัด' where id = test.id('tenant_a');
+update app.branches set address = '12 ซ.อารีย์ กรุงเทพฯ 10400' where id = test.id('branch_a');
+set role authenticated;
+
+-- Numbers per till: each registered till counts on its own; the account on a browser keeps the branch series.
+select test.as_user(test.id('owner_a'));
+select test.put('till1', app.register_device(test.id('branch_a'), 'เครื่องหน้าร้าน 1', 'pos', encode(extensions.digest('till-1', 'sha256'), 'hex')));
+select test.put('till2', app.register_device(test.id('branch_a'), 'เครื่องหน้าร้าน 2', 'pos', encode(extensions.digest('till-2', 'sha256'), 'hex')));
+select test.ok((select receipt_code is null from app.devices where id = test.id('till1')), 'a till has no code until its first sale');
+do $$
+declare
+  ym text := to_char(app.business_date(test.id('branch_a')), 'YYMM');
+  n text;
+begin
+  perform test.as_till(test.id('owner_mem_a'), test.id('till1'));
+  n := test.sell(); perform test.ok(n = 'HQ-T1-' || ym || '-00001', 'till 1 first receipt, got ' || n);
+  perform test.put('till1_order', test.id('last_order'));
+  n := test.sell(); perform test.ok(n = 'HQ-T1-' || ym || '-00002', 'till 1 second receipt, got ' || n);
+  perform test.as_till(test.id('owner_mem_a'), test.id('till2'));
+  n := test.sell(); perform test.ok(n = 'HQ-T2-' || ym || '-00001', 'till 2 starts its own series, got ' || n);
+  -- The account on a browser shares the branch series (order1 was HQ-YYMM-00001).
+  perform test.as_user(test.id('owner_a'));
+  n := test.sell(); perform test.ok(n = 'HQ-' || ym || '-00002', 'no till: branch series, got ' || n);
+  -- A till id that is not a till of this branch (or a revoked one) is ignored, never trusted.
+  perform test.as_till(test.id('owner_mem_a'), app.uuid_v7());
+  n := test.sell(); perform test.ok(n = 'HQ-' || ym || '-00003', 'unknown till id: branch series, got ' || n);
+  perform test.as_user(test.id('owner_a'));
+  perform app.revoke_device(test.id('till2'));
+  perform test.as_till(test.id('owner_mem_a'), test.id('till2'));
+  n := test.sell(); perform test.ok(n = 'HQ-' || ym || '-00004', 'revoked till: branch series, got ' || n);
+end $$;
+select test.ok((select receipt_code from app.devices where id = test.id('till1')) = 'T1' and (select receipt_code from app.devices where id = test.id('till2')) = 'T2', 'codes are handed out on first sale');
+
+-- Full tax invoice: only for a paid bill, with a buyer whose taxpayer number can be right.
+select test.as_user(test.id('owner_a'));
+do $$
+declare
+  ch uuid := (select id from app.sales_channels where tenant_id = test.id('tenant_a') and key = 'dine_in');
+  oid uuid := app.uuid_v7();
+begin
+  perform app.submit_order(jsonb_build_object('id', oid, 'branch_id', test.id('branch_a'), 'channel_id', ch,
+    'items', jsonb_build_array(jsonb_build_object('id', app.uuid_v7(), 'menu_item_id', test.id('latte'), 'qty', 1))));
+  perform test.put('unpaid', oid);
+end $$;
+select test.throws(format('select app.issue_tax_invoice(%L, %L, %L, %L)', test.id('unpaid'), 'บริษัท ผู้ซื้อ จำกัด', '1101700230708', '99 ถ.สุขุมวิท'), 'TAX_INVOICE_ORDER_NOT_PAID');
+select test.throws(format('select app.issue_tax_invoice(%L, %L, %L, %L)', test.id('order1'), 'บริษัท ผู้ซื้อ จำกัด', '1101700230705', '99 ถ.สุขุมวิท'), 'VALIDATION');
+select test.throws(format('select app.issue_tax_invoice(%L, %L, %L, %L)', test.id('order1'), '  ', '1101700230708', '99 ถ.สุขุมวิท'), 'VALIDATION');
+select test.throws(format('select app.issue_tax_invoice(%L, %L, %L, %L)', test.id('order1'), 'บริษัท ผู้ซื้อ จำกัด', '1101700230708', ''), 'VALIDATION');
+select test.throws(format('select app.issue_tax_invoice(%L, %L, %L, %L, %L)', test.id('order1'), 'บริษัท ผู้ซื้อ จำกัด', '1101700230708', '99 ถ.สุขุมวิท', '12'), 'VALIDATION');
+select test.ok((select count(*) from app.tax_invoices) = 0, 'refused requests wrote nothing');
+
+do $$
+declare
+  ym text := to_char(app.business_date(test.id('branch_a')), 'YYMM');
+  r jsonb;
+begin
+  r := app.issue_tax_invoice(test.id('order1'), '  บริษัท ผู้ซื้อ จำกัด ', '1101700230708', ' 99 ถ.สุขุมวิท กรุงเทพฯ 10110 ', '00003');
+  perform test.ok(r->>'invoice_no' = 'HQ-TI-' || ym || '-00001', 'first tax invoice number, got ' || (r->>'invoice_no'));
+  perform test.ok(r->>'receipt_no' = (select receipt_no from app.orders where id = test.id('order1')), 'it names the receipt it accompanies');
+  perform test.ok(r->>'seller_name' = 'บริษัท สบายคาเฟ่ จำกัด' and r->>'seller_tax_id' = '1101700230708' and r->>'seller_branch_no' = '00000', 'seller is the shop as it is today');
+  perform test.ok(r->>'buyer_name' = 'บริษัท ผู้ซื้อ จำกัด' and r->>'buyer_address' = '99 ถ.สุขุมวิท กรุงเทพฯ 10110' and r->>'buyer_branch_no' = '00003', 'buyer is stored trimmed');
+  -- 65 + (65 + 15) = 145 with VAT included: 145 − 9.49 = 135.51 before VAT (same as amountBeforeVat in @sabai/domain).
+  perform test.ok((r->>'total')::numeric = 145 and (r->>'vat_amount')::numeric = 9.49 and (r->>'amount_before_vat')::numeric = 135.51, 'amounts as on the bill, got ' || (r->>'amount_before_vat'));
+  perform test.ok(jsonb_array_length(r->'lines') = 2
+                  and (r->'lines'->1->'modifiers') = (select jsonb_agg(m.name) from app.order_item_modifiers m join app.order_items i on i.id = m.order_item_id where i.order_id = test.id('order1'))
+                  and jsonb_array_length(r->'lines'->0->'modifiers') = 0, 'lines and modifiers are copied');
+  perform test.ok((r->>'issued_by')::uuid = test.id('owner_mem_a'), 'issued by the person at the till');
+  perform test.ok((select count(*) from app.domain_events where event_type = 'order.tax_invoiced' and aggregate_id = test.id('order1')) = 1, 'in the activity feed');
+  perform test.ok((select count(*) from audit.log where table_name = 'tax_invoices' and tenant_id = test.id('tenant_a')) = 1, 'the audit trail has it');
+end $$;
+
+-- One per bill: a second request is refused and names the first.
+select test.throws(format('select app.issue_tax_invoice(%L, %L, %L, %L)', test.id('order1'), 'บริษัทอื่น', '1101700230708', 'ที่อยู่อื่น'), 'TAX_INVOICE_EXISTS');
+-- The next bill's invoice is the next number.
+select test.ok((app.issue_tax_invoice(test.id('till1_order'), 'คุณสมชาย', '1234567890121', '1 ถ.เพชรบุรี')->>'invoice_no') like 'HQ-TI-____-00002', 'second invoice is number 2');
+
+-- A document handed out does not move when the shop later changes its details.
+reset role;
+update app.tenants set legal_name = 'ชื่อใหม่ จำกัด' where id = test.id('tenant_a');
+set role authenticated;
+select test.as_user(test.id('owner_a'));
+select test.ok((select seller_name from app.tax_invoices where order_id = test.id('order1')) = 'บริษัท สบายคาเฟ่ จำกัด', 'seller as it was on the day');
+
+-- Append-only: neither an app user nor a privileged role can change or remove one.
+select test.throws(format('update app.tax_invoices set buyer_name = %L where order_id = %L', 'x', test.id('order1')), 'permission denied for table tax_invoices');
+reset role;
+select test.throws(format('update app.tax_invoices set buyer_name = %L where order_id = %L', 'x', test.id('order1')), 'LEDGER_IMMUTABLE');
+select test.throws(format('delete from app.tax_invoices where order_id = %L', test.id('order1')), 'LEDGER_IMMUTABLE');
+set role authenticated;
+
+-- Who may issue: whoever may take the money. The kitchen may not, nor another shop's owner (who also sees none of them).
+do $$
+declare k uuid;
+begin
+  insert into app.memberships (tenant_id, display_name, role_id)
+  values (test.id('tenant_a'), 'น้องครัว', (select id from app.roles where tenant_id = test.id('tenant_a') and key = 'kitchen')) returning id into k;
+  perform test.put('kitchen_mem', k);
+end $$;
+select test.as_member(test.id('kitchen_mem'));
+select test.throws(format('select app.issue_tax_invoice(%L, %L, %L, %L)', test.id('order1'), 'x', '1101700230708', 'x'), 'PERMISSION_DENIED');
+select test.as_user(test.id('owner_b'));
+select test.throws(format('select app.issue_tax_invoice(%L, %L, %L, %L)', test.id('order1'), 'x', '1101700230708', 'x'), 'PERMISSION_DENIED');
+select test.ok((select count(*) from app.tax_invoices) = 0, 'another shop sees none of these invoices');
+
+rollback;
+-- The rollback restored the role and claims as they were before section 4b.
+
+-- ---------------------------------------------------------------------------
 -- 5. PIN-only cashier: limited powers, manager approval by PIN
 -- ---------------------------------------------------------------------------
 do $$

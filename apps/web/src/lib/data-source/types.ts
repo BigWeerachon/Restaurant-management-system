@@ -26,6 +26,8 @@ import type {
   PaymentMethod,
   PurchaseOrder,
   Tenant,
+  TaxInvoice,
+  TaxInvoiceParty,
   Ticket,
 } from "../demo/types";
 import type {
@@ -107,6 +109,13 @@ export interface DataSource {
   voidOrder(orderId: string, reason: string, approval?: ApprovalToken): Promise<void>;
   payOrder(orderId: string, payments: PaymentInput[]): Promise<{ queued: boolean }>;
   refundOrder(orderId: string, reason: string, restock: boolean, approval?: ApprovalToken): Promise<void>;
+  /**
+   * A full tax invoice on the customer's request (checklist 7.3): one per paid bill, seller and buyer as they are that
+   * day. Needs a VAT-registered shop with its taxpayer number on file and a buyer whose number can be right.
+   */
+  issueTaxInvoice(orderId: string, buyer: TaxInvoiceParty): Promise<TaxInvoice>;
+  /** The invoice issued on this bill, or `null` when none was. */
+  getTaxInvoice(orderId: string): Promise<TaxInvoice | null>;
 
   // ------------------------------------------------------------- kitchen
   setTicketStatus(ticketId: string, status: Ticket["status"]): Promise<void>;

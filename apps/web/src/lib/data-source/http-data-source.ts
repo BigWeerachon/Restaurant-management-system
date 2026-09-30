@@ -21,6 +21,7 @@ import { purchasingCommands } from "./http-purchasing";
 import { reportQueries } from "./http-reports";
 import { settingsCommands } from "./http-settings";
 import { stockCommands } from "./http-stock";
+import { taxInvoiceCommands } from "./http-tax";
 import { teamCommands } from "./http-team";
 import type { DataSource, Slice } from "./types";
 
@@ -106,6 +107,7 @@ const implemented = {
   },
 
   ...posCommands,
+  ...taxInvoiceCommands,
   ...kdsCommands,
   ...stockCommands,
   ...menuCommands,

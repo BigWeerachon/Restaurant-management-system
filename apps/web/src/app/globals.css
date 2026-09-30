@@ -417,6 +417,42 @@
 .receipt-note { margin-top: 4px; font-size: 11px; text-align: center; }
 .receipt footer { margin-top: 6px; }
 
+/* The full tax invoice: A4, one page per copy. */
+.tax-invoice { color: #000; background: #fff; font-family: "IBM Plex Sans Thai", "Noto Sans Thai", "Sarabun", system-ui, sans-serif; font-size: 12px; line-height: 1.4; box-sizing: border-box; }
+.tax-invoice p, .tax-invoice dl, .tax-invoice dd { margin: 0; padding: 0; }
+.tax-invoice + .tax-invoice { break-before: page; }
+.ti-head { display: flex; justify-content: space-between; gap: 16px; align-items: flex-start; }
+.ti-seller { flex: 1; min-width: 0; }
+.ti-name { font-size: 17px; font-weight: 700; }
+.ti-box { width: 62mm; border: 1.5px solid #000; padding: 6px 10px; }
+.ti-title { font-size: 17px; font-weight: 700; text-align: center; }
+.ti-copy { text-align: center; font-size: 11px; margin-bottom: 4px; }
+.ti-box dl > div { display: flex; justify-content: space-between; gap: 8px; }
+.ti-box dd { font-weight: 600; text-align: right; }
+.ti-buyer { margin-top: 14px; border: 1px solid #000; padding: 6px 10px; }
+.ti-label { font-size: 11px; font-weight: 700; }
+.ti-buyer-name { font-weight: 700; font-size: 13px; }
+.ti-lines { width: 100%; border-collapse: collapse; margin-top: 14px; table-layout: fixed; }
+.ti-lines th:nth-child(1) { width: 14mm; }
+.ti-lines th:nth-child(3) { width: 18mm; }
+.ti-lines th:nth-child(4) { width: 28mm; }
+.ti-lines th:nth-child(5) { width: 30mm; }
+.ti-lines td { overflow-wrap: anywhere; }
+.ti-lines th { border: 1px solid #000; padding: 4px 6px; text-align: left; font-weight: 700; }
+.ti-lines td { border-left: 1px solid #000; border-right: 1px solid #000; padding: 3px 6px; vertical-align: top; }
+.ti-lines tbody tr:last-child td { border-bottom: 1px solid #000; }
+.ti-c { text-align: center !important; }
+.ti-r { text-align: right !important; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.ti-sub { font-size: 11px; }
+.ti-foot { display: flex; gap: 16px; align-items: flex-start; justify-content: space-between; margin-top: 10px; }
+.ti-words { flex: 1; min-width: 0; }
+.ti-words-text { font-weight: 700; font-size: 13px; }
+.ti-summary { width: 78mm; border-collapse: collapse; }
+.ti-summary th { text-align: left; font-weight: 400; padding: 2px 6px; }
+.ti-summary td { padding: 2px 6px; }
+.ti-strong th, .ti-strong td { font-weight: 700; font-size: 14px; border-top: 1px solid #000; border-bottom: 3px double #000; }
+.ti-sign { display: flex; justify-content: space-between; gap: 16px; margin-top: 36px; }
+
 @media print {
   html, body { background: #fff !important; margin: 0 !important; padding: 0 !important; }
   body > :not(#print-root) { display: none !important; }

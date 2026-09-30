@@ -14,6 +14,7 @@ export interface OrderApi {
   id: string;
   orderNo: string;
   receiptNo: string | null;
+  taxInvoiceNo?: string | null;
   status: Order["status"];
   businessDate: string;
   branchId: string;
@@ -73,6 +74,7 @@ export function mapOrder(o: OrderApi, menuItems: Pick<MenuItem, "id" | "emoji">[
     tableId: o.tableId ?? undefined,
     orderNo: o.orderNo,
     receiptNo: o.receiptNo ?? undefined,
+    taxInvoiceNo: o.taxInvoiceNo ?? undefined,
     status: o.status,
     businessDate: o.businessDate,
     openedAt: o.openedAt,

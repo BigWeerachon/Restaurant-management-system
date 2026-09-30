@@ -1,4 +1,4 @@
-import { addDays, calculateOrderTotals, channelPrice, PERMISSIONS, toSatang } from "@sabai/domain";
+import { addDays, amountBeforeVat, calculateOrderTotals, channelPrice, PERMISSIONS, toSatang } from "@sabai/domain";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { createApp } from "../src/app";
 import { createTestContext, uuidv7 } from "./helpers";
@@ -1184,5 +1184,117 @@ describe("purchasing and expense shortcuts", () => {
     await s.call("POST", `/v1/purchase-orders/${po.json.id}/status`, { status: "submitted" });
     const noneLeft = await s.call("POST", "/v1/purchase-orders/from-suggestions", { branchId: s.branchId, supplierId: supplier!.id });
     expect(noneLeft.status).toBe(422);
+  });
+});
+
+// A shop of its own: these tests sell, and the story above counts its sales.
+describe("receipt numbers per till and full tax invoices", () => {
+  const x: Record<string, any> = {};
+
+  it("opens a VAT-registered shop with a PIN cashier and something to sell", async () => {
+    x.owner = await ctx.newUser();
+    const r = await ctx.client(x.owner.token)("POST", "/v1/tenants", { name: "ร้านใบกำกับ", businessType: "cafe", ownerName: "คุณบี", vatRegistered: true });
+    expect(r.status).toBe(201);
+    x.tenantId = r.json.tenant_id;
+    x.branchId = r.json.branch_id;
+    x.call = ctx.client(x.owner.token, x.tenantId);
+    x.cash = (await x.call("GET", "/v1/shop")).json.paymentMethods.find((p: any) => p.kind === "cash").id;
+    x.latte = (await x.call("POST", "/v1/menu-items", { categoryName: "กาแฟ", name: "ลาเต้เย็น", price: 65, kitchenRoute: "bar" })).json.id;
+    expect((await x.call("POST", "/v1/members", { displayName: "น้องแคช", roleKey: "cashier", pin: "1111" })).status).toBe(201);
+    expect((await x.call("POST", "/v1/shifts", { branchId: x.branchId, openingFloat: 1000 })).status).toBe(201);
+  });
+
+  it("numbers each till's receipts on its own, and issues a full tax invoice on request", async () => {
+    const { createHash, randomBytes } = await import("node:crypto");
+    const secret = `sbd_${randomBytes(32).toString("base64url")}`;
+    const reg = await x.call("POST", "/v1/devices", { branchId: x.branchId, name: "เครื่องออกบิล", kind: "pos", tokenHash: createHash("sha256").update(secret).digest("hex") });
+    expect(reg.status).toBe(201);
+    const signIn = await ctx.client()("POST", "/v1/auth/device-pin", { pin: "1111" }, { "x-device-token": secret });
+    const till = ctx.client(signIn.json.token, x.tenantId);
+    expect((await x.call("GET", "/v1/devices")).json.find((d: any) => d.id === reg.json.id).receipt_code).toBeNull();
+
+    const sell = async (call: typeof till) => {
+      const id = uuidv7();
+      const placed = await call("POST", "/v1/orders", { id, branchId: x.branchId, items: [{ id: uuidv7(), menuItemId: x.latte, qty: 2 }] });
+      expect(placed.status).toBe(200);
+      const paid = await call("POST", `/v1/orders/${id}/pay`, { payments: [{ methodId: x.cash, amount: Number(placed.json.total) }] });
+      expect(paid.status).toBe(200);
+      return { id, receiptNo: paid.json.receiptNo as string };
+    };
+    // The till's slips run HQ-T1-YYMM-00001, -00002…; the account on a browser stays on the branch series.
+    const a = await sell(till);
+    const b = await sell(till);
+    const browser = await sell(x.call);
+    expect(a.receiptNo).toMatch(/^HQ-T1-\d{4}-00001$/);
+    expect(b.receiptNo).toMatch(/^HQ-T1-\d{4}-00002$/);
+    expect(browser.receiptNo).toMatch(/^HQ-\d{4}-\d{5}$/);
+    expect((await x.call("GET", "/v1/devices")).json.find((d: any) => d.id === reg.json.id).receipt_code).toBe("T1");
+
+    // The shop has not put its taxpayer number and address on file yet: no tax invoice, said plainly.
+    const buyer = { buyerName: "บริษัท ผู้ซื้อ จำกัด", buyerTaxId: "1101700230708", buyerAddress: "99 ถ.สุขุมวิท กรุงเทพฯ 10110" };
+    const early = await till("POST", `/v1/orders/${a.id}/tax-invoice`, buyer);
+    expect(early.status).toBe(422);
+    expect(early.json.error.code).toBe("TAX_INVOICE_NOT_AVAILABLE");
+    expect((await x.call("PATCH", "/v1/tenant", { legalName: "บริษัท สบายคาเฟ่ จำกัด", taxId: "1101700230708" })).status).toBe(200);
+    expect((await x.call("PATCH", `/v1/branches/${x.branchId}`, { address: "12 ซ.อารีย์ กรุงเทพฯ 10400" })).status).toBe(200);
+
+    // A buyer whose number cannot be right is refused with the field named; an open bill cannot be invoiced.
+    const wrongId = await till("POST", `/v1/orders/${a.id}/tax-invoice`, { ...buyer, buyerTaxId: "1101700230705" });
+    expect(wrongId.status).toBe(422);
+    expect(wrongId.json.error.fields.buyerTaxId).toContain("ตัวเลขถูกต้อง");
+    expect((await till("POST", `/v1/orders/${a.id}/tax-invoice`, { ...buyer, buyerName: "  " })).json.error.fields.buyerName).toBeTruthy();
+    expect((await till("POST", `/v1/orders/${a.id}/tax-invoice`, { ...buyer, buyerBranchNo: "12" })).json.error.fields.buyerBranchNo).toBeTruthy();
+    const openId = uuidv7();
+    await till("POST", "/v1/orders", { id: openId, branchId: x.branchId, items: [{ id: uuidv7(), menuItemId: x.latte, qty: 1 }] });
+    expect((await till("POST", `/v1/orders/${openId}/tax-invoice`, buyer)).json.error.code).toBe("TAX_INVOICE_ORDER_NOT_PAID");
+    await till("POST", `/v1/orders/${openId}/void`, { reason: "ทดสอบ" });
+
+    // Issue it. The same key twice answers with the first result and issues nothing more.
+    const key = `tax-invoice-${a.id}`;
+    const issued = await till("POST", `/v1/orders/${a.id}/tax-invoice`, { ...buyer, buyerBranchNo: "00003" }, { "idempotency-key": key });
+    expect(issued.status).toBe(201);
+    expect(issued.json).toMatchObject({
+      invoiceNo: expect.stringMatching(/^HQ-TI-\d{4}-00001$/),
+      orderId: a.id,
+      receiptNo: a.receiptNo,
+      issuedByName: "น้องแคช",
+      seller: { name: "บริษัท สบายคาเฟ่ จำกัด", taxId: "1101700230708", branchNo: expect.stringMatching(/^\d{5}$/), address: "12 ซ.อารีย์ กรุงเทพฯ 10400" },
+      buyer: { name: "บริษัท ผู้ซื้อ จำกัด", taxId: "1101700230708", branchNo: "00003", address: "99 ถ.สุขุมวิท กรุงเทพฯ 10110" },
+      pricesIncludeVat: true,
+    });
+    const replay = await till("POST", `/v1/orders/${a.id}/tax-invoice`, { ...buyer, buyerBranchNo: "00003" }, { "idempotency-key": key });
+    expect(replay.headers.get("idempotent-replayed")).toBe("true");
+    expect(replay.json).toEqual(issued.json);
+
+    // Amounts are the bill's, and "before VAT" is the same figure the receipt shows (the domain's rule, not a second one).
+    const detail = (await x.call("GET", `/v1/orders/${a.id}`)).json;
+    expect(issued.json.total).toBe(detail.total);
+    expect(issued.json.vatAmount).toBe(detail.vatAmount);
+    expect(toSatang(issued.json.amountBeforeVat)).toBe(
+      amountBeforeVat({ itemsTotal: toSatang(detail.itemsTotal), discountTotal: toSatang(detail.discountTotal), serviceCharge: toSatang(detail.serviceCharge), vatAmount: toSatang(detail.vatAmount), pricesIncludeVat: issued.json.pricesIncludeVat }),
+    );
+    expect(issued.json.lines).toEqual([expect.objectContaining({ name: expect.any(String), qty: 2, amount: expect.stringMatching(/^\d+\.\d{2}$/), modifiers: [] })]);
+    expect(detail.taxInvoiceNo).toBe(issued.json.invoiceNo);
+
+    // One per bill; asking again (a different key: a person, not a retry) names the first.
+    const again = await till("POST", `/v1/orders/${a.id}/tax-invoice`, { ...buyer, buyerName: "คนอื่น" });
+    expect(again.status).toBe(409);
+    expect(again.json.error.code).toBe("TAX_INVOICE_EXISTS");
+    expect(again.json.error.message).toContain(issued.json.invoiceNo);
+    expect((await till("POST", `/v1/orders/${b.id}/tax-invoice`, buyer)).json.invoiceNo).toMatch(/^HQ-TI-\d{4}-00002$/);
+
+    // Reading: whoever can see the bill; not another shop; a bill without one is "not found".
+    const read = await x.call("GET", `/v1/orders/${a.id}/tax-invoice`);
+    expect(read.status).toBe(200);
+    expect(read.json.invoiceNo).toBe(issued.json.invoiceNo);
+    expect((await x.call("GET", `/v1/orders/${browser.id}/tax-invoice`)).status).toBe(404);
+    const stranger = await ctx.newUser();
+    expect((await ctx.client(stranger.token)("GET", `/v1/orders/${a.id}/tax-invoice`)).status).toBe(404);
+    expect((await ctx.client(stranger.token)("POST", `/v1/orders/${a.id}/tax-invoice`, buyer)).status).toBe(403);
+
+    // A revoked till's id is never trusted to number anything again.
+    await x.call("DELETE", `/v1/devices/${reg.json.id}`);
+    const after = await sell(till);
+    expect(after.receiptNo).toMatch(/^HQ-\d{4}-\d{5}$/);
   });
 });

@@ -66,6 +66,10 @@ export const demoDataSource: DataSource = {
     return { queued: false };
   },
   refundOrder: (orderId, reason, restock, approval) => run((d, c) => engine.refundOrder(d, c, orderId, reason, restock, approval?.value)),
+  issueTaxInvoice: (orderId, buyer) => run((d, c) => engine.issueTaxInvoice(d, c, orderId, buyer)),
+  async getTaxInvoice(orderId) {
+    return useSabai.getState().db.taxInvoices.find((i) => i.orderId === orderId) ?? null;
+  },
 
   // ------------------------------------------------------------- kitchen
   setTicketStatus: (ticketId, status) => run((d, c) => engine.setTicketStatus(d, c, ticketId, status)),

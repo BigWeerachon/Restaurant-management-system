@@ -46,8 +46,8 @@ export function money(satang: Satang): string {
   return satang < 0 ? `-${text}` : text;
 }
 
-const dateOf = (iso: string) => new Date(iso).toLocaleDateString("th-TH", { day: "2-digit", month: "2-digit", year: "numeric", timeZone: BANGKOK });
-const timeOf = (iso: string) => new Date(iso).toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit", hour12: false, timeZone: BANGKOK });
+export const dateOf = (iso: string) => new Date(iso).toLocaleDateString("th-TH", { day: "2-digit", month: "2-digit", year: "numeric", timeZone: BANGKOK });
+export const timeOf = (iso: string) => new Date(iso).toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit", hour12: false, timeZone: BANGKOK });
 
 export interface ReceiptInput {
   order: Order;
@@ -96,6 +96,7 @@ export function buildReceipt({ order, tenant, branch, channel, methods, members,
     summary.push({ label: `ภาษีมูลค่าเพิ่ม ${vatPct}`, amount: money(totals.vatAmount) });
     if (tenant.pricesIncludeVat) notes.push("ราคาสินค้ารวมภาษีมูลค่าเพิ่มแล้ว");
   }
+  if (order.taxInvoiceNo) notes.push(`ออกใบกำกับภาษีเต็มรูปแล้ว เลขที่ ${order.taxInvoiceNo}`);
   if (totals.rounding !== 0) summary.push({ label: "ปัดเศษ", amount: money(totals.rounding) });
   summary.push({ label: "ยอดสุทธิ", amount: money(totals.total), strong: true });
 

@@ -14,7 +14,7 @@ import type {
   Tenant,
 } from "./types";
 
-export const DEMO_VERSION = 9;
+export const DEMO_VERSION = 10;
 
 const baht = (n: number) => Math.round(n * 100);
 
@@ -388,6 +388,7 @@ export function sampleState(today: string): DemoState {
     bills: [],
     expected: [],
     statementLines: [],
+    taxInvoices: [],
     activity: [],
     seq: {},
   };
@@ -436,6 +437,7 @@ export function freshState(today: string, shopName = "ร้านใหม่�
     bills: [],
     expected: [],
     statementLines: [],
+    taxInvoices: [],
     activity: [],
     seq: {},
   };

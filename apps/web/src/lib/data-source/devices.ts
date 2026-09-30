@@ -28,6 +28,8 @@ export interface DeviceRow {
   registered_at: string | null;
   revoked_at: string | null;
   registered_by_name: string | null;
+  /** "T1": this till's own receipt series (HQ-T1-2609-00001). Given at its first sale, so empty until then. */
+  receipt_code?: string | null;
 }
 
 export interface RosterStaff {
