@@ -1,0 +1,479 @@
+@import "tailwindcss";
+@import "@fontsource/ibm-plex-sans-thai/400.css";
+@import "@fontsource/ibm-plex-sans-thai/500.css";
+@import "@fontsource/ibm-plex-sans-thai/600.css";
+@import "@fontsource/ibm-plex-sans-thai/700.css";
+
+/* =============================================================================
+   Sabai design tokens
+   – Semantic tokens only; components never use raw hex.
+   – Light is the default; dark is its own selected set (not an inversion).
+   – The kitchen display (.kds) always runs dark + high contrast.
+   ========================================================================== */
+
+:root {
+  color-scheme: light;
+
+  /* Surfaces — warm "rice paper" neutrals, calmer than pure white */
+  --bg: #f6f5f1;
+  --surface: #fdfcfa;
+  --surface-2: #f1efe9;
+  --surface-3: #e8e5dd;
+  --overlay: rgb(28 27 25 / 0.42);
+
+  /* Cheap "product tile" surface (e.g. the POS menu grid) and the category-
+     colour tint mixed into it. In light mode this equals --surface; in dark
+     mode it's bumped to --surface-2/-3 and a stronger tint so a dense grid of
+     tiles doesn't collapse into one flat mass against --bg (see dark blocks
+     below). */
+  --tile-surface: var(--surface);
+  --cat-tint: 14%;
+
+  /* Ink */
+  --ink: #1c1b19;
+  --ink-2: #4f4d47;
+  --ink-3: #6b6861;
+  --ink-inverse: #fdfcfa;
+
+  /* Lines */
+  --line: #e4e1d8;
+  --line-strong: #cfcbc0;
+
+  /* Brand — "pandan" green (ใบเตย) */
+  --brand: #13784f;
+  --brand-hover: #0f6443;
+  --brand-ink: #ffffff;
+  --brand-soft: #e3f4ea;
+  --brand-soft-ink: #0f5a3d;
+  --brand-glow: rgb(19 120 79 / 0.22);
+
+  /* Accent — saffron, for highlights and celebration only */
+  --accent: #f2a516;
+  --accent-soft: #fdf0d3;
+  --accent-ink: #7a4d00;
+
+  /* Status (always paired with an icon + words) */
+  --success: #12703a;
+  --success-soft: #e2f5e8;
+  --warning: #9c4406;
+  --warning-fill: #f59e0b;
+  --warning-soft: #fdf1dc;
+  --danger: #c0262d;
+  --danger-fill: #d13a3f;
+  --danger-soft: #fce8e8;
+  --info: #1d5fc4;
+  --info-soft: #e5eefc;
+
+  --ring: #1d5fc4;
+
+  /* Data viz (validated palette slots; see docs/02-ux-principles.md) */
+  --viz-surface: #fdfcfa;
+  --viz-grid: #e8e5dd;
+  --viz-axis: #c3c0b6;
+  --series-1: #2a78d6;
+  --series-2: #eb6834;
+  --series-3: #1baf7a;
+  --series-neg: #e34948;
+
+  /* Elevation */
+  --shadow-xs: 0 1px 1px rgb(28 27 25 / 0.04);
+  --shadow-sm: 0 1px 2px rgb(28 27 25 / 0.06), 0 1px 1px rgb(28 27 25 / 0.04);
+  --shadow-md: 0 6px 16px -4px rgb(28 27 25 / 0.1), 0 2px 4px -2px rgb(28 27 25 / 0.06);
+  --shadow-lg: 0 24px 48px -16px rgb(28 27 25 / 0.22), 0 6px 16px -6px rgb(28 27 25 / 0.1);
+
+  /* Glass material — translucent frosted surfaces (nav, cards, dialogs).
+     Derived from --surface via color-mix so it stays correct in every theme
+     without a second set of hand-picked colours; opacity kept ≥70% so text
+     contrast on top never depends on what happens to be blurred behind it. */
+  --glass-bg: color-mix(in srgb, var(--surface) 72%, transparent);
+  --glass-bg-strong: color-mix(in srgb, var(--surface) 90%, transparent);
+  --glass-border: color-mix(in srgb, white 55%, transparent);
+  --glass-sheen: color-mix(in srgb, white 45%, transparent);
+  --glass-blur: 20px;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --bg: #11110f;
+    --surface: #1a1a18;
+    --surface-2: #232320;
+    --surface-3: #2d2c29;
+    --overlay: rgb(0 0 0 / 0.6);
+    --tile-surface: var(--surface-2);
+    --cat-tint: 30%;
+    --ink: #f4f3ee;
+    --ink-2: #c9c7be;
+    --ink-3: #a09d94;
+    --ink-inverse: #1a1a18;
+    --line: #2f2e2a;
+    --line-strong: #43423d;
+    --brand: #3fbf87;
+    --brand-hover: #5dcd9b;
+    --brand-ink: #06231a;
+    --brand-soft: #16362a;
+    --brand-soft-ink: #9be3c1;
+    --brand-glow: rgb(63 191 135 / 0.25);
+    --accent: #f6b73c;
+    --accent-soft: #3a2c10;
+    --accent-ink: #fcd98a;
+    --success: #4ade80;
+    --success-soft: #133222;
+    --warning: #fbbf24;
+    --warning-fill: #f59e0b;
+    --warning-soft: #362a0f;
+    --danger: #f87171;
+    --danger-fill: #dc2626;
+    --danger-soft: #3a1618;
+    --info: #7aa7f5;
+    --info-soft: #172642;
+    --ring: #7aa7f5;
+    --viz-surface: #1a1a18;
+    --viz-grid: #2c2c2a;
+    --viz-axis: #43423d;
+    --series-1: #3987e5;
+    --series-2: #d95926;
+    --series-3: #199e70;
+    --series-neg: #e66767;
+    --shadow-xs: 0 1px 1px rgb(0 0 0 / 0.3);
+    --shadow-sm: 0 1px 2px rgb(0 0 0 / 0.4);
+    --shadow-md: 0 8px 20px -6px rgb(0 0 0 / 0.55);
+    --shadow-lg: 0 24px 56px -16px rgb(0 0 0 / 0.7);
+    --glass-bg: color-mix(in srgb, var(--surface) 62%, transparent);
+    --glass-bg-strong: color-mix(in srgb, var(--surface) 85%, transparent);
+    --glass-border: color-mix(in srgb, white 14%, transparent);
+    --glass-sheen: color-mix(in srgb, white 8%, transparent);
+    --glass-blur: 24px;
+  }
+}
+
+:root[data-theme="dark"],
+.kds {
+  color-scheme: dark;
+  --bg: #11110f;
+  --surface: #1a1a18;
+  --surface-2: #232320;
+  --surface-3: #2d2c29;
+  --overlay: rgb(0 0 0 / 0.6);
+  --tile-surface: var(--surface-2);
+  --cat-tint: 30%;
+  --ink: #f4f3ee;
+  --ink-2: #c9c7be;
+  --ink-3: #a09d94;
+  --ink-inverse: #1a1a18;
+  --line: #2f2e2a;
+  --line-strong: #43423d;
+  --brand: #3fbf87;
+  --brand-hover: #5dcd9b;
+  --brand-ink: #06231a;
+  --brand-soft: #16362a;
+  --brand-soft-ink: #9be3c1;
+  --brand-glow: rgb(63 191 135 / 0.25);
+  --accent: #f6b73c;
+  --accent-soft: #3a2c10;
+  --accent-ink: #fcd98a;
+  --success: #4ade80;
+  --success-soft: #133222;
+  --warning: #fbbf24;
+  --warning-fill: #f59e0b;
+  --warning-soft: #362a0f;
+  --danger: #f87171;
+  --danger-fill: #dc2626;
+  --danger-soft: #3a1618;
+  --info: #7aa7f5;
+  --info-soft: #172642;
+  --ring: #7aa7f5;
+  --viz-surface: #1a1a18;
+  --viz-grid: #2c2c2a;
+  --viz-axis: #43423d;
+  --series-1: #3987e5;
+  --series-2: #d95926;
+  --series-3: #199e70;
+  --series-neg: #e66767;
+  --shadow-xs: 0 1px 1px rgb(0 0 0 / 0.3);
+  --shadow-sm: 0 1px 2px rgb(0 0 0 / 0.4);
+  --shadow-md: 0 8px 20px -6px rgb(0 0 0 / 0.55);
+  --shadow-lg: 0 24px 56px -16px rgb(0 0 0 / 0.7);
+  --glass-bg: color-mix(in srgb, var(--surface) 62%, transparent);
+  --glass-bg-strong: color-mix(in srgb, var(--surface) 85%, transparent);
+  --glass-border: color-mix(in srgb, white 14%, transparent);
+  --glass-sheen: color-mix(in srgb, white 8%, transparent);
+  --glass-blur: 24px;
+}
+
+@theme inline {
+  --font-sans: "IBM Plex Sans Thai", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-surface-3: var(--surface-3);
+  --color-overlay: var(--overlay);
+  --color-ink: var(--ink);
+  --color-ink-2: var(--ink-2);
+  --color-ink-3: var(--ink-3);
+  --color-ink-inverse: var(--ink-inverse);
+  --color-line: var(--line);
+  --color-line-strong: var(--line-strong);
+  --color-brand: var(--brand);
+  --color-brand-hover: var(--brand-hover);
+  --color-brand-ink: var(--brand-ink);
+  --color-brand-soft: var(--brand-soft);
+  --color-brand-soft-ink: var(--brand-soft-ink);
+  --color-accent: var(--accent);
+  --color-accent-soft: var(--accent-soft);
+  --color-accent-ink: var(--accent-ink);
+  --color-success: var(--success);
+  --color-success-soft: var(--success-soft);
+  --color-warning: var(--warning);
+  --color-warning-fill: var(--warning-fill);
+  --color-warning-soft: var(--warning-soft);
+  --color-danger: var(--danger);
+  --color-danger-fill: var(--danger-fill);
+  --color-danger-soft: var(--danger-soft);
+  --color-info: var(--info);
+  --color-info-soft: var(--info-soft);
+  --color-ring: var(--ring);
+  --color-series-1: var(--series-1);
+  --color-series-2: var(--series-2);
+  --color-series-3: var(--series-3);
+  --color-series-neg: var(--series-neg);
+  --color-viz-grid: var(--viz-grid);
+  --color-viz-axis: var(--viz-axis);
+
+  --shadow-xs: var(--shadow-xs);
+  --shadow-sm: var(--shadow-sm);
+  --shadow-md: var(--shadow-md);
+  --shadow-lg: var(--shadow-lg);
+
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-xl: 20px;
+  --radius-2xl: 28px;
+
+  --ease-out-soft: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+
+  --animate-shimmer: shimmer 1.6s linear infinite;
+  --animate-pulse-soft: pulse-soft 1.8s ease-in-out infinite;
+  --animate-fade-in: fade-in 240ms var(--ease-out-soft) both;
+}
+
+@keyframes shimmer {
+  from { background-position: -200% 0; }
+  to { background-position: 200% 0; }
+}
+@keyframes pulse-soft {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.55; }
+}
+@keyframes fade-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes loading-bar {
+  from { background-position: -60% 0; }
+  to { background-position: 160% 0; }
+}
+
+@layer base {
+  html {
+    -webkit-text-size-adjust: 100%;
+    text-rendering: optimizeLegibility;
+  }
+  body {
+    background: var(--bg);
+    color: var(--ink);
+    font-family: var(--font-sans);
+    font-size: 15px;
+    line-height: 1.55;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    -webkit-tap-highlight-color: transparent;
+  }
+  /* Thai stacks tone marks above letters — give headings room. */
+  h1, h2, h3, h4 {
+    line-height: 1.3;
+    letter-spacing: -0.005em;
+    text-wrap: balance;
+  }
+  p { text-wrap: pretty; }
+  button, [role="button"], a { touch-action: manipulation; }
+  :focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+    border-radius: 6px;
+  }
+  ::selection { background: var(--brand-soft); color: var(--brand-soft-ink); }
+  input[type="number"]::-webkit-inner-spin-button,
+  input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+  input[type="number"] { -moz-appearance: textfield; }
+}
+
+@layer utilities {
+  .tabular { font-variant-numeric: tabular-nums; }
+  .scrollbar-thin { scrollbar-width: thin; scrollbar-color: var(--line-strong) transparent; }
+  .no-scrollbar { scrollbar-width: none; }
+  .no-scrollbar::-webkit-scrollbar { display: none; }
+  .safe-bottom { padding-bottom: max(env(safe-area-inset-bottom), 0px); }
+  .text-balance { text-wrap: balance; }
+  /*
+   * For the parts of a long page that are well below the screen: they are not laid out or painted until they get near it, so
+   * the first screen is not held up by text nobody can see yet (Chrome, Safari 18, Firefox 125; elsewhere they are simply
+   * drawn at once). `auto` in the size makes the browser remember the real height once a part has been drawn.
+   */
+  .offscreen-lazy { content-visibility: auto; contain-intrinsic-size: auto 600px; }
+  /* Shown along the top edge of the window while a page reads its data (`LoadBanner`): it takes no room, so nothing below it moves. */
+  .loading-bar {
+    background: linear-gradient(90deg, transparent, var(--brand), transparent) no-repeat;
+    background-size: 40% 100%;
+    animation: loading-bar 1.1s ease-in-out infinite;
+  }
+  .bg-grain {
+    background-image: radial-gradient(ellipse at top left, var(--brand-soft), transparent 55%),
+      radial-gradient(ellipse at bottom right, var(--accent-soft), transparent 50%);
+  }
+  .skeleton {
+    background: linear-gradient(90deg, var(--surface-2) 25%, var(--surface-3) 37%, var(--surface-2) 63%);
+    background-size: 400% 100%;
+    animation: var(--animate-shimmer);
+  }
+
+  /* Liquid glass — frosted, translucent chrome (nav, dialogs, top-level cards).
+     Reserved for structural/low-count elements: backdrop-filter is expensive
+     per layer, so repeated grid tiles (e.g. the POS menu) use .glass-soft
+     instead, which fakes the same material with a cheap gradient. */
+  .glass {
+    background: var(--glass-bg);
+    backdrop-filter: blur(var(--glass-blur)) saturate(160%);
+    -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(160%);
+    border: 1px solid var(--glass-border);
+    box-shadow: inset 0 1px 0 var(--glass-sheen), var(--shadow-sm);
+  }
+  .glass-strong {
+    background: var(--glass-bg-strong);
+    backdrop-filter: blur(var(--glass-blur)) saturate(160%);
+    -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(160%);
+    border: 1px solid var(--glass-border);
+    box-shadow: inset 0 1px 0 var(--glass-sheen), var(--shadow-md);
+  }
+  .glass-overlay {
+    background: var(--glass-bg-strong);
+    backdrop-filter: blur(var(--glass-blur)) saturate(160%);
+    -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(160%);
+    border: 1px solid var(--glass-border);
+    box-shadow: inset 0 1px 0 var(--glass-sheen), var(--shadow-lg);
+  }
+  .glass-soft {
+    background: linear-gradient(180deg, color-mix(in srgb, white 8%, var(--tile-surface)), var(--tile-surface));
+    border: 1px solid var(--line);
+  }
+  @supports not (backdrop-filter: blur(1px)) {
+    .glass, .glass-strong, .glass-overlay { background: var(--glass-bg-strong); }
+  }
+
+  /* Ambient mesh — soft, slowly drifting colour behind glass chrome. Fixed
+     and z-index'd under content; a page opts in with .glass-field on its
+     root instead of every page paying for it. */
+  .glass-field { position: relative; isolation: isolate; }
+  .glass-field::before {
+    content: "";
+    position: fixed;
+    inset: 0;
+    z-index: -1;
+    pointer-events: none;
+    background:
+      radial-gradient(38rem 30rem at 8% -5%, var(--brand-soft), transparent 60%),
+      radial-gradient(34rem 28rem at 100% 8%, var(--accent-soft), transparent 55%),
+      radial-gradient(40rem 34rem at 15% 100%, var(--info-soft), transparent 60%);
+    filter: blur(60px) saturate(130%);
+    opacity: 0.8;
+    animation: drift 26s ease-in-out infinite alternate;
+  }
+}
+
+@keyframes drift {
+  from { transform: translate3d(0, 0, 0) scale(1); }
+  to { transform: translate3d(2%, -2%, 0) scale(1.05); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 1ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 1ms !important;
+    scroll-behavior: auto !important;
+  }
+  /* Nothing sweeps: the bar is simply there, while the page loads. */
+  .loading-bar { background: var(--brand); opacity: 0.45; animation: none !important; }
+}
+
+@media (forced-colors: active) {
+  .status-dot { forced-color-adjust: none; border: 1px solid CanvasText; }
+}
+
+/* Paper. The receipt is drawn into #print-root (components/app/print-root.tsx), which is invisible on screen; when the
+   browser prints, everything except it is hidden, so the roll gets the receipt and never the till's screen. */
+#print-root { display: none; }
+.receipt { color: #000; background: #fff; font-family: "IBM Plex Sans Thai", "Noto Sans Thai", "Sarabun", system-ui, sans-serif; font-size: 12px; line-height: 1.35; padding: 2mm 3mm 4mm; box-sizing: border-box; }
+.receipt p, .receipt dl, .receipt dd, .receipt ul { margin: 0; padding: 0; }
+.receipt ul { list-style: none; }
+.receipt hr { border: 0; border-top: 1px dashed #000; margin: 5px 0; }
+.receipt-center { text-align: center; }
+.receipt-name { font-weight: 700; font-size: 14px; }
+.receipt-title { margin-top: 4px; font-weight: 700; }
+.receipt-banner { margin-top: 2px; font-weight: 700; border: 1px solid #000; padding: 1px 4px; display: inline-block; }
+.receipt-meta > div { display: flex; justify-content: space-between; gap: 6px; }
+.receipt-meta dt { flex: none; }
+.receipt-meta dd { text-align: right; }
+.receipt-row { display: flex; justify-content: space-between; align-items: flex-start; gap: 6px; }
+.receipt-row > span:first-child { min-width: 0; overflow-wrap: anywhere; }
+.receipt-num { flex: none; font-variant-numeric: tabular-nums; text-align: right; }
+.receipt-sub { padding-left: 10px; font-size: 11px; }
+.receipt-strong { font-weight: 700; font-size: 14px; margin-top: 2px; }
+.receipt-note { margin-top: 4px; font-size: 11px; text-align: center; }
+.receipt footer { margin-top: 6px; }
+
+/* The full tax invoice: A4, one page per copy. */
+.tax-invoice { color: #000; background: #fff; font-family: "IBM Plex Sans Thai", "Noto Sans Thai", "Sarabun", system-ui, sans-serif; font-size: 12px; line-height: 1.4; box-sizing: border-box; }
+.tax-invoice p, .tax-invoice dl, .tax-invoice dd { margin: 0; padding: 0; }
+.tax-invoice + .tax-invoice { break-before: page; }
+.ti-head { display: flex; justify-content: space-between; gap: 16px; align-items: flex-start; }
+.ti-seller { flex: 1; min-width: 0; }
+.ti-name { font-size: 17px; font-weight: 700; }
+.ti-box { width: 62mm; border: 1.5px solid #000; padding: 6px 10px; }
+.ti-title { font-size: 17px; font-weight: 700; text-align: center; }
+.ti-copy { text-align: center; font-size: 11px; margin-bottom: 4px; }
+.ti-box dl > div { display: flex; justify-content: space-between; gap: 8px; }
+.ti-box dd { font-weight: 600; text-align: right; }
+.ti-buyer { margin-top: 14px; border: 1px solid #000; padding: 6px 10px; }
+.ti-label { font-size: 11px; font-weight: 700; }
+.ti-buyer-name { font-weight: 700; font-size: 13px; }
+.ti-lines { width: 100%; border-collapse: collapse; margin-top: 14px; table-layout: fixed; }
+.ti-lines th:nth-child(1) { width: 14mm; }
+.ti-lines th:nth-child(3) { width: 18mm; }
+.ti-lines th:nth-child(4) { width: 28mm; }
+.ti-lines th:nth-child(5) { width: 30mm; }
+.ti-lines td { overflow-wrap: anywhere; }
+.ti-lines th { border: 1px solid #000; padding: 4px 6px; text-align: left; font-weight: 700; }
+.ti-lines td { border-left: 1px solid #000; border-right: 1px solid #000; padding: 3px 6px; vertical-align: top; }
+.ti-lines tbody tr:last-child td { border-bottom: 1px solid #000; }
+.ti-c { text-align: center !important; }
+.ti-r { text-align: right !important; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.ti-sub { font-size: 11px; }
+.ti-foot { display: flex; gap: 16px; align-items: flex-start; justify-content: space-between; margin-top: 10px; }
+.ti-words { flex: 1; min-width: 0; }
+.ti-words-text { font-weight: 700; font-size: 13px; }
+.ti-summary { width: 78mm; border-collapse: collapse; }
+.ti-summary th { text-align: left; font-weight: 400; padding: 2px 6px; }
+.ti-summary td { padding: 2px 6px; }
+.ti-strong th, .ti-strong td { font-weight: 700; font-size: 14px; border-top: 1px solid #000; border-bottom: 3px double #000; }
+.ti-sign { display: flex; justify-content: space-between; gap: 16px; margin-top: 36px; }
+
+@media print {
+  html, body { background: #fff !important; margin: 0 !important; padding: 0 !important; }
+  body > :not(#print-root) { display: none !important; }
+  #print-root { display: block; }
+  .no-print { display: none !important; }
+}

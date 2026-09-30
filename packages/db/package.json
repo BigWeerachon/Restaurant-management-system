@@ -1,0 +1,13 @@
+{
+  "name": "@sabai/db",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Sabai database: Supabase-compatible migrations (../../supabase/migrations), local shim and SQL tests",
+  "scripts": {
+    "reset": "bash ./scripts/reset.sh",
+    "seed": "bash ./scripts/seed.sh",
+    "seed:history": "bash ./scripts/seed-history.sh",
+    "test:sql": "bash ./run-sql-tests.sh",
+    "test": "bash ./run-sql-tests.sh"
+  }
+}

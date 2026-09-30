@@ -1,0 +1,22 @@
+/ (welcome)            passes=22 violations=0
+/today                 passes=26 violations=0
+/pos                   passes=29 violations=0
+/kds                   passes=23 violations=0
+/orders                passes=26 violations=0
+/inventory             passes=28 violations=0
+/inventory/receive     passes=23 violations=0
+/inventory/waste       passes=26 violations=0
+/inventory/count       passes=21 violations=0
+/inventory/new         passes=26 violations=0
+/menu                  passes=27 violations=0
+/menu/new              passes=26 violations=0
+/purchasing            passes=26 violations=0
+/finance               passes=26 violations=0
+/finance/close         passes=23 violations=0
+/reports               passes=27 violations=0
+/team                  passes=27 violations=0
+/settings              passes=27 violations=0
+/setup                 passes=25 violations=0
+/setup/branch          passes=25 violations=0
+/setup/payments        passes=25 violations=0
+TOTAL violating nodes: 0

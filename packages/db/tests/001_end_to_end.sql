@@ -1,0 +1,935 @@
+-- =============================================================================
+-- End-to-end database test: a café opens, sells, cooks, counts, closes the day.
+-- Runs as the real `authenticated` role with JWT claims, so every RLS policy,
+-- permission check and trigger is exercised exactly as in production.
+--
+--   pnpm --filter @sabai/db test:sql
+-- =============================================================================
+\set ON_ERROR_STOP on
+set client_min_messages = warning;
+
+create schema if not exists test;
+grant usage on schema test to authenticated;
+
+create or replace function test.ok(p_cond boolean, p_msg text) returns void language plpgsql as $$
+begin
+  if p_cond is not true then raise exception 'ASSERTION FAILED: %', p_msg; end if;
+end $$;
+
+-- Asserts that a statement fails with the given domain error code.
+create or replace function test.throws(p_sql text, p_code text) returns void language plpgsql as $$
+begin
+  execute p_sql;
+  raise exception 'ASSERTION FAILED: expected % from: %', p_code, p_sql;
+exception when others then
+  if sqlerrm like 'ASSERTION FAILED%' then raise; end if;
+  if sqlerrm <> p_code then
+    raise exception 'ASSERTION FAILED: expected %, got "%" from: %', p_code, sqlerrm, p_sql;
+  end if;
+end $$;
+
+create or replace function test.as_user(p_user uuid) returns void language sql as $$
+  select set_config('request.jwt.claims', json_build_object('sub', p_user, 'role', 'authenticated')::text, false);
+$$;
+create or replace function test.as_member(p_membership uuid) returns void language sql as $$
+  select set_config('request.jwt.claims', json_build_object('mid', p_membership, 'role', 'authenticated')::text, false);
+$$;
+create or replace function test.id(p_key text) returns uuid language sql stable as $$
+  select current_setting('test.' || p_key)::uuid;
+$$;
+create or replace function test.put(p_key text, p_val uuid) returns void language sql as $$
+  select set_config('test.' || p_key, p_val::text, false);
+$$;
+grant execute on all functions in schema test to authenticated;
+
+-- ---------------------------------------------------------------------------
+-- 1. Two owners sign up (tenant A = café under test, tenant B = the neighbour)
+-- ---------------------------------------------------------------------------
+select test.put('owner_a', '00000000-0000-7000-8000-00000000000a');
+select test.put('owner_b', '00000000-0000-7000-8000-00000000000b');
+insert into auth.users (id, email) values (test.id('owner_a'), 'a@example.com'), (test.id('owner_b'), 'b@example.com');
+
+set role authenticated;
+
+select test.as_user(test.id('owner_b'));
+select test.put('tenant_b', (app.create_tenant('{"name":"ร้านข้างบ้าน","owner_name":"บี"}')->>'tenant_id')::uuid);
+
+select test.as_user(test.id('owner_a'));
+do $$
+declare r jsonb;
+begin
+  r := app.create_tenant('{"name":"สบายคาเฟ่","business_type":"cafe","branch_name":"สาขาสุขุมวิท","owner_name":"คุณเอ","vat_registered":true}');
+  perform test.put('tenant_a', (r->>'tenant_id')::uuid);
+  perform test.put('branch_a', (r->>'branch_id')::uuid);
+  perform test.put('owner_mem_a', (r->>'membership_id')::uuid);
+end $$;
+
+-- Smart defaults exist and are visible through RLS.
+select test.ok((select count(*) from app.roles where tenant_id = test.id('tenant_a')) = 7, 'seven role templates');
+select test.ok((select count(*) from app.accounts where tenant_id = test.id('tenant_a')) >= 30, 'chart of accounts installed');
+select test.ok((select count(*) from app.kitchen_stations where branch_id = test.id('branch_a')) = 2, 'kitchen + bar stations');
+select test.ok((select count(*) from app.payment_methods where tenant_id = test.id('tenant_a') and is_active) = 2, 'cash + platform active by default');
+
+-- Onboarding facts start mostly empty.
+select test.ok((select not branch_ready and not payments_ready and ingredients = 0 and not has_sale
+                  from app.v_onboarding_facts where tenant_id = test.id('tenant_a')), 'fresh onboarding facts');
+
+-- Owner finishes the branch + payment steps.
+update app.branches set address = '99 สุขุมวิท 24', phone = '021234567' where id = test.id('branch_a');
+update app.payment_methods set is_active = true, config = '{"promptpay_id":"0812345678"}'
+ where tenant_id = test.id('tenant_a') and kind = 'promptpay';
+select test.ok((select branch_ready and payments_ready from app.v_onboarding_facts where tenant_id = test.id('tenant_a')),
+               'branch + payments steps detected automatically');
+
+-- ---------------------------------------------------------------------------
+-- 2. Ingredients, prep recipe (untracked syrup), menu with modifiers + recipes
+-- ---------------------------------------------------------------------------
+do $$
+declare
+  t uuid := test.id('tenant_a');
+  brand uuid;
+  cat uuid;
+  latte uuid;
+  g_milk uuid; g_extra uuid;
+  o_oat uuid; o_shot uuid;
+  r uuid;
+begin
+  insert into app.ingredients (tenant_id, name, base_unit, display_unit, reorder_point, par_level, standard_cost, is_high_value)
+  values (t, 'เมล็ดกาแฟ', 'g', 'kg', 500, 2000, 0.45, true) returning id into r; perform test.put('coffee', r);
+  insert into app.ingredients (tenant_id, name, base_unit, display_unit, reorder_point, standard_cost)
+  values (t, 'นมสด', 'ml', 'l', 2000, 0.045) returning id into r; perform test.put('milk', r);
+  insert into app.ingredients (tenant_id, name, base_unit, display_unit, standard_cost)
+  values (t, 'นมโอ๊ต', 'ml', 'l', 0.12) returning id into r; perform test.put('oat', r);
+  insert into app.ingredients (tenant_id, name, base_unit, display_unit, standard_cost)
+  values (t, 'น้ำตาลทราย', 'g', 'kg', 0.03) returning id into r; perform test.put('sugar', r);
+  insert into app.ingredients (tenant_id, name, base_unit, kind, track_stock)
+  values (t, 'น้ำเชื่อม', 'ml', 'prep', false) returning id into r; perform test.put('syrup', r);
+
+  -- Syrup: 500 g sugar → 1000 ml syrup (cost 0.015/ml, exploded at sale).
+  insert into app.recipes (tenant_id, kind, output_ingredient_id, yield_qty) values (t, 'prep', test.id('syrup'), 1000) returning id into r;
+  insert into app.recipe_lines (tenant_id, recipe_id, ingredient_id, qty) values (t, r, test.id('sugar'), 500);
+
+  select id into brand from app.brands where tenant_id = t and is_default;
+  insert into app.menu_categories (tenant_id, brand_id, name) values (t, brand, 'กาแฟ') returning id into cat;
+  insert into app.menu_items (tenant_id, brand_id, category_id, name, price, kitchen_route)
+  values (t, brand, cat, 'ลาเต้เย็น', 65, 'bar') returning id into latte; perform test.put('latte', latte);
+
+  insert into app.recipes (tenant_id, kind, menu_item_id) values (t, 'menu_item', latte) returning id into r;
+  insert into app.recipe_lines (tenant_id, recipe_id, ingredient_id, qty) values
+    (t, r, test.id('coffee'), 18), (t, r, test.id('milk'), 180), (t, r, test.id('syrup'), 20);
+
+  insert into app.modifier_groups (tenant_id, brand_id, name, min_select, max_select) values (t, brand, 'เปลี่ยนนม', 0, 1) returning id into g_milk;
+  insert into app.modifier_options (tenant_id, group_id, name, price_delta) values (t, g_milk, 'นมโอ๊ต', 15) returning id into o_oat;
+  insert into app.modifier_options (tenant_id, group_id, name, price_delta) values (t, g_milk, 'นมอัลมอนด์', 20) returning id into r;
+  perform test.put('opt_almond', r);
+  insert into app.modifier_groups (tenant_id, brand_id, name, min_select, max_select) values (t, brand, 'เพิ่ม', 0, 2) returning id into g_extra;
+  insert into app.modifier_options (tenant_id, group_id, name, price_delta) values (t, g_extra, 'เพิ่มช็อต', 15) returning id into o_shot;
+  insert into app.menu_item_modifier_groups (tenant_id, menu_item_id, group_id) values (t, latte, g_milk), (t, latte, g_extra);
+  perform test.put('opt_oat', o_oat);
+  perform test.put('opt_shot', o_shot);
+
+  -- Oat milk substitutes fresh milk (negative line allowed on modifier recipes only).
+  insert into app.recipes (tenant_id, kind, modifier_option_id) values (t, 'modifier_option', o_oat) returning id into r;
+  insert into app.recipe_lines (tenant_id, recipe_id, ingredient_id, qty) values (t, r, test.id('milk'), -180), (t, r, test.id('oat'), 180);
+  insert into app.recipes (tenant_id, kind, modifier_option_id) values (t, 'modifier_option', o_shot) returning id into r;
+  insert into app.recipe_lines (tenant_id, recipe_id, ingredient_id, qty) values (t, r, test.id('coffee'), 18);
+end $$;
+
+-- Negative qty is rejected on a normal menu recipe.
+select test.throws(format($q$insert into app.recipe_lines (tenant_id, recipe_id, ingredient_id, qty)
+  select %L, id, %L, -5 from app.recipes where menu_item_id = %L$q$, test.id('tenant_a'), test.id('sugar'), test.id('latte')),
+  'RECIPE_QTY_MUST_BE_POSITIVE');
+
+-- Theoretical cost before any purchase uses standard cost:
+-- 18 g × 0.45 + 180 ml × 0.045 + 20 ml syrup × (500 g × 0.03 / 1000) = 8.10 + 8.10 + 0.30 = 16.50
+select test.ok(app.menu_item_cost(test.id('latte')) = 16.50, 'latte theoretical cost 16.50, got ' || app.menu_item_cost(test.id('latte')));
+
+-- ---------------------------------------------------------------------------
+-- 3. Receive goods (credit from a supplier → AP bill + GL entry)
+-- ---------------------------------------------------------------------------
+do $$
+declare
+  sup uuid;
+  r jsonb;
+begin
+  insert into app.suppliers (tenant_id, name, payment_terms_days) values (test.id('tenant_a'), 'โรงคั่วดอยช้าง', 30) returning id into sup;
+  perform test.put('supplier', sup);
+  r := app.receive_goods(jsonb_build_object(
+    'branch_id', test.id('branch_a'), 'supplier_id', sup, 'invoice_no', 'INV-001', 'vat_amount', 70,
+    'lines', jsonb_build_array(
+      jsonb_build_object('ingredient_id', test.id('coffee'), 'pack_name', 'ถุง 1 กก.', 'pack_qty', 1000, 'qty_packs', 2, 'unit_price', 500),
+      jsonb_build_object('ingredient_id', test.id('milk'), 'pack_name', 'ขวด 2 ลิตร', 'pack_qty', 2000, 'qty_packs', 3, 'unit_price', 100),
+      jsonb_build_object('ingredient_id', test.id('oat'), 'pack_name', 'กล่อง 1 ลิตร', 'pack_qty', 1000, 'qty_packs', 1, 'unit_price', 120),
+      jsonb_build_object('ingredient_id', test.id('sugar'), 'pack_name', 'ถุง 1 กก.', 'pack_qty', 1000, 'qty_packs', 1, 'unit_price', 30))));
+  perform test.ok((r->>'total')::numeric = 1450 + 70, 'GR total incl. VAT');
+end $$;
+
+select test.ok((select qty_on_hand from app.stock_balances where ingredient_id = test.id('coffee')) = 2000, 'coffee on hand 2000 g');
+select test.ok((select avg_cost from app.stock_balances where ingredient_id = test.id('coffee')) = 0.5, 'coffee avg cost 0.50/g');
+select test.ok((select count(*) from app.bills where tenant_id = test.id('tenant_a') and status = 'open') = 1, 'AP bill created');
+select test.ok((select sum(debit) = sum(credit) from app.journal_lines where tenant_id = test.id('tenant_a')), 'GL balanced after receipt');
+-- Price alert fired (coffee 0.45 standard → 0.50 is not "last cost", so no alert on first buy).
+select test.ok((select count(*) from app.domain_events where event_type = 'inventory.price_increased' and tenant_id = test.id('tenant_a')) = 0, 'no price alert on first purchase');
+
+-- ---------------------------------------------------------------------------
+-- 4. Sell: shift → order (server re-prices) → KDS → pay → stock consumed
+-- ---------------------------------------------------------------------------
+select test.put('shift', app.open_shift(test.id('branch_a'), 1000));
+select test.throws(format('select app.open_shift(%L, 500)', test.id('branch_a')), 'SHIFT_ALREADY_OPEN');
+
+do $$
+declare
+  ch uuid := (select id from app.sales_channels where tenant_id = test.id('tenant_a') and key = 'dine_in');
+  r jsonb;
+  oid uuid := app.uuid_v7();
+begin
+  perform test.put('order1', oid);
+  r := app.submit_order(jsonb_build_object(
+    'id', oid, 'branch_id', test.id('branch_a'), 'channel_id', ch, 'guest_count', 2,
+    'items', jsonb_build_array(
+      jsonb_build_object('id', app.uuid_v7(), 'menu_item_id', test.id('latte'), 'qty', 1),
+      jsonb_build_object('id', app.uuid_v7(), 'menu_item_id', test.id('latte'), 'qty', 1,
+                         'modifier_option_ids', jsonb_build_array(test.id('opt_oat')), 'note', 'หวานน้อย'))));
+  -- 65 + (65 + 15) = 145, VAT included: 145 × 7/107 = 9.49
+  perform test.ok((r->>'total')::numeric = 145, 'order total 145, got ' || (r->>'total'));
+  perform test.ok((r->>'vat_amount')::numeric = 9.49, 'VAT 9.49, got ' || (r->>'vat_amount'));
+  perform test.ok(r->>'order_no' = '001', 'first order number of the day is 001');
+
+  -- Idempotent retry (same payload) does not duplicate anything.
+  r := app.submit_order(jsonb_build_object('id', oid, 'branch_id', test.id('branch_a'), 'channel_id', ch, 'items', '[]'::jsonb));
+  perform test.ok((r->>'total')::numeric = 145, 'retry is idempotent');
+end $$;
+
+-- Too many modifiers in a max=1 group is refused with a human-mappable code.
+select test.throws(format($q$select app.submit_order(jsonb_build_object('id', %L, 'branch_id', %L,
+  'items', jsonb_build_array(jsonb_build_object('menu_item_id', %L, 'modifier_option_ids', jsonb_build_array(%L, %L)))))$q$,
+  test.id('order1'), test.id('branch_a'), test.id('latte'), test.id('opt_oat'), test.id('opt_almond')), 'MODIFIER_SELECTION');
+
+-- Latte routes to the bar station → one ticket with two items.
+select test.ok((select count(*) from app.kitchen_tickets kt join app.kitchen_stations ks on ks.id = kt.station_id
+                 where kt.order_id = test.id('order1') and ks.route_key = 'bar') = 1, 'one bar ticket');
+select test.ok((select count(*) from app.kitchen_ticket_items ti join app.kitchen_tickets kt on kt.id = ti.ticket_id
+                 where kt.order_id = test.id('order1')) = 2, 'two ticket items');
+
+-- Paying the wrong total is refused; the right total with change works.
+select test.throws(format($q$select app.pay_order(%L, jsonb_build_array(jsonb_build_object('method_id',
+  (select id from app.payment_methods where tenant_id = %L and kind = 'cash'), 'amount', 100)))$q$,
+  test.id('order1'), test.id('tenant_a')), 'PAYMENT_TOTAL_MISMATCH');
+
+do $$
+declare r jsonb;
+begin
+  r := app.pay_order(test.id('order1'), jsonb_build_array(jsonb_build_object(
+    'method_id', (select id from app.payment_methods where tenant_id = test.id('tenant_a') and kind = 'cash'),
+    'amount', 145, 'tendered', 200)));
+  perform test.ok((r->>'change')::numeric = 55, 'change 55');
+  perform test.ok(r->>'receipt_no' like 'HQ-____-00001', 'receipt number format, got ' || (r->>'receipt_no'));
+end $$;
+
+-- Stock: coffee 2 × 18 = 36 g; milk 180 (oat replaced the other 180); oat 180; sugar 2 × 20 ml × 0.5 g/ml = 20 g.
+select test.ok((select qty_on_hand from app.stock_balances where ingredient_id = test.id('coffee')) = 2000 - 36, 'coffee consumed');
+select test.ok((select qty_on_hand from app.stock_balances where ingredient_id = test.id('milk')) = 6000 - 180, 'milk consumed (substitution)');
+select test.ok((select qty_on_hand from app.stock_balances where ingredient_id = test.id('oat')) = 1000 - 180, 'oat milk consumed');
+select test.ok((select qty_on_hand from app.stock_balances where ingredient_id = test.id('sugar')) = 1000 - 20, 'syrup exploded into sugar');
+select test.ok((select cost_total from app.orders where id = test.id('order1')) > 0, 'order cost recorded');
+
+-- Paying again is a safe no-op (flaky Wi-Fi retry).
+select test.ok((app.pay_order(test.id('order1'), '[]'::jsonb)->>'status') = 'paid', 'pay is idempotent');
+
+-- KDS: bump ready, then recall (undo), then ready again.
+do $$
+declare kt uuid := (select id from app.kitchen_tickets where order_id = test.id('order1') limit 1);
+begin
+  perform app.set_ticket_status(kt, 'in_progress');
+  perform app.set_ticket_status(kt, 'ready');
+  perform test.ok((select bool_and(status = 'ready') from app.order_items where order_id = test.id('order1')), 'items ready');
+  perform app.set_ticket_status(kt, 'in_progress');
+  perform test.ok((select bool_and(status = 'sent') from app.order_items where order_id = test.id('order1')), 'recall puts items back');
+  perform app.set_ticket_status(kt, 'ready');
+end $$;
+
+-- Ledgers are append-only: app users have no UPDATE grant at all, and even a
+-- privileged role is stopped by the immutability trigger.
+select test.throws(format('update app.stock_movements set qty = 1 where ingredient_id = %L', test.id('coffee')),
+                   'permission denied for table stock_movements');
+reset role;
+select test.throws(format('update app.stock_movements set qty = 1 where ingredient_id = %L', test.id('coffee')), 'LEDGER_IMMUTABLE');
+select test.throws(format('delete from app.payments where order_id = %L', test.id('order1')), 'LEDGER_IMMUTABLE');
+set role authenticated;
+
+-- ---------------------------------------------------------------------------
+-- 4b. Receipt numbers per till, and full tax invoices on request (7.3)
+--     Everything here is undone at the end: later sections see the shop as it was.
+-- ---------------------------------------------------------------------------
+begin;
+
+reset role;
+create or replace function test.as_till(p_membership uuid, p_device uuid) returns void language sql as $$
+  select set_config('request.jwt.claims', json_build_object('mid', p_membership, 'did', p_device, 'role', 'authenticated')::text, false);
+$$;
+-- Sells one latte and pays it in cash; returns the receipt number. The order id is left in test.last_order.
+create or replace function test.sell() returns text language plpgsql as $$
+declare
+  oid uuid := app.uuid_v7();
+  r jsonb;
+  cash uuid := (select id from app.payment_methods where tenant_id = test.id('tenant_a') and kind = 'cash');
+begin
+  r := app.submit_order(jsonb_build_object('id', oid, 'branch_id', test.id('branch_a'),
+    'channel_id', (select id from app.sales_channels where tenant_id = test.id('tenant_a') and key = 'dine_in'),
+    'items', jsonb_build_array(jsonb_build_object('id', app.uuid_v7(), 'menu_item_id', test.id('latte'), 'qty', 1))));
+  perform test.put('last_order', oid);
+  r := app.pay_order(oid, jsonb_build_array(jsonb_build_object('method_id', cash, 'amount', (r->>'total')::numeric)));
+  return r->>'receipt_no';
+end $$;
+grant execute on function test.as_till(uuid, uuid), test.sell() to authenticated;
+set role authenticated;
+
+-- Parity with isValidThaiTaxId in @sabai/domain (packages/domain/test/tax.test.ts uses the same numbers).
+select test.ok(app.is_valid_thai_tax_id('0105536001239') and app.is_valid_thai_tax_id('1234567890121') and app.is_valid_thai_tax_id('3100456789018')
+               and app.is_valid_thai_tax_id('0000000000019') and app.is_valid_thai_tax_id('1101700230708'), 'valid taxpayer numbers pass');
+select test.ok(not app.is_valid_thai_tax_id('1101700230705') and not app.is_valid_thai_tax_id('110170023070') and not app.is_valid_thai_tax_id('11017002307083')
+               and not app.is_valid_thai_tax_id('1-1017-00230-70-8') and not app.is_valid_thai_tax_id('abcdefghijklm') and not app.is_valid_thai_tax_id('')
+               and not app.is_valid_thai_tax_id(null), 'wrong taxpayer numbers fail');
+
+-- The shop has not put its taxpayer number and branch address on file: no tax invoice yet, and nothing is written.
+select test.as_user(test.id('owner_a'));
+select test.throws(format('select app.issue_tax_invoice(%L, %L, %L, %L)', test.id('order1'), 'บริษัท ผู้ซื้อ จำกัด', '1101700230708', '99 ถ.สุขุมวิท'), 'TAX_INVOICE_NOT_AVAILABLE');
+reset role;
+update app.tenants set tax_id = '1101700230708', legal_name = 'บริษัท สบายคาเฟ่ จำกัด' where id = test.id('tenant_a');
+update app.branches set address = '12 ซ.อารีย์ กรุงเทพฯ 10400' where id = test.id('branch_a');
+set role authenticated;
+
+-- Numbers per till: each registered till counts on its own; the account on a browser keeps the branch series.
+select test.as_user(test.id('owner_a'));
+select test.put('till1', app.register_device(test.id('branch_a'), 'เครื่องหน้าร้าน 1', 'pos', encode(extensions.digest('till-1', 'sha256'), 'hex')));
+select test.put('till2', app.register_device(test.id('branch_a'), 'เครื่องหน้าร้าน 2', 'pos', encode(extensions.digest('till-2', 'sha256'), 'hex')));
+select test.ok((select receipt_code is null from app.devices where id = test.id('till1')), 'a till has no code until its first sale');
+do $$
+declare
+  ym text := to_char(app.business_date(test.id('branch_a')), 'YYMM');
+  n text;
+begin
+  perform test.as_till(test.id('owner_mem_a'), test.id('till1'));
+  n := test.sell(); perform test.ok(n = 'HQ-T1-' || ym || '-00001', 'till 1 first receipt, got ' || n);
+  perform test.put('till1_order', test.id('last_order'));
+  n := test.sell(); perform test.ok(n = 'HQ-T1-' || ym || '-00002', 'till 1 second receipt, got ' || n);
+  perform test.as_till(test.id('owner_mem_a'), test.id('till2'));
+  n := test.sell(); perform test.ok(n = 'HQ-T2-' || ym || '-00001', 'till 2 starts its own series, got ' || n);
+  -- The account on a browser shares the branch series (order1 was HQ-YYMM-00001).
+  perform test.as_user(test.id('owner_a'));
+  n := test.sell(); perform test.ok(n = 'HQ-' || ym || '-00002', 'no till: branch series, got ' || n);
+  -- A till id that is not a till of this branch (or a revoked one) is ignored, never trusted.
+  perform test.as_till(test.id('owner_mem_a'), app.uuid_v7());
+  n := test.sell(); perform test.ok(n = 'HQ-' || ym || '-00003', 'unknown till id: branch series, got ' || n);
+  perform test.as_user(test.id('owner_a'));
+  perform app.revoke_device(test.id('till2'));
+  perform test.as_till(test.id('owner_mem_a'), test.id('till2'));
+  n := test.sell(); perform test.ok(n = 'HQ-' || ym || '-00004', 'revoked till: branch series, got ' || n);
+end $$;
+select test.ok((select receipt_code from app.devices where id = test.id('till1')) = 'T1' and (select receipt_code from app.devices where id = test.id('till2')) = 'T2', 'codes are handed out on first sale');
+
+-- Full tax invoice: only for a paid bill, with a buyer whose taxpayer number can be right.
+select test.as_user(test.id('owner_a'));
+do $$
+declare
+  ch uuid := (select id from app.sales_channels where tenant_id = test.id('tenant_a') and key = 'dine_in');
+  oid uuid := app.uuid_v7();
+begin
+  perform app.submit_order(jsonb_build_object('id', oid, 'branch_id', test.id('branch_a'), 'channel_id', ch,
+    'items', jsonb_build_array(jsonb_build_object('id', app.uuid_v7(), 'menu_item_id', test.id('latte'), 'qty', 1))));
+  perform test.put('unpaid', oid);
+end $$;
+select test.throws(format('select app.issue_tax_invoice(%L, %L, %L, %L)', test.id('unpaid'), 'บริษัท ผู้ซื้อ จำกัด', '1101700230708', '99 ถ.สุขุมวิท'), 'TAX_INVOICE_ORDER_NOT_PAID');
+select test.throws(format('select app.issue_tax_invoice(%L, %L, %L, %L)', test.id('order1'), 'บริษัท ผู้ซื้อ จำกัด', '1101700230705', '99 ถ.สุขุมวิท'), 'VALIDATION');
+select test.throws(format('select app.issue_tax_invoice(%L, %L, %L, %L)', test.id('order1'), '  ', '1101700230708', '99 ถ.สุขุมวิท'), 'VALIDATION');
+select test.throws(format('select app.issue_tax_invoice(%L, %L, %L, %L)', test.id('order1'), 'บริษัท ผู้ซื้อ จำกัด', '1101700230708', ''), 'VALIDATION');
+select test.throws(format('select app.issue_tax_invoice(%L, %L, %L, %L, %L)', test.id('order1'), 'บริษัท ผู้ซื้อ จำกัด', '1101700230708', '99 ถ.สุขุมวิท', '12'), 'VALIDATION');
+select test.ok((select count(*) from app.tax_invoices) = 0, 'refused requests wrote nothing');
+
+do $$
+declare
+  ym text := to_char(app.business_date(test.id('branch_a')), 'YYMM');
+  r jsonb;
+begin
+  r := app.issue_tax_invoice(test.id('order1'), '  บริษัท ผู้ซื้อ จำกัด ', '1101700230708', ' 99 ถ.สุขุมวิท กรุงเทพฯ 10110 ', '00003');
+  perform test.ok(r->>'invoice_no' = 'HQ-TI-' || ym || '-00001', 'first tax invoice number, got ' || (r->>'invoice_no'));
+  perform test.ok(r->>'receipt_no' = (select receipt_no from app.orders where id = test.id('order1')), 'it names the receipt it accompanies');
+  perform test.ok(r->>'seller_name' = 'บริษัท สบายคาเฟ่ จำกัด' and r->>'seller_tax_id' = '1101700230708' and r->>'seller_branch_no' = '00000', 'seller is the shop as it is today');
+  perform test.ok(r->>'buyer_name' = 'บริษัท ผู้ซื้อ จำกัด' and r->>'buyer_address' = '99 ถ.สุขุมวิท กรุงเทพฯ 10110' and r->>'buyer_branch_no' = '00003', 'buyer is stored trimmed');
+  -- 65 + (65 + 15) = 145 with VAT included: 145 − 9.49 = 135.51 before VAT (same as amountBeforeVat in @sabai/domain).
+  perform test.ok((r->>'total')::numeric = 145 and (r->>'vat_amount')::numeric = 9.49 and (r->>'amount_before_vat')::numeric = 135.51, 'amounts as on the bill, got ' || (r->>'amount_before_vat'));
+  perform test.ok(jsonb_array_length(r->'lines') = 2
+                  and (r->'lines'->1->'modifiers') = (select jsonb_agg(m.name) from app.order_item_modifiers m join app.order_items i on i.id = m.order_item_id where i.order_id = test.id('order1'))
+                  and jsonb_array_length(r->'lines'->0->'modifiers') = 0, 'lines and modifiers are copied');
+  perform test.ok((r->>'issued_by')::uuid = test.id('owner_mem_a'), 'issued by the person at the till');
+  perform test.ok((select count(*) from app.domain_events where event_type = 'order.tax_invoiced' and aggregate_id = test.id('order1')) = 1, 'in the activity feed');
+  perform test.ok((select count(*) from audit.log where table_name = 'tax_invoices' and tenant_id = test.id('tenant_a')) = 1, 'the audit trail has it');
+end $$;
+
+-- One per bill: a second request is refused and names the first.
+select test.throws(format('select app.issue_tax_invoice(%L, %L, %L, %L)', test.id('order1'), 'บริษัทอื่น', '1101700230708', 'ที่อยู่อื่น'), 'TAX_INVOICE_EXISTS');
+-- The next bill's invoice is the next number.
+select test.ok((app.issue_tax_invoice(test.id('till1_order'), 'คุณสมชาย', '1234567890121', '1 ถ.เพชรบุรี')->>'invoice_no') like 'HQ-TI-____-00002', 'second invoice is number 2');
+
+-- A document handed out does not move when the shop later changes its details.
+reset role;
+update app.tenants set legal_name = 'ชื่อใหม่ จำกัด' where id = test.id('tenant_a');
+set role authenticated;
+select test.as_user(test.id('owner_a'));
+select test.ok((select seller_name from app.tax_invoices where order_id = test.id('order1')) = 'บริษัท สบายคาเฟ่ จำกัด', 'seller as it was on the day');
+
+-- Append-only: neither an app user nor a privileged role can change or remove one.
+select test.throws(format('update app.tax_invoices set buyer_name = %L where order_id = %L', 'x', test.id('order1')), 'permission denied for table tax_invoices');
+reset role;
+select test.throws(format('update app.tax_invoices set buyer_name = %L where order_id = %L', 'x', test.id('order1')), 'LEDGER_IMMUTABLE');
+select test.throws(format('delete from app.tax_invoices where order_id = %L', test.id('order1')), 'LEDGER_IMMUTABLE');
+set role authenticated;
+
+-- Who may issue: whoever may take the money. The kitchen may not, nor another shop's owner (who also sees none of them).
+do $$
+declare k uuid;
+begin
+  insert into app.memberships (tenant_id, display_name, role_id)
+  values (test.id('tenant_a'), 'น้องครัว', (select id from app.roles where tenant_id = test.id('tenant_a') and key = 'kitchen')) returning id into k;
+  perform test.put('kitchen_mem', k);
+end $$;
+select test.as_member(test.id('kitchen_mem'));
+select test.throws(format('select app.issue_tax_invoice(%L, %L, %L, %L)', test.id('order1'), 'x', '1101700230708', 'x'), 'PERMISSION_DENIED');
+select test.as_user(test.id('owner_b'));
+select test.throws(format('select app.issue_tax_invoice(%L, %L, %L, %L)', test.id('order1'), 'x', '1101700230708', 'x'), 'PERMISSION_DENIED');
+select test.ok((select count(*) from app.tax_invoices) = 0, 'another shop sees none of these invoices');
+
+rollback;
+-- The rollback restored the role and claims as they were before section 4b.
+
+-- ---------------------------------------------------------------------------
+-- 4c. Billing (8.1): the invoice, the provider's "paid", the nightly job — and a shop that never stops selling.
+--     Undone at the end, like 4b.
+-- ---------------------------------------------------------------------------
+begin;
+
+reset role;
+create or replace function test.sell() returns text language plpgsql as $$
+declare
+  oid uuid := app.uuid_v7();
+  r jsonb;
+  cash uuid := (select id from app.payment_methods where tenant_id = test.id('tenant_a') and kind = 'cash');
+begin
+  r := app.submit_order(jsonb_build_object('id', oid, 'branch_id', test.id('branch_a'),
+    'channel_id', (select id from app.sales_channels where tenant_id = test.id('tenant_a') and key = 'dine_in'),
+    'items', jsonb_build_array(jsonb_build_object('id', app.uuid_v7(), 'menu_item_id', test.id('latte'), 'qty', 1))));
+  r := app.pay_order(oid, jsonb_build_array(jsonb_build_object('method_id', cash, 'amount', (r->>'total')::numeric)));
+  return r->>'receipt_no';
+end $$;
+-- Puts the neighbour's subscription into a state and says which stage that is at a fixed moment (2026-10-15 05:00 UTC).
+-- The same facts and answers as VECTORS in packages/domain/test/billing.test.ts.
+create or replace function test.stage(p_status text, p_trial timestamptz, p_since timestamptz, p_grace int default 14) returns text language plpgsql as $$
+begin
+  update app.subscriptions set status = p_status, trial_ends_at = p_trial, past_due_since = p_since, grace_days = p_grace where tenant_id = test.id('tenant_b');
+  return app.billing_stage(test.id('tenant_b'), timestamptz '2026-10-15 05:00+00');
+end $$;
+grant execute on function test.sell() to authenticated;
+
+select test.ok(test.stage('active', null, null) = 'ok', 'paying');
+select test.ok(test.stage('trialing', '2026-10-24 05:00+00', null) = 'trial', 'trial with days left');
+select test.ok(test.stage('trialing', '2026-10-15 04:59:59+00', null) = 'canceled', 'a trial that ended a second ago is over');
+select test.ok(test.stage('past_due', null, '2026-10-15 05:00+00') = 'past_due', 'just missed a payment');
+select test.ok(test.stage('past_due', null, '2026-10-10 05:00+00') = 'past_due', 'missed 5 days ago');
+select test.ok(test.stage('past_due', null, '2026-10-02 05:00+00') = 'past_due', 'one day of grace left');
+select test.ok(test.stage('past_due', null, '2026-10-01 05:00+00') = 'restricted', 'grace ran out exactly now');
+select test.ok(test.stage('past_due', null, '2026-09-05 05:00+00') = 'restricted', 'long overdue, the job has not run yet');
+select test.ok(test.stage('past_due', null, '2026-10-11 05:00+00', 3) = 'restricted', 'a shorter grace period');
+select test.ok(test.stage('restricted', null, '2026-09-25 05:00+00') = 'restricted', 'already marked restricted');
+select test.ok(test.stage('canceled', null, null) = 'canceled', 'canceled');
+select test.ok(app.billing_stage(gen_random_uuid()) = 'ok', 'a shop with no subscription record is not blocked');
+-- The neighbour is a trial that has run out: the job ends it, and it carries on with the free plan, owing nothing.
+update app.subscriptions set status = 'trialing', trial_ends_at = now() - interval '1 hour', past_due_since = null, grace_days = 14 where tenant_id = test.id('tenant_b');
+select test.ok((app.effective_plan(test.id('tenant_b'))).code = 'free', 'an ended trial is the free plan even before the job runs');
+select test.ok((app.billing_run(now())->>'trials_ended')::int = 1, 'the job ends the trial');
+select test.ok((select status from app.subscriptions where tenant_id = test.id('tenant_b')) = 'canceled', 'and records it');
+select test.ok((app.billing_run(now())->>'trials_ended')::int = 0, 'a second run finds nothing to do');
+
+-- Asking for a plan while on a trial: an invoice to pay first. Nothing is applied until the money arrives.
+set role authenticated;
+select test.as_user(test.id('owner_a'));
+do $$
+declare
+  ym text := to_char(now() at time zone 'Asia/Bangkok', 'YYMM');
+  r jsonb;
+  inv app.subscription_invoices;
+begin
+  r := app.request_plan_change(test.id('tenant_a'), 'pro', 'monthly');
+  perform test.ok((r->>'applied')::boolean = false and r->>'invoice_no' = 'INV-' || ym || '-00001', 'a trial asks for payment first, got ' || r::text);
+  select * into inv from app.subscription_invoices where id = (r->>'invoice_id')::uuid;
+  -- Prices include VAT: 1490 = 1392.52 + 97.48 (the same 7/107 split as a receipt).
+  perform test.ok(inv.subtotal = 1392.52 and inv.vat_amount = 97.48 and inv.total = 1490 and inv.status = 'open'
+                  and inv.kind = 'plan_change' and inv.plan_code = 'pro' and inv.billing_cycle = 'monthly', 'invoice amounts and kind');
+  perform test.ok((select status = 'trialing' from app.subscriptions where tenant_id = test.id('tenant_a')), 'nothing changes until it is paid');
+  -- Another request replaces it: only one invoice is ever waiting.
+  r := app.request_plan_change(test.id('tenant_a'), 'pro', 'yearly');
+  perform test.ok(r->>'invoice_no' = 'INV-' || ym || '-00002' and (r->>'total')::numeric = 14900, 'yearly invoice is number 2');
+  perform test.ok((select count(*) from app.subscription_invoices where status = 'open') = 1
+                  and (select count(*) from app.subscription_invoices where status = 'void') = 1, 'one open invoice, the old one voided');
+end $$;
+select test.throws(format('select app.request_plan_change(%L, %L, %L)', test.id('tenant_a'), 'enterprise', 'monthly'), 'VALIDATION');
+select test.throws(format('select app.request_plan_change(%L, %L, %L)', test.id('tenant_a'), 'pro', 'weekly'), 'VALIDATION');
+select test.throws(format('select app.request_plan_change(%L, %L, %L)', test.id('tenant_a'), 'platinum', 'monthly'), 'NOT_FOUND');
+
+-- Only whoever may manage billing can ask, or see the invoices; and neither can the other shop.
+do $$
+declare k uuid;
+begin
+  insert into app.memberships (tenant_id, display_name, role_id)
+  values (test.id('tenant_a'), 'น้องครัว', (select id from app.roles where tenant_id = test.id('tenant_a') and key = 'kitchen')) returning id into k;
+  perform test.put('kitchen_mem', k);
+end $$;
+select test.as_member(test.id('kitchen_mem'));
+select test.throws(format('select app.request_plan_change(%L, %L, %L)', test.id('tenant_a'), 'pro', 'monthly'), 'PERMISSION_DENIED');
+select test.ok((select count(*) from app.subscription_invoices) = 0, 'the kitchen sees no invoices');
+select test.as_user(test.id('owner_b'));
+select test.ok((select count(*) from app.subscription_invoices) = 0, 'the other shop sees no invoices');
+select test.throws(format('select app.request_plan_change(%L, %L, %L)', test.id('tenant_a'), 'pro', 'monthly'), 'PERMISSION_DENIED');
+-- Provider events, invoice numbers and the job are for the server only.
+select test.throws('select count(*) from app.billing_events', 'permission denied for table billing_events');
+select test.throws(format('select app.apply_billing_event(%L, %L, %L, %L::jsonb)', 'omise', 'evt_x', 'invoice.paid', '{}'), 'permission denied for function apply_billing_event');
+select test.throws('select app.billing_run()', 'permission denied for function billing_run');
+
+-- The provider tells us what happened (as the API's service role). Each event counts once.
+reset role;
+do $$
+declare
+  yearly text := (select invoice_no from app.subscription_invoices where tenant_id = test.id('tenant_a') and status = 'open');
+  voided text := (select invoice_no from app.subscription_invoices where tenant_id = test.id('tenant_a') and status = 'void');
+  today date := (now() at time zone 'Asia/Bangkok')::date;
+  o text;
+  s app.subscriptions;
+begin
+  o := app.apply_billing_event('omise', 'evt_void', 'invoice.paid', jsonb_build_object('invoice_no', voided, 'amount', 1490));
+  perform test.ok(o = 'needs_review', 'money for a replaced invoice goes to a person, got ' || o);
+  o := app.apply_billing_event('omise', 'evt_short', 'invoice.paid', jsonb_build_object('invoice_no', yearly, 'amount', 14000));
+  perform test.ok(o = 'amount_mismatch', 'a different amount is not applied, got ' || o);
+  o := app.apply_billing_event('omise', 'evt_nobody', 'invoice.paid', jsonb_build_object('invoice_no', 'INV-0000-00000', 'amount', 1));
+  perform test.ok(o = 'unknown_invoice', 'an invoice we never issued, got ' || o);
+  o := app.apply_billing_event('omise', 'evt_declined', 'invoice.payment_failed', jsonb_build_object('invoice_no', yearly));
+  perform test.ok(o = 'noted', 'a declined card on a plan change is only noted, got ' || o);
+  perform test.ok((select status = 'trialing' and past_due_since is null from app.subscriptions where tenant_id = test.id('tenant_a')), 'none of that changed the subscription');
+
+  o := app.apply_billing_event('omise', 'evt_paid', 'invoice.paid', jsonb_build_object('invoice_no', yearly, 'amount', 14900, 'provider_customer_id', 'cus_1', 'provider_subscription_id', 'sub_1'));
+  perform test.ok(o = 'paid', 'the payment, got ' || o);
+  select * into s from app.subscriptions where tenant_id = test.id('tenant_a');
+  perform test.ok(s.status = 'active' and s.plan_code = 'pro' and s.billing_cycle = 'yearly' and s.past_due_since is null
+                  and s.provider = 'omise' and s.provider_customer_id = 'cus_1' and s.provider_subscription_id = 'sub_1', 'paid: active on the plan they paid for');
+  perform test.ok(s.current_period_start = today::timestamp at time zone 'Asia/Bangkok'
+                  and s.current_period_end = ((today + interval '1 year')::date)::timestamp at time zone 'Asia/Bangkok', 'a year from today');
+  perform test.ok((select status = 'paid' and paid_at is not null from app.subscription_invoices where invoice_no = yearly), 'the invoice is paid');
+  perform test.ok((select count(*) from app.domain_events where event_type = 'subscription.paid' and tenant_id = test.id('tenant_a')) = 1, 'in the activity feed');
+  -- The provider sends it again (it does): nothing happens twice.
+  perform test.ok(app.apply_billing_event('omise', 'evt_paid', 'invoice.paid', jsonb_build_object('invoice_no', yearly, 'amount', 14900)) = 'duplicate', 'same event id → duplicate');
+  perform test.ok(app.apply_billing_event('omise', 'evt_paid_again', 'invoice.paid', jsonb_build_object('invoice_no', yearly, 'amount', 14900)) = 'already_paid', 'same invoice, new event id → already paid');
+  perform test.ok((select count(*) from app.domain_events where event_type = 'subscription.paid' and tenant_id = test.id('tenant_a')) = 1, 'still one payment in the feed');
+  perform test.ok((select outcome from app.billing_events where provider = 'omise' and event_id = 'evt_paid') = 'paid'
+                  and (select tenant_id from app.billing_events where event_id = 'evt_paid') = test.id('tenant_a'), 'every event is recorded with what came of it');
+end $$;
+
+-- The nightly job, at moments we choose. A year on, the renewal is invoiced a week ahead, is overdue at the due date,
+-- and after the grace period the shop can no longer grow — but it can still sell.
+do $$
+declare
+  pe timestamptz := (select current_period_end from app.subscriptions where tenant_id = test.id('tenant_a'));
+  j jsonb;
+  inv app.subscription_invoices;
+  s app.subscriptions;
+begin
+  j := app.billing_run(pe - interval '30 days');
+  perform test.ok((j->>'invoiced')::int = 0, 'nothing is invoiced a month ahead, got ' || j::text);
+  j := app.billing_run(pe - interval '6 days');
+  perform test.ok((j->>'invoiced')::int = 1, 'the renewal is invoiced a week ahead, got ' || j::text);
+  select * into inv from app.subscription_invoices where tenant_id = test.id('tenant_a') and status = 'open';
+  perform test.ok(inv.kind = 'renewal' and inv.total = 14900 and inv.plan_code = 'pro' and inv.billing_cycle = 'yearly' and inv.due_at = pe
+                  and inv.period_start = (pe at time zone 'Asia/Bangkok')::date, 'the renewal: same plan, next period, due at the end of this one');
+  perform test.ok((app.billing_run(pe - interval '5 days')->>'invoiced')::int = 0, 'running again invoices nothing twice');
+  perform test.ok((select status = 'active' from app.subscriptions where tenant_id = test.id('tenant_a')), 'not overdue before the due date');
+
+  j := app.billing_run(pe + interval '1 hour');
+  perform test.ok((j->>'past_due')::int = 1, 'overdue once the period is over, got ' || j::text);
+  select * into s from app.subscriptions where tenant_id = test.id('tenant_a');
+  perform test.ok(s.status = 'past_due' and s.past_due_since = pe, 'the clock started at the due date, not when the job ran');
+  perform test.ok(app.billing_stage(test.id('tenant_a'), pe + interval '13 days') = 'past_due'
+                  and app.billing_stage(test.id('tenant_a'), pe + interval '14 days') = 'restricted', 'the grace period is 14 days');
+  perform test.ok(app.apply_billing_event('omise', 'evt_declined2', 'invoice.payment_failed', jsonb_build_object('invoice_no', inv.invoice_no)) = 'past_due', 'a declined renewal');
+  perform test.ok((select past_due_since = pe from app.subscriptions where tenant_id = test.id('tenant_a')), 'and it does not restart the clock');
+  perform test.ok((app.billing_run(pe + interval '10 days')->>'restricted')::int = 0, 'still inside the grace period');
+  j := app.billing_run(pe + interval '15 days');
+  perform test.ok((j->>'restricted')::int = 1, 'the grace period is over, got ' || j::text);
+  perform test.ok((select status = 'restricted' from app.subscriptions where tenant_id = test.id('tenant_a')), 'restricted');
+end $$;
+
+-- Restricted: no new branches, staff or tills. Everything they already have keeps working — above all, selling.
+set role authenticated;
+select test.as_user(test.id('owner_a'));
+select test.ok(test.sell() is not null, 'a restricted shop still sells and takes payment');
+select test.ok(app.has_feature(test.id('tenant_a'), 'finance'), 'and keeps its plan features');
+select test.throws(format('select app.add_branch(%L::jsonb)', jsonb_build_object('tenant_id', test.id('tenant_a'), 'code', 'R2', 'name', 'สาขาใหม่')), 'BILLING_RESTRICTED');
+select test.throws(format('select app.register_device(%L, %L, %L, %L)', test.id('branch_a'), 'เครื่องใหม่', 'pos', repeat('c', 64)), 'BILLING_RESTRICTED');
+reset role;
+select test.throws(format('insert into app.memberships (tenant_id, display_name, role_id) values (%L, %L, %L)', test.id('tenant_a'), 'คนใหม่',
+                          (select id from app.roles where tenant_id = test.id('tenant_a') and key = 'kitchen')), 'BILLING_RESTRICTED');
+
+-- Paying puts everything back.
+do $$
+declare
+  renewal text := (select invoice_no from app.subscription_invoices where tenant_id = test.id('tenant_a') and status = 'open');
+  pe timestamptz := (select current_period_end from app.subscriptions where tenant_id = test.id('tenant_a'));
+begin
+  perform test.ok(app.apply_billing_event('omise', 'evt_renewed', 'invoice.paid', jsonb_build_object('invoice_no', renewal, 'amount', 14900)) = 'paid', 'the renewal is paid');
+  perform test.ok((select status = 'active' and past_due_since is null and current_period_start = pe and current_period_end > pe + interval '360 days'
+                     from app.subscriptions where tenant_id = test.id('tenant_a')), 'active again, the next period starts where the last ended');
+end $$;
+set role authenticated;
+select test.as_user(test.id('owner_a'));
+select test.ok(app.add_branch(jsonb_build_object('tenant_id', test.id('tenant_a'), 'code', 'R2', 'name', 'สาขาที่สอง')) is not null, 'adding a branch works again');
+
+-- Leaving: the shop asks to end at the period's end; no renewal is invoiced, and on the day it becomes the free plan.
+reset role;
+do $$
+declare
+  pe timestamptz := (select current_period_end from app.subscriptions where tenant_id = test.id('tenant_a'));
+  j jsonb;
+begin
+  perform test.ok(app.apply_billing_event('omise', 'evt_leave', 'subscription.canceled', jsonb_build_object('provider_subscription_id', 'sub_1')) = 'cancel_scheduled', 'leaving is noted');
+  perform test.ok((app.billing_run(pe - interval '6 days')->>'invoiced')::int = 0, 'no renewal for a shop that is leaving');
+  perform test.ok((select status = 'active' from app.subscriptions where tenant_id = test.id('tenant_a')), 'they keep what they paid for until the period ends');
+  j := app.billing_run(pe + interval '1 hour');
+  perform test.ok((j->>'canceled')::int = 1, 'the day it ends, got ' || j::text);
+  perform test.ok((app.effective_plan(test.id('tenant_a'))).code = 'free', 'now the free plan');
+end $$;
+set role authenticated;
+select test.as_user(test.id('owner_a'));
+select test.ok(test.sell() is not null, 'a shop that left still sells');
+select test.throws(format('select app.add_branch(%L::jsonb)', jsonb_build_object('tenant_id', test.id('tenant_a'), 'code', 'R3', 'name', 'สาขาที่สาม')), 'FEATURE_NOT_IN_PLAN');
+-- (More branches are a Pro feature.) Coming back: a plan that is too small for what they have is refused before they are asked to pay.
+select test.throws(format('select app.request_plan_change(%L, %L, %L)', test.id('tenant_a'), 'starter', 'monthly'), 'PLAN_LIMIT_REACHED');
+select test.ok((select count(*) from app.subscription_invoices where status = 'open') = 0, 'and no invoice was written for it');
+select test.ok((app.request_plan_change(test.id('tenant_a'), 'pro', 'monthly')->>'applied')::boolean = false, 'a plan that fits is an invoice again');
+
+-- Once paying, changing plan: bigger = an invoice, smaller = now. An unpaid plan change lapses after three days.
+reset role;
+do $$
+declare
+  inv text := (select invoice_no from app.subscription_invoices where tenant_id = test.id('tenant_a') and status = 'open');
+begin
+  perform test.ok(app.apply_billing_event('omise', 'evt_back', 'invoice.paid', jsonb_build_object('invoice_no', inv, 'amount', 1490)) = 'paid', 'back on Pro');
+end $$;
+set role authenticated;
+select test.as_user(test.id('owner_a'));
+do $$
+declare r jsonb;
+begin
+  r := app.request_plan_change(test.id('tenant_a'), 'business', 'monthly');
+  perform test.ok((r->>'applied')::boolean = false and (r->>'total')::numeric = 3490, 'going up is an invoice');
+  perform test.ok((select plan_code = 'pro' from app.subscriptions where tenant_id = test.id('tenant_a')), 'the plan stays until it is paid');
+end $$;
+reset role;
+select test.ok((app.billing_run(now() + interval '4 days')->>'plan_changes_lapsed')::int = 1, 'an unpaid plan change lapses');
+set role authenticated;
+select test.as_user(test.id('owner_a'));
+-- Same plan, another cycle: nothing to pay now; the next renewal is invoiced for it.
+select test.ok((app.request_plan_change(test.id('tenant_a'), 'pro', 'yearly')->>'applied')::boolean, 'same plan, yearly: applied, no invoice');
+select test.ok((select billing_cycle = 'yearly' and status = 'active' from app.subscriptions where tenant_id = test.id('tenant_a'))
+               and (select count(*) from app.subscription_invoices where status = 'open') = 0, 'the cycle is what the next renewal is for');
+-- Dearer or cheaper is compared per month: Business monthly (3490) is more than Pro yearly (14900 / 12).
+select test.ok((app.request_plan_change(test.id('tenant_a'), 'business', 'monthly')->>'applied')::boolean = false, 'Business is dearer per month than Pro on a yearly plan: an invoice');
+select test.ok((app.request_plan_change(test.id('tenant_a'), 'pro', 'monthly')->>'applied')::boolean, 'back to Pro monthly is applied, and withdraws the open plan change');
+select test.ok((select count(*) from app.subscription_invoices where status = 'open') = 0 and (select billing_cycle = 'monthly' from app.subscriptions where tenant_id = test.id('tenant_a')), 'and it shows');
+select test.ok((app.request_plan_change(test.id('tenant_a'), 'pro', 'monthly')->>'applied')::boolean, 'asking for what they already have changes nothing');
+
+-- Changing their mind: a plan-change invoice can be withdrawn; a renewal (a bill) and a paid invoice cannot.
+do $$
+declare r jsonb;
+begin
+  r := app.request_plan_change(test.id('tenant_a'), 'business', 'monthly');
+  perform test.throws(format('select app.void_subscription_invoice(%L)', (select id from app.subscription_invoices where status = 'paid' limit 1)), 'INVOICE_NOT_OPEN');
+  perform app.void_subscription_invoice((r->>'invoice_id')::uuid);
+  perform test.ok((select status = 'void' from app.subscription_invoices where id = (r->>'invoice_id')::uuid), 'withdrawn');
+  perform test.throws(format('select app.void_subscription_invoice(%L)', (r->>'invoice_id')::uuid), 'INVOICE_NOT_OPEN');
+  perform test.put('renewal_inv', (select id from app.subscription_invoices where kind = 'renewal' and status = 'paid' limit 1));
+end $$;
+select test.throws(format('select app.void_subscription_invoice(%L)', gen_random_uuid()), 'NOT_FOUND');
+reset role;
+update app.subscription_invoices set status = 'open' where id = test.id('renewal_inv');
+set role authenticated;
+select test.as_user(test.id('owner_a'));
+select test.throws(format('select app.void_subscription_invoice(%L)', test.id('renewal_inv')), 'VALIDATION');
+select test.as_user(test.id('owner_b'));
+select test.throws(format('select app.void_subscription_invoice(%L)', test.id('renewal_inv')), 'PERMISSION_DENIED');
+
+rollback;
+-- The rollback restored the role and claims as they were before section 4c.
+
+-- ---------------------------------------------------------------------------
+-- 5. PIN-only cashier: limited powers, manager approval by PIN
+-- ---------------------------------------------------------------------------
+do $$
+declare
+  cashier uuid;
+  manager uuid;
+begin
+  insert into app.memberships (tenant_id, display_name, role_id, limits)
+  values (test.id('tenant_a'), 'น้องแคช', (select id from app.roles where tenant_id = test.id('tenant_a') and key = 'cashier'),
+          '{"max_discount_rate":0.1}')
+  returning id into cashier;
+  insert into app.memberships (tenant_id, display_name, role_id)
+  values (test.id('tenant_a'), 'พี่ผู้จัดการ', (select id from app.roles where tenant_id = test.id('tenant_a') and key = 'manager'))
+  returning id into manager;
+  perform app.set_member_pin(cashier, '1111');
+  perform app.set_member_pin(manager, '9999');
+  perform test.put('cashier', cashier);
+  perform test.put('manager', manager);
+end $$;
+select test.throws(format('select app.set_member_pin(%L, %L)', test.id('manager'), '1111'), 'PIN_IN_USE');
+select test.ok(app.verify_pin(test.id('tenant_a'), test.id('branch_a'), '1111') = test.id('cashier'), 'PIN resolves cashier');
+
+select test.as_member(test.id('cashier'));
+do $$
+declare
+  ch uuid := (select id from app.sales_channels where tenant_id = test.id('tenant_a') and key = 'takeaway');
+  oid uuid := app.uuid_v7();
+  item uuid := app.uuid_v7();
+  appr uuid;
+begin
+  perform test.put('order2', oid);
+  perform app.submit_order(jsonb_build_object('id', oid, 'branch_id', test.id('branch_a'), 'channel_id', ch,
+    'items', jsonb_build_array(jsonb_build_object('id', item, 'menu_item_id', test.id('latte'), 'qty', 2))));
+
+  -- Cashier's own cap is 10 %: 5 % is fine, 20 % needs a manager.
+  perform app.apply_order_discount(oid, 'percent', 5, 'ลูกค้าประจำ');
+  perform test.throws(format('select app.apply_order_discount(%L, %L, 20, %L)', oid, 'percent', 'ลูกค้าประจำ'), 'APPROVAL_REQUIRED');
+  appr := app.request_approval(test.id('branch_a'), 'pos.discount', '9999', 'order', oid, 'ลูกค้าประจำ');
+  perform app.apply_order_discount(oid, 'percent', 20, 'ลูกค้าประจำ', appr);
+  perform test.ok((select discount_total from app.orders where id = oid) = 26, '20 % of 130 = 26');
+  -- An approval is single-use.
+  perform test.throws(format('select app.apply_order_discount(%L, %L, 25, %L, %L)', oid, 'percent', 'x', appr), 'APPROVAL_INVALID');
+
+  -- Voiding an item the bar already has requires approval; wrong PIN is refused.
+  perform test.throws(format('select app.void_order_item(%L, %L)', item, 'ลูกค้าเปลี่ยนใจ'), 'APPROVAL_REQUIRED');
+  perform test.throws(format('select app.request_approval(%L, %L, %L)', test.id('branch_a'), 'pos.void', '0000'), 'APPROVAL_PIN_INVALID');
+  perform test.throws(format('select app.request_approval(%L, %L, %L)', test.id('branch_a'), 'pos.void', '1111'), 'APPROVER_NOT_ALLOWED');
+  appr := app.request_approval(test.id('branch_a'), 'pos.void', '9999', 'order_item', item, 'ลูกค้าเปลี่ยนใจ');
+  perform app.void_order_item(item, 'ลูกค้าเปลี่ยนใจ', appr);
+  perform test.ok((select status from app.kitchen_ticket_items where order_item_id = item) = 'voided', 'kitchen sees the void');
+  perform app.void_order(oid, 'ลูกค้ายกเลิก');
+end $$;
+
+-- Cashier cannot see money reports or approve counts.
+select test.ok((select count(*) from app.journal_entries) = 0, 'cashier sees no journal entries (RLS)');
+select test.ok((select count(*) from app.bills) = 0, 'cashier sees no bills (RLS)');
+select test.throws(format('select app.start_stock_count(%L)', app.default_location(test.id('branch_a'))), 'PERMISSION_DENIED');
+
+-- ---------------------------------------------------------------------------
+-- 6. Waste + blind stock count (manager)
+-- ---------------------------------------------------------------------------
+select test.as_member(test.id('manager'));
+select app.record_waste(app.default_location(test.id('branch_a')), test.id('milk'), 200, 'spoiled', 'นมบูด');
+select test.ok((select qty_on_hand from app.stock_balances where ingredient_id = test.id('milk')) = 6000 - 180 - 200, 'waste deducted');
+
+do $$
+declare c uuid; r jsonb;
+begin
+  c := app.start_stock_count(app.default_location(test.id('branch_a')));
+  perform app.record_count(c, test.id('coffee'), 1950);   -- expected 1964 → −14 g
+  perform app.record_count(c, test.id('milk'), 5620);     -- expected 5620 → 0
+  r := app.submit_stock_count(c);
+  perform test.ok((r->>'uncounted')::int = 2, 'two lines left uncounted (oat, sugar)');
+  r := app.approve_stock_count(c);
+  perform test.ok((r->>'adjusted_lines')::int = 1, 'only the coffee line adjusted; uncounted lines untouched');
+end $$;
+select test.ok((select qty_on_hand from app.stock_balances where ingredient_id = test.id('coffee')) = 1950, 'coffee set to counted qty');
+select test.ok((select qty_on_hand from app.stock_balances where ingredient_id = test.id('oat')) = 820, 'uncounted oat not zeroed');
+
+-- ---------------------------------------------------------------------------
+-- 7. Close shift and day → GL balanced, expectations generated, period locked
+-- ---------------------------------------------------------------------------
+select test.as_user(test.id('owner_a'));
+select test.throws(format('select app.close_business_day(%L, %L)', test.id('branch_a'), app.business_date(test.id('branch_a'))), 'OPEN_SHIFTS_EXIST');
+do $$
+declare r jsonb;
+begin
+  r := app.close_shift(test.id('shift'), 1140);   -- float 1000 + cash 145 = 1145 expected → −5
+  perform test.ok((r->>'variance')::numeric = -5, 'cash short by 5');
+end $$;
+
+do $$
+declare
+  d date := app.business_date(test.id('branch_a'));
+  r jsonb;
+begin
+  r := app.close_business_day(test.id('branch_a'), d, 'ปิดยอดวันแรก');
+  perform test.ok((r->>'orders')::int = 1, 'one paid order in the day');
+  perform test.ok((r->>'total')::numeric = 145, 'day total 145');
+  -- Idempotent: closing again returns the same summary.
+  perform test.ok((app.close_business_day(test.id('branch_a'), d)->>'total')::numeric = 145, 'close is idempotent');
+  -- New activity rolls into the next business day instead of failing.
+  perform test.ok(app.business_date(test.id('branch_a')) = d + 1, 'business date rolls forward after close');
+end $$;
+
+select test.ok((select sum(debit) = sum(credit) from app.journal_lines where tenant_id = test.id('tenant_a')), 'GL balanced after day close');
+select test.ok((select sum(credit) from app.journal_lines jl join app.accounts a on a.id = jl.account_id
+                 where a.system_key = 'vat_output' and jl.tenant_id = test.id('tenant_a')) = 9.49, 'VAT output posted');
+select test.ok((select sum(debit) from app.journal_lines jl join app.accounts a on a.id = jl.account_id
+                 where a.system_key = 'cash_over_short' and jl.tenant_id = test.id('tenant_a')) = 5, 'cash short expensed');
+select test.ok((select sum(debit) - sum(credit) from app.journal_lines jl join app.accounts a on a.id = jl.account_id
+                 where a.system_key = 'waste_expense' and jl.tenant_id = test.id('tenant_a')) > 0, 'waste expensed');
+
+-- P&L read model answers "เหลือเงินจริงเท่าไร".
+select test.ok((select net_sales from app.v_branch_daily_pnl where branch_id = test.id('branch_a') order by business_date limit 1) = 135.51,
+               'net sales ex VAT 135.51');
+
+-- Reopen: GL entries reversed, still balanced.
+select app.reopen_business_day(test.id('branch_a'), (select business_date from app.day_closes where branch_id = test.id('branch_a')), 'ลืมบันทึกของเสีย');
+select test.ok((select sum(debit) = sum(credit) from app.journal_lines where tenant_id = test.id('tenant_a')), 'GL balanced after reopen');
+
+-- A monthly bill is spread over its service period (30 days × 100 = 3,000).
+do $$
+declare
+  d date := app.business_date(test.id('branch_a'));
+  rent uuid := (select id from app.accounts where tenant_id = test.id('tenant_a') and system_key = 'rent');
+begin
+  perform app.record_expense(jsonb_build_object('branch_id', test.id('branch_a'), 'account_id', rent,
+    'description', 'ค่าเช่าร้าน', 'amount', 3000, 'paid_from', 'bank', 'period_start', d - 10, 'period_end', d + 19));
+  perform test.ok((select expenses from app.v_branch_daily_pnl where branch_id = test.id('branch_a') and business_date = d + 5) = 100,
+                  'monthly expense spread per day');
+  perform test.ok((select sum(expenses) from app.v_branch_daily_pnl where branch_id = test.id('branch_a') and business_date between d - 10 and d + 19) = 3000,
+                  'spread sums back to the full amount');
+end $$;
+select test.throws(format('select app.record_expense(%L::jsonb)', jsonb_build_object('branch_id', test.id('branch_a'),
+  'account_id', (select id from app.accounts where tenant_id = test.id('tenant_a') and system_key = 'rent'),
+  'description', 'x', 'amount', 1, 'paid_from', 'bank', 'period_start', '2026-09-30', 'period_end', '2026-09-01')), 'INVALID_PERIOD');
+
+-- The only owner can't be demoted or removed (the shop would be locked out).
+select test.throws(format('update app.memberships set status = %L where tenant_id = %L and user_id = %L', 'suspended', test.id('tenant_a'), test.id('owner_a')), 'LAST_OWNER');
+
+-- ---------------------------------------------------------------------------
+-- 8. Tenant isolation: owner B sees nothing of A and cannot act on A's data
+-- ---------------------------------------------------------------------------
+select test.as_user(test.id('owner_b'));
+select test.ok((select count(*) from app.orders where tenant_id = test.id('tenant_a')) = 0, 'B cannot read A orders');
+select test.ok((select count(*) from app.menu_items where tenant_id = test.id('tenant_a')) = 0, 'B cannot read A menu');
+select test.ok((select count(*) from app.memberships where tenant_id = test.id('tenant_a')) = 0, 'B cannot read A staff');
+select test.ok((select count(*) from app.tenants) = 1, 'B sees exactly one tenant');
+select test.throws(format('select app.open_shift(%L, 0)', test.id('branch_a')), 'PERMISSION_DENIED');
+select test.throws(format('select app.pay_order(%L, %L::jsonb)', test.id('order1'), '[]'), 'PERMISSION_DENIED');
+do $$
+begin
+  update app.menu_items set price = 1 where tenant_id = test.id('tenant_a');
+  perform test.ok(not found, 'B cannot update A menu prices');
+end $$;
+
+-- ---------------------------------------------------------------------------
+-- 9. Audit trail & activity feed
+-- ---------------------------------------------------------------------------
+select test.as_user(test.id('owner_a'));
+select test.ok((select count(*) from audit.log where tenant_id = test.id('tenant_a') and table_name = 'menu_items') >= 1, 'menu change audited');
+select test.ok((select count(*) from audit.log where row_data ? 'pin_hash') = 0, 'PIN hashes never land in the audit log');
+select test.ok((select count(*) from app.domain_events where event_type = 'order.item_voided') = 1, 'void is in the activity feed');
+
+-- ---------------------------------------------------------------------------
+-- 10. Plan limits: Pro allows 3 branches; the 4th is refused with a clear code.
+--     Limits only stop *adding* — selling in existing branches is never blocked.
+-- ---------------------------------------------------------------------------
+select test.as_user(test.id('owner_b'));
+select app.add_branch(jsonb_build_object('tenant_id', test.id('tenant_b'), 'code', 'B2', 'name', 'สาขาสอง'));
+select app.add_branch(jsonb_build_object('tenant_id', test.id('tenant_b'), 'code', 'B3', 'name', 'สาขาสาม'));
+select test.ok((select count(*) from app.branches where tenant_id = test.id('tenant_b')) = 3, 'three branches on Pro');
+select test.throws(format('select app.add_branch(%L::jsonb)', jsonb_build_object('tenant_id', test.id('tenant_b'), 'code', 'B4', 'name', 'สาขาสี่')), 'PLAN_LIMIT_REACHED');
+
+-- ---------------------------------------------------------------------------
+-- 11. Registered devices: a till that asks "who is here?" with a secret, not an account
+-- ---------------------------------------------------------------------------
+select test.as_user(test.id('owner_a'));
+do $$
+declare
+  h text := encode(extensions.digest('till-secret-1', 'sha256'), 'hex');
+  d uuid;
+begin
+  d := app.register_device(test.id('branch_a'), 'iPad หน้าร้าน', 'pos', h);
+  perform test.put('device1', d);
+  perform test.ok((select is_active and registered_by = test.id('owner_mem_a') from app.devices where id = d), 'device registered by the owner');
+  perform test.ok((select count(*) from app.domain_events where event_type = 'device.registered' and aggregate_id = d) = 1, 'registration is in the activity feed');
+end $$;
+
+-- The hash lives where no signed-in person can read it.
+select test.throws('select count(*) from app.device_credentials', 'permission denied for table device_credentials');
+
+-- Only someone who may manage settings can register or revoke; the cashier cannot.
+select test.as_member(test.id('cashier'));
+select test.throws(format('select app.register_device(%L, %L, %L, %L)', test.id('branch_a'), 'เครื่องแอบ', 'pos', repeat('a', 64)), 'PERMISSION_DENIED');
+select test.throws(format('select app.revoke_device(%L)', test.id('device1')), 'PERMISSION_DENIED');
+-- A bad kind or a hash that is not a SHA-256 is refused, not stored.
+select test.as_user(test.id('owner_a'));
+select test.throws(format('select app.register_device(%L, %L, %L, %L)', test.id('branch_a'), 'x', 'toaster', repeat('b', 64)), 'VALIDATION');
+select test.throws(format('select app.register_device(%L, %L, %L, %L)', test.id('branch_a'), 'x', 'pos', 'not-a-hash'), 'VALIDATION');
+
+-- The device side runs as the API's service role, not as a signed-in person.
+reset role;
+do $$
+declare
+  h text := encode(extensions.digest('till-secret-1', 'sha256'), 'hex');
+  r jsonb := app.device_roster(h);
+  names text[];
+begin
+  perform test.ok(r->'tenant'->>'name' = 'สบายคาเฟ่' and r->'branch'->>'id' = test.id('branch_a')::text, 'roster names the shop and branch');
+  select array_agg(x->>'display_name' order by x->>'display_name') into names from jsonb_array_elements(r->'staff') x;
+  perform test.ok('น้องแคช' = any(names) and 'พี่ผู้จัดการ' = any(names), 'PIN staff are on the roster');
+  perform test.ok(not (r::text like '%pin_hash%') and not (r::text like '%crypt%'), 'the roster carries no PIN material');
+  -- A wrong secret sees nothing at all.
+  perform test.ok(app.device_roster(repeat('0', 64)) is null, 'unknown secret gets no roster');
+  -- PIN sign-in on the device.
+  perform test.ok((app.device_pin_login(h, '1111'))->>'role_key' = 'cashier', 'cashier PIN works on the registered device');
+  perform test.ok((app.device_pin_login(h, '0000'))->>'device' = 'true' and (app.device_pin_login(h, '0000'))->'membership_id' = 'null'::jsonb, 'wrong PIN is a wrong PIN');
+  perform test.ok((app.device_pin_login(repeat('0', 64), '1111'))->>'device' = 'false', 'PIN with an unknown secret is refused');
+  perform test.ok((select last_seen_at is not null from app.devices where id = test.id('device1')), 'last seen is recorded');
+end $$;
+
+-- Someone who works only at another branch is not on this device's roster and cannot sign in on it.
+set role authenticated;
+select test.as_user(test.id('owner_a'));
+do $$
+declare b2 uuid; far uuid;
+begin
+  b2 := app.add_branch(jsonb_build_object('tenant_id', test.id('tenant_a'), 'code', 'A2', 'name', 'สาขาไกล'));
+  insert into app.memberships (tenant_id, display_name, role_id, all_branches)
+  values (test.id('tenant_a'), 'พนักงานสาขาไกล', (select id from app.roles where tenant_id = test.id('tenant_a') and key = 'cashier'), false) returning id into far;
+  insert into app.membership_branches (tenant_id, membership_id, branch_id) values (test.id('tenant_a'), far, b2);
+  perform app.set_member_pin(far, '4321');
+  perform test.put('far_member', far);
+end $$;
+reset role;
+do $$
+declare h text := encode(extensions.digest('till-secret-1', 'sha256'), 'hex');
+begin
+  perform test.ok(not exists (select 1 from jsonb_array_elements((app.device_roster(h))->'staff') x where x->>'display_name' = 'พนักงานสาขาไกล'), 'other-branch staff not on the roster');
+  perform test.ok((app.device_pin_login(h, '4321'))->'membership_id' = 'null'::jsonb, 'other-branch PIN does not work here');
+end $$;
+
+-- Revoking stops the device at once, and is recorded.
+set role authenticated;
+select test.as_user(test.id('owner_a'));
+select app.revoke_device(test.id('device1'));
+select test.ok((select revoked_at is not null and not is_active from app.devices where id = test.id('device1')), 'device revoked');
+select test.ok((select count(*) from app.domain_events where event_type = 'device.revoked' and aggregate_id = test.id('device1')) = 1, 'revocation is in the activity feed');
+reset role;
+do $$
+declare h text := encode(extensions.digest('till-secret-1', 'sha256'), 'hex');
+begin
+  perform test.ok(app.device_roster(h) is null, 'revoked device gets no roster');
+  perform test.ok((app.device_pin_login(h, '1111'))->>'device' = 'false', 'revoked device cannot sign anyone in');
+end $$;
+
+-- Another shop's owner cannot see or revoke this shop's devices.
+set role authenticated;
+select test.as_user(test.id('owner_b'));
+select test.ok((select count(*) from app.devices where tenant_id = test.id('tenant_a')) = 0, 'B cannot see A devices');
+select test.throws(format('select app.revoke_device(%L)', test.id('device1')), 'PERMISSION_DENIED');
+
+reset role;
+select 'ALL DATABASE TESTS PASSED' as result;

@@ -1,0 +1,109 @@
+# หลักการ UX/UI และระบบดีไซน์
+
+> **"พนักงานไม่จำเป็นต้องเข้าใจระบบ แต่ระบบต้องเข้าใจวิธีทำงานของพนักงาน"**
+
+## 1. หลักการออกแบบ 8 ข้อ (และตัวอย่างที่ทำจริง)
+
+| หลักการ | ในระบบ Sabai |
+|---|---|
+| **Task-based ไม่ใช่ table-based** | หน้า "วันนี้" แสดง *สิ่งที่ควรทำตอนนี้* (ของใกล้หมด → ปุ่ม "ดูจำนวนที่ควรสั่ง", บิลเลยกำหนด → "จ่ายบิล") แทนตารางข้อมูล |
+| **Role-based simplicity** | แคชเชียร์เห็น 3 เมนู, ครัวเห็นจอครัวเต็มจอ, เจ้าของเห็นรายงานก่อน — เมนูสร้างจากสิทธิ์ ≤ 5 รายการ |
+| **Progressive disclosure** | สูตรอาหารใส่แค่ปริมาณ + หน่วย; อัตราสูญเสีย (waste rate) เก็บไว้เบื้องหลัง; ตั้งค่าขั้นสูงซ่อนในแท็บ |
+| **Smart defaults** | ร้านใหม่มีช่องทางขาย/รับเงิน/ผังบัญชี/ตำแหน่งงานพร้อม, เงินทอนเริ่มต้น ฿2,000, ค่าเช่า/เงินเดือนเลือก "ทั้งเดือน" ให้อัตโนมัติ, PromptPay เปิดไว้ก่อน |
+| **Wizard สำหรับงานไม่บ่อย** | เปิดร้าน, เพิ่มพนักงาน (ชื่อ → หน้าที่ → PIN), ปิดยอด (ตรวจ 2 อย่าง → ยืนยัน), นับสต็อก, รับของ |
+| **Human-readable errors** | ทุก error มีหัวข้อ + วิธีแก้ + ปุ่มถัดไป + เลขอ้างอิงสั้น เช่น "ยังมีกะที่เปิดอยู่ — ไปปิดกะ"; ไม่มี stack trace/SQL ถึงผู้ใช้ (มี API test ยืนยัน) |
+| **Empty state = onboarding** | หน้าว่างทุกหน้ามี emoji + คำอธิบาย + ปุ่มทำต่อ; checklist 7 ขั้นคำนวณจากข้อมูลจริง ข้ามขั้นไม่บังคับได้ |
+| **ไม่มีทางตัน** | deep link ที่ไม่มีสิทธิ์ → หน้าอธิบาย + "สลับผู้ใช้" (อยู่ในโครงหน้าปกติ เมนูยังใช้ได้) |
+
+## 2. ความเร็วที่รู้สึกได้
+
+- **Local-first**: ตะกร้า/การแตะตอบสนองทันที (< 100ms, Doherty threshold 400ms)
+- **Optimistic + atomic**: ทุกคำสั่งรันแบบ all-or-nothing (Immer ในเดโม / transaction ใน Postgres) — ล้มเหลวไม่ทิ้งข้อมูลครึ่งๆ
+- **Idempotency-Key**: กดชำระเงินซ้ำ/เน็ตหลุดแล้วส่งใหม่ ไม่เก็บเงินซ้ำ
+- วัดจริง: Lighthouse desktop LCP 0.2–0.4s, mobile (throttled 4G + CPU 4×) LCP 0.9–1.4s — ดู [08-scorecard.md](08-scorecard.md)
+
+## 3. Design Tokens
+
+ใช้ **semantic token เท่านั้น** (component ไม่ใช้ hex ตรง) ที่ [`globals.css`](../apps/web/src/app/globals.css)
+
+| กลุ่ม | ค่า (light) | แนวคิด |
+|---|---|---|
+| Surface | `bg #f6f5f1`, `surface #fdfcfa` | โทนกระดาษสาอุ่น สบายตากว่าขาวล้วน สำหรับการใช้งานทั้งวัน |
+| Brand | `#13784f` ใบเตย | ความสด/อาหาร/ความไว้ใจ |
+| Accent | `#f2a516` หญ้าฝรั่น | ใช้เฉพาะไฮไลต์และการฉลอง |
+| Status | success / warning / danger / info | **มาพร้อมไอคอน + ข้อความเสมอ** |
+| Dark mode | ชุดค่าที่เลือกเอง (ไม่ใช่กลับสี) | ใช้ได้ทั้ง `prefers-color-scheme` และสลับเอง |
+| KDS | `.kds` บังคับ dark high-contrast | จอครัวมีไอน้ำ/แสงสะท้อน |
+
+### Contrast ที่วัดได้ (WCAG AA ต้อง ≥ 4.5:1)
+
+| คู่สี | Light | Dark |
+|---|---|---|
+| ink / bg | 15.78 | 17.01 |
+| ink-2 / surface | 8.24 | 10.29 |
+| ink-3 (ข้อความรอง) / surface | 5.42 | 6.43 |
+| ink-3 / surface-2 | 4.83 | 5.81 |
+| ปุ่มหลัก (brand-ink / brand) | 5.49 | 7.14 |
+| success / success-soft | 5.42 | 8.00 |
+| warning / warning-soft | 5.79 | 8.41 |
+| danger / danger-soft | 5.02 | 5.80 |
+| info / info-soft | 5.15 | 6.23 |
+
+## 4. Typography, spacing, touch
+
+- ฟอนต์ **IBM Plex Sans Thai** (self-host ผ่าน @fontsource ไม่พึ่ง CDN), ตัวเลข `tabular-nums` ในทุกจำนวนเงิน
+- ขนาดข้อความหลัก 15–16px, หัวข้อหน้า 28–32px, KPI 30–48px
+- **ปุ่มแตะ ≥ 44px ทุกปุ่ม** (WCAG 2.2 SC 2.5.8 กำหนดขั้นต่ำ 24px), ปุ่มหลัก POS/KDS 56–64px, keypad 64px
+- radius 12–28px, เงาเบา 4 ระดับ
+
+## 5. Motion (แอนิเมชัน)
+
+| ชนิด | ใช้ที่ | ค่า |
+|---|---|---|
+| Spring tap | ปุ่ม/เมนู POS | `scale 0.95`, stiffness 500–700 |
+| Shared layout | แท็บ, segmented control | `layoutId` indicator เลื่อนตาม |
+| Enter/exit | dialog, bottom sheet, toast | 150–250ms ease-out-soft |
+| Stagger | รายการ/การ์ด | 15–60ms ต่อชิ้น สูงสุด 200ms |
+| Number tween | KPI, ยอดชำระ | AnimatedNumber |
+| Chart draw | เส้น/แท่ง | 0.5–0.9s ease-out, tooltip spring |
+| Celebration | ชำระเงินสำเร็จ, ปิดยอด | SuccessCheck (path draw) |
+
+- ทุกแอนิเมชันผ่าน `MotionConfig reducedMotion="user"` + CSS `prefers-reduced-motion` → ปิดอัตโนมัติ
+- Motion มีหน้าที่ **อธิบายการเปลี่ยนแปลง** (ของเข้าตะกร้า, บิลย้ายสถานะ) ไม่ใช่ตกแต่ง
+
+## 6. Accessibility
+
+- axe-core WCAG 2.2 AA: **0 violations** บน 21 หน้า × (สว่าง/มืด) + 12 สถานะ interactive/มือถือ ([docs/qa](qa/))
+- Keyboard ครบ: command palette (Ctrl/⌘+K), bump KDS ด้วยปุ่ม 1–9, กราฟเลื่อนด้วยลูกศร, focus ring ชัดเจน
+- ชื่อที่อ่านได้ตรงกับข้อความที่เห็น (WCAG 2.5.3) — ภาษาไทยไม่มีเว้นวรรคระหว่างคำ จึงใช้ข้อความที่มองเห็น/`sr-only` แทน `aria-label` ที่เขียนแยก
+- `forced-colors` (Windows High Contrast) และ print stylesheet
+- `lang="th"`, วันที่แบบไทย (พ.ศ.) แต่ข้อมูลเก็บ ISO
+
+## 7. Data visualization
+
+ใช้วิธีของ dataviz skill: เลือกรูปแบบตามงานของข้อมูล → กำหนดสีตามหน้าที่ → **ตรวจ palette ด้วยสคริปต์** → mark spec → hover layer → accessibility
+
+| กราฟ | คำถามที่ตอบ | รูปแบบ |
+|---|---|---|
+| Waterfall | เหลือเงินจริงเท่าไร | แท่งแนวนอน: ยอดรวม (series-1) / รายการหัก (series-neg) + เส้นเชื่อม |
+| Trend | ขายดีขึ้นไหม | เส้น 2px แกนเดียว (บาท) + crosshair + direct labels |
+| Channel mix | ช่องทางไหนเหลือเงิน | แท่ง 100% 3 ส่วน (เหลือ/ต้นทุน/GP) เว้น 2px |
+| Menu engineering | อะไรขายดีและกำไรดี | scatter + เส้นค่าเฉลี่ย + ชื่อ quadrant ในกราฟ |
+| Rank bars / Hours | อันดับ / ช่วงเวลา | แท่งเดี่ยว ไม่ต้องมี legend (หัวข้อบอกแล้ว) |
+
+**Palette ที่ตรวจแล้ว** (`validate_palette.js`)
+
+| Mode | สี | ผล |
+|---|---|---|
+| Light (surface `#fdfcfa`) | `#2a78d6 · #eb6834 · #1baf7a` | PASS ทุกข้อ: CVD ΔE 9.2 (deutan), normal-vision ΔE 27.6; WARN contrast ของ `#1baf7a` 2.75:1 → **มี legend + ป้ายตัวเลข + มุมมองตารางทุกกราฟ** |
+| Dark (surface `#1a1a18`) | `#3987e5 · #d95926 · #199e70` | PASS ทุกข้อ (contrast ≥ 3:1 ทั้งหมด) |
+
+กติกา: แกนเดียวเสมอ, ข้อความใช้สีตัวอักษร (ไม่ใช้สี series), สีสถานะสงวนไว้ไม่ใช้เป็น series,
+ทุกกราฟมี tooltip (hover + focus) และปุ่ม "ตาราง" และทุกรายงานส่งออก CSV ได้
+
+## 8. Copywriting
+
+- ภาษาพูดสุภาพ สั้น เป็นกันเอง: "ของใกล้หมด 2 รายการ" ไม่ใช่ "Low stock alert (2)"
+- บอก **ผลลัพธ์** ไม่ใช่กลไก: "ระบบเฉลี่ยค่าเช่าให้ทุกวันของเดือน กำไรรายวันจึงไม่เพี้ยน"
+- ปุ่มเป็นคำกริยาที่บอกสิ่งที่จะเกิด: "ปิดยอดวันนี้", "ลูกค้าโอนแล้ว", "ตรงกัน ยืนยัน"
+- ตัวเลขเงิน: ≥ ฿1,000 แสดงเต็มบาทใน KPI, รายละเอียดแสดงสตางค์
