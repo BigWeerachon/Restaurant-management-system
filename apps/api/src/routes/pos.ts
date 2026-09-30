@@ -202,6 +202,9 @@ export function registerPos(app: Hono<Env>, deps: Deps) {
 
   route(app, deps, { method: "GET", path: "/v1/orders", tag: "POS", summary: "บิลของวัน (ค่าเริ่มต้น: วันทำการปัจจุบัน)", query: OrdersQuery }, async ({ query, tx }) =>
     tx(async (t) => {
+      // (The business date is worked out in a sub-select so that it is worked out once. Called straight in the WHERE it ran
+      // for every order in the table — half a millisecond each, 180 ms for a day of 350 bills — because it is a stable
+      // function of a bound parameter, which Postgres will not fold away.)
       const rows = await t`
         select o.id, o.order_no, o.receipt_no, o.status, o.business_date::text, o.total, o.guest_count, o.opened_at, o.paid_at,
                c.name as channel, dt.name as table_name,
@@ -210,7 +213,7 @@ export function registerPos(app: Hono<Env>, deps: Deps) {
           join app.sales_channels c on c.id = o.channel_id
           left join app.dining_tables dt on dt.id = o.table_id
          where o.branch_id = ${query.branchId}
-           and o.business_date = coalesce(${query.date ?? null}::date, app.business_date(${query.branchId}))
+           and o.business_date = coalesce(${query.date ?? null}::date, (select app.business_date(${query.branchId})))
            and (${query.status ?? null}::text is null or o.status = ${query.status ?? null})
          order by o.opened_at desc
          limit 500`;
