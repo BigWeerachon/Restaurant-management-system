@@ -31,6 +31,7 @@ export async function createTestContext(overrides: Partial<Config> = {}) {
     corsOrigins: ["http://localhost:3000"],
     staffTokenTtlSeconds: 3600,
     billing: { provider: "none", webhookSecret: "", payTo: { promptpayId: null, bankName: null, accountNo: null, accountName: null }, jobIntervalMinutes: 0, jobSecret: null },
+    observability: { serviceName: "sabai-api", environment: "test", release: null, otlpEndpoint: null, traceSampleRatio: 1, errorDsn: null },
     ...overrides,
   };
   const deps = { sql, config, log: createLogger({ silent: true }), events };

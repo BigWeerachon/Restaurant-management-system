@@ -3,6 +3,7 @@ import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { secureHeaders } from "hono/secure-headers";
 import { verifyToken } from "./auth";
+import { countError, observe, routeLabel } from "./observability/instrument";
 import { ApiFailure, toErrorResponse } from "./errors";
 import { openApiDocument, type Deps, type Env } from "./http";
 import { registerBilling } from "./routes/billing";
@@ -35,14 +36,22 @@ export function createApp(deps: Deps): Hono<Env> {
     c.header("X-Request-Id", requestId);
     const started = performance.now();
     await next();
+    const actor = c.get("actor");
     deps.log.info("request", {
       requestId,
       method: c.req.method,
+      // The route that answered, and the ids of who asked and for which shop — never the query string or a body.
+      route: routeLabel(c.req.matchedRoutes, c.res.status),
       path: c.req.path,
       status: c.res.status,
       ms: Math.round(performance.now() - started),
+      ...(actor ? { actor: actor.membershipId ?? actor.userId } : {}),
+      ...(c.req.header("x-tenant-id") ? { tenant: c.req.header("x-tenant-id") } : {}),
     });
   });
+
+  // Inside the request-id middleware (it needs the id), around everything else: one span and the request metrics per call.
+  app.use("*", observe());
 
   app.use("*", secureHeaders());
   app.use(
@@ -66,8 +75,20 @@ export function createApp(deps: Deps): Hono<Env> {
   app.onError((err, c) => {
     const requestId = c.get("requestId") ?? randomUUID();
     const { status, body, internal } = toErrorResponse(err, requestId, c.get("locale") ?? "th");
+    const route = routeLabel(c.req.matchedRoutes, status);
+    countError(body.error.code, route);
     if (internal) {
-      deps.log.error("unhandled", { requestId, error: err instanceof Error ? { message: err.message, stack: err.stack } : String(err) });
+      deps.log.error("unhandled", { requestId, route, error: err instanceof Error ? { name: err.name, message: err.message, stack: err.stack } : String(err) });
+      const actor = c.get("actor");
+      deps.reporter?.capture(err, {
+        requestId,
+        code: body.error.code,
+        route,
+        method: c.req.method,
+        url: c.req.url,
+        ...(c.req.header("x-tenant-id") ? { tenantId: c.req.header("x-tenant-id")! } : {}),
+        ...(actor ? { actorId: actor.membershipId ?? actor.userId ?? undefined } : {}),
+      });
     }
     return c.json(body, status as 500);
   });
@@ -79,7 +100,7 @@ export function createApp(deps: Deps): Hono<Env> {
 
   app.get("/health", async (c) => {
     await deps.sql`select 1`;
-    return c.json({ ok: true, service: "sabai-api", time: new Date().toISOString() });
+    return c.json({ ok: true, service: "sabai-api", ...(deps.config.observability.release ? { release: deps.config.observability.release } : {}), time: new Date().toISOString() });
   });
 
   // Dev-only convenience login (no password) so local/CI clients can obtain a

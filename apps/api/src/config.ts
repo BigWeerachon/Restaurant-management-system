@@ -15,6 +15,19 @@ export interface BillingConfig {
   jobSecret: string | null;
 }
 
+export interface ObservabilityConfig {
+  serviceName: string;
+  environment: string;
+  /** A build or commit id, so a report says which version it happened on. */
+  release: string | null;
+  /** Base URL of an OTLP/HTTP collector or vendor. Unset = no traces or metrics are recorded. */
+  otlpEndpoint: string | null;
+  /** Share of new traces kept, 0–1 (default 1). A caller's own sampling decision is followed. */
+  traceSampleRatio: number;
+  /** A Sentry-compatible DSN (Sentry, GlitchTip…). Unset = unexpected errors are only logged. */
+  errorDsn: string | null;
+}
+
 export interface Config {
   env: "development" | "test" | "production";
   port: number;
@@ -24,6 +37,7 @@ export interface Config {
   /** Lifetime of a PIN-switched staff token on a shared device. */
   staffTokenTtlSeconds: number;
   billing: BillingConfig;
+  observability: ObservabilityConfig;
 }
 
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
@@ -55,6 +69,14 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     jwtSecret,
     corsOrigins: (env.CORS_ORIGINS ?? "http://localhost:3000").split(",").map((s) => s.trim()).filter(Boolean),
     staffTokenTtlSeconds: Number(env.STAFF_TOKEN_TTL ?? 12 * 3600),
+    observability: {
+      serviceName: env.OTEL_SERVICE_NAME?.trim() || "sabai-api",
+      environment: mode,
+      release: env.RELEASE?.trim() || env.VERCEL_GIT_COMMIT_SHA?.trim() || env.GIT_SHA?.trim() || null,
+      otlpEndpoint: env.OTEL_EXPORTER_OTLP_ENDPOINT?.trim() || null,
+      traceSampleRatio: Math.min(Math.max(Number(env.OTEL_TRACES_SAMPLE_RATIO ?? 1) || 0, 0), 1),
+      errorDsn: env.ERROR_TRACKING_DSN?.trim() || env.SENTRY_DSN?.trim() || null,
+    },
     billing: {
       provider,
       webhookSecret,

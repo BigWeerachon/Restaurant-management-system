@@ -6,6 +6,7 @@ import { Toaster } from "sonner";
 import { TooltipProvider } from "@/components/ui/overlay";
 import { ApiBoot } from "./api-boot";
 import { ApprovalDialog } from "./approval-dialog";
+import { ErrorReporting } from "./error-reporting";
 import { OfflineBridge } from "./offline-bridge";
 import { PrinterBridge } from "./printer-bridge";
 import { PrintRoot } from "./print-root";
@@ -19,6 +20,7 @@ export function Providers({ children }: { children: ReactNode }) {
       <TooltipProvider delayDuration={250}>
         {children}
         <ApiBoot />
+        <ErrorReporting />
         <RealtimeBridge />
         <OfflineBridge />
         <ServiceWorkerRegister />

@@ -2,7 +2,7 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   // Workspace packages ship TypeScript source; Next compiles them.
-  transpilePackages: ["@sabai/domain", "@sabai/contracts"],
+  transpilePackages: ["@sabai/domain", "@sabai/contracts", "@sabai/observability"],
   reactStrictMode: true,
   poweredByHeader: false,
   devIndicators: false,

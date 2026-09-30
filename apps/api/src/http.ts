@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import type { Context, Hono } from "hono";
 import { z, type ZodType } from "zod";
 import type { Actor } from "./auth";
+import type { ErrorReporter } from "@sabai/observability";
 import type { Config } from "./config";
 import { asActor, type Sql, type Tx } from "./db";
 import { ApiFailure } from "./errors";
@@ -13,6 +14,8 @@ export interface Deps {
   config: Config;
   log: Logger;
   events?: EventHub;
+  /** Sends unexpected errors to the error tracker, when one is configured. */
+  reporter?: ErrorReporter;
 }
 
 export type Env = {

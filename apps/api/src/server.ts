@@ -1,21 +1,33 @@
 import { serve } from "@hono/node-server";
+import { createErrorReporter } from "@sabai/observability";
 import { createApp } from "./app";
 import { startBillingJob } from "./billing/job";
 import { loadConfig } from "./config";
 import { createDb } from "./db";
 import { EventHub } from "./events";
 import { createLogger } from "./logger";
+import { startTelemetry } from "./observability/telemetry";
 
 const config = loadConfig();
-const log = createLogger();
+const log = createLogger({ service: config.observability.serviceName });
+// Started first, so that everything below is inside it. Does nothing unless a collector is configured.
+const telemetry = await startTelemetry(config.observability);
+const reporter = createErrorReporter({
+  dsn: config.observability.errorDsn,
+  environment: config.env,
+  service: config.observability.serviceName,
+  release: config.observability.release,
+  platform: "node",
+  onDrop: (reason) => log.warn("error_report_not_sent", { reason }),
+});
 const sql = createDb(config.databaseUrl);
 const events = new EventHub();
 await events.start(sql);
 
-const app = createApp({ sql, config, log, events });
+const app = createApp({ sql, config, log, events, reporter });
 const stopBillingJob = startBillingJob(sql, log, config.billing.jobIntervalMinutes);
 const server = serve({ fetch: app.fetch, port: config.port }, (info) => {
-  log.info("listening", { port: info.port, env: config.env });
+  log.info("listening", { port: info.port, env: config.env, tracing: telemetry.enabled, error_tracking: reporter.enabled });
 });
 
 async function shutdown(signal: string) {
@@ -24,7 +36,21 @@ async function shutdown(signal: string) {
   stopBillingJob();
   await events.close();
   await sql.end({ timeout: 5 });
+  await reporter.flush();
+  await telemetry.shutdown();
   process.exit(0);
 }
 process.on("SIGTERM", () => void shutdown("SIGTERM"));
 process.on("SIGINT", () => void shutdown("SIGINT"));
+
+// What nothing else caught. A rejection is logged and reported and the server carries on; an exception leaves it in
+// an unknown state, so it is reported and the process exits for the platform to start a fresh one.
+process.on("unhandledRejection", (reason) => {
+  log.error("unhandled_rejection", { error: reason instanceof Error ? { name: reason.name, message: reason.message, stack: reason.stack } : String(reason) });
+  reporter.capture(reason, { code: "UNHANDLED_REJECTION" });
+});
+process.on("uncaughtException", (error) => {
+  log.error("uncaught_exception", { error: { name: error.name, message: error.message, stack: error.stack } });
+  reporter.capture(error, { code: "UNCAUGHT_EXCEPTION" });
+  void reporter.flush().finally(() => process.exit(1));
+});

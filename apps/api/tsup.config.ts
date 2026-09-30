@@ -9,5 +9,5 @@ export default defineConfig({
   platform: "node",
   clean: true,
   sourcemap: true,
-  noExternal: ["@sabai/domain", "@sabai/contracts"],
+  noExternal: ["@sabai/domain", "@sabai/contracts", "@sabai/observability"],
 });
