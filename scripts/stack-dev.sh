@@ -22,9 +22,8 @@ pnpm --filter @sabai/api dev &
 pids+=("$!")
 
 # NEXT_PUBLIC_DATA_SOURCE selects the web app's DataSource adapter (ADR-0009).
-# With "api" the welcome page offers "เชื่อมต่อร้านจริง" (dev login by email, e.g.
-# owner@sabai.dev, then a role + PIN). Only sign-in and loading the shop are wired
-# to the API so far; the other pages move over one by one (checklist phase 4).
+# With "api" every page reads and writes through the API; the welcome page offers
+# "เชื่อมต่อร้านจริง" (dev login by email, e.g. owner@sabai.dev, then a role + PIN).
 NEXT_PUBLIC_DATA_SOURCE=api pnpm --filter @sabai/web dev &
 pids+=("$!")
 

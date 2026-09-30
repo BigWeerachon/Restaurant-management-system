@@ -1,6 +1,6 @@
 # ฐานข้อมูล (Database)
 
-Postgres 16, เข้ากันได้กับ Supabase — **72 ตาราง, 85 functions/commands, 7 views** ใน 12 migrations
+Postgres 16, เข้ากันได้กับ Supabase — **75 ตาราง (+ `audit.log`), 103 functions/commands, 7 views** ใน 23 migrations
 ([`supabase/migrations`](../supabase/migrations)) และ SQL end-to-end test ที่ [`packages/db/tests`](../packages/db/tests)
 
 ## 1. โครงสร้างตามโมดูล
@@ -15,11 +15,21 @@ Postgres 16, เข้ากันได้กับ Supabase — **72 ตาร
 | `0600_purchasing_inventory_ops` | suppliers, supplier_items, purchase_orders/lines, goods_receipts/lines | ผู้ขาย แพ็กที่ซื้อ, PO, รับของ (แจ้งราคาขึ้น > 5%), ของเสีย, นับ, โอน |
 | `0700_finance` | accounts, bank_accounts, tenant_sequences, journal_entries/lines, bills, bill_payments, expenses, expected_receipts, statement_imports/lines, reconciliation_matches | บัญชีคู่ (ตรวจงบดุล), เจ้าหนี้ + WHT, ค่าใช้จ่ายมีงวดบริการ, ปิดยอด/เปิดใหม่, เงินที่ต้องเข้า, กระทบยอด |
 | `0800_saas_billing` | plans, subscriptions, subscription_invoices, usage_counters | แพ็กเกจ/ขีดจำกัด บังคับด้วย trigger |
-| `20260930000100_billing` | billing_events, billing_sequences (+ คอลัมน์ใหม่ใน subscriptions, subscription_invoices) | ใบแจ้งหนี้ค่าบริการ (เลข `INV-YYMM-00001`, เปิดค้างได้ครั้งละ 1 ใบต่อร้าน, แยก VAT 7/107), `billing_stage` (คำนวณจากเวลา ตรงกับ `billingStage` ใน domain), `request_plan_change`, `apply_billing_event` (บันทึกทุกเหตุการณ์จากผู้ให้บริการครั้งเดียว), `billing_run` (งานประจำวัน) |
 | `0900_audit` | audit.log | trigger บันทึกทุกการเปลี่ยนแปลงสำคัญ (ตัด `pin_hash`), ห้ามแก้ |
 | `1000_reporting` | *(views)* | `v_stock_status`, `v_daily_sales`, `v_item_sales`, `v_menu_costing`, `v_reorder_suggestions`, `v_branch_daily_pnl`, `v_onboarding_facts` (ทั้งหมด `security_invoker`) |
 | `1100_bootstrap` | — | สิทธิ์ 34 รายการ, ตำแหน่งเริ่มต้น 7 แบบ, ผังบัญชี SME ไทย, `create_tenant` (พร้อมขายทันที), `add_branch`, ปิดสิทธิ์ `public` |
 | `1200_api_support` | api_idempotency | เก็บผลลัพธ์ต่อ Idempotency-Key, trigger → `pg_notify` |
+| `20260928000100_kitchen_item_toggle` | — | `toggle_ticket_item`: ติ๊กทีละรายการบนตั๋วครัว (ครั้งแรกเริ่มตั๋วให้ด้วย) ตรงกับ engine ของเว็บ |
+| `20260928000200_settings_commands` | — | `change_plan`: เปลี่ยนแพ็กเกจต้องผ่านคำสั่ง (ตาราง `subscriptions` ให้ `authenticated` อ่านอย่างเดียว) |
+| `20260929000100_opening_stock` | — | `record_opening_stock`: ของที่มีอยู่แล้วตอนเพิ่มวัตถุดิบ บันทึกเป็น movement ชนิด `opening` เพื่อให้ ledger อธิบายได้ทุกกรัม |
+| `20260929000200_emoji` | (คอลัมน์ `emoji` ใน menu_items, ingredients) | รูปที่พนักงานจำเมนู/วัตถุดิบได้ ไม่หายเมื่อโหลดใหม่ |
+| `20260929000300_event_actor` | — | `emit_event` ระบุผู้กระทำจาก session ทุกเหตุการณ์ — ฟีดของเจ้าของไม่เขียนว่า "ระบบ" กับสิ่งที่คนทำ |
+| `20260929000400_channel_markup` | (คอลัมน์ `price_markup` ใน sales_channels) | ราคาเมนูเดลิเวอรีสูงกว่าร้านได้ (ปัดขึ้นเป็น ฿5 — `resolve_menu_price` ตรงกับ `channelPrice` ใน domain, มีเทสต์ยึดไว้) |
+| `20260929000500_change_plan_fits` | — | เปลี่ยนไปแพ็กเกจที่เล็กลงได้ก็ต่อเมื่อสาขา/พนักงานที่มีอยู่ยังอยู่ในขีดจำกัด (เหมือนที่ `enforce_plan_limits` กันตอนเพิ่ม) |
+| `20260929000600_device_credentials` | device_credentials | ลงทะเบียนเครื่องร้าน: ความลับแสดงครั้งเดียว เก็บเฉพาะ SHA-256 ในตารางที่ผู้ใช้แอปอ่านไม่ได้; `register_device`/`revoke_device` (เจ้าของ/ผู้จัดการ), `device_roster`/`device_pin_login` (API เรียกแทนเครื่อง ไม่มีผู้ใช้) — เพิกถอนแล้วแท็บเล็ตที่หายใช้ไม่ได้ทันที |
+| `20260929000700_receipt_settings` | (คอลัมน์ `receipt_footer` ใน tenants) | บรรทัดท้ายใบเสร็จ (ขอบคุณ, รหัส Wi-Fi, โปรโมชัน) |
+| `20260929000800_tax_invoices` | tax_invoices (+ `devices.receipt_code`) | เลขใบเสร็จแยกต่อเครื่อง POS (`HQ-T1-YYMM-00001`); ใบกำกับภาษีเต็มรูปตามที่ลูกค้าขอ บิลละหนึ่งใบ ห้ามแก้/ลบ เก็บภาพถ่ายของผู้ขาย/ผู้ซื้อ ณ วันนั้น เลขเฉพาะ (`HQ-TI-YYMM-00001`) |
+| `20260930000100_billing` | billing_events, billing_sequences (+ คอลัมน์ใหม่ใน subscriptions, subscription_invoices) | ใบแจ้งหนี้ค่าบริการ (เลข `INV-YYMM-00001`, เปิดค้างได้ครั้งละ 1 ใบต่อร้าน, แยก VAT 7/107), `billing_stage` (คำนวณจากเวลา ตรงกับ `billingStage` ใน domain), `request_plan_change`, `apply_billing_event` (บันทึกทุกเหตุการณ์จากผู้ให้บริการครั้งเดียว), `billing_run` (งานประจำวัน) |
 
 ## 2. Invariants (กฎที่ฐานข้อมูลบังคับเอง)
 

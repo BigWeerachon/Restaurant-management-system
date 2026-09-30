@@ -97,8 +97,8 @@
 | Typecheck | 0 error ทุก package | `pnpm typecheck` |
 | Unit/Integration | ผ่านทั้งหมด (SQL e2e, domain, API, web) | `pnpm test` + `pnpm db:test` |
 | Build | `next build` สำเร็จ | `pnpm build` |
-| Accessibility | axe WCAG 2.2 AA = **0 violations** (สว่าง/มืด/dialog/มือถือ) | `tools/qa` → `npm run axe` |
-| Lighthouse | Desktop 100 ทุกหมวด, Mobile Perf ≥ 90, A11y/BP/SEO = 100 | `tools/qa` → `npm run lighthouse` |
+| Browser tests + accessibility | ผ่านทั้งสองโหมด; axe WCAG 2.2 AA = **0 violations** (สว่าง/มืด/dialog/มือถือ) อยู่ในเทสต์เอง | `pnpm e2e demo` · `pnpm e2e api` (CI ทุก push) |
+| Lighthouse | **งบใน CI (ขวาง merge):** Desktop Perf ≥ 85, Mobile Perf ≥ 70 / LCP ≤ 3.5 s / TBT ≤ 1 s, A11y = 100, BP/SEO ≥ 95. **เป้าหมาย** (ตัวเลขจริงดู [scorecard](08-scorecard.md)): Desktop ≥ 99, Mobile Perf ≥ 90 | `tools/qa` → `npm run lighthouse` |
 
 ## Definition of Done
 
