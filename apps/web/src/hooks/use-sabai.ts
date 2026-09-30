@@ -1,11 +1,25 @@
 "use client";
 
 import { accessFromRole, can as canDo, homeFor, humanizeError, navigationFor, type Home, type Permission } from "@sabai/domain";
-import { useEffect, useMemo, useState } from "react";
+import { startTransition, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { create } from "zustand";
 import { currentBusinessDate } from "@/lib/demo/engine";
 import { getHistory, isDomainError, useSabai } from "@/lib/demo/store";
+
+/**
+ * False while the page is being hydrated, and true once a transition has said the first screen may be drawn. The screen
+ * waits for it, so that it is drawn in slices with gaps the browser can use to answer a tap or paint, instead of in one
+ * block of a hundred milliseconds: a store read through `useSyncExternalStore` re-renders everything below it
+ * synchronously the moment hydration ends, and a synchronous render cannot be interrupted.
+ */
+export function useAfterHydration(): boolean {
+  const [ready, setReady] = useState(false);
+  useEffect(() => {
+    startTransition(() => setReady(true));
+  }, []);
+  return ready;
+}
 
 // ---------------------------------------------------------------------------
 // Who am I, what can I do, where do I work

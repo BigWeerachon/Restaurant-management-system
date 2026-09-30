@@ -32,6 +32,9 @@ export async function signIn(page: Page, who: Who = "owner"): Promise<void> {
   }
   // `commit`: the move to the home page is made by the app itself, and waiting for a `load` event that never comes is a hang.
   await page.waitForURL(w.home, { timeout: 30_000, waitUntil: "commit" });
+  // The page itself, not the loading screen that comes first: the first screen is drawn in slices, a moment after the URL changes
+  // (and the welcome page has no <main>, so this cannot be satisfied by the screen being left).
+  await expect(page.locator("main").first()).toBeVisible({ timeout: 30_000 });
 }
 
 /**

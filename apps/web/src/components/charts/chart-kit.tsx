@@ -7,20 +7,22 @@
  */
 import { BarChart3, Table2 } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
-import { useEffect, useLayoutEffect, useRef, useState, type ReactNode, type RefObject } from "react";
+import { useEffect, useRef, useState, type ReactNode, type RefObject } from "react";
 import { Card } from "@/components/ui/primitives";
 import { cn } from "@/lib/cn";
 
-const useIsoLayoutEffect = typeof window === "undefined" ? useEffect : useLayoutEffect;
-
-/** Width of an element, tracked with ResizeObserver (charts are fluid). */
+/**
+ * Width of an element, tracked with ResizeObserver (charts are fluid). The first width arrives with the observer's first
+ * report, right after the layout the browser does anyway. It is not read on the spot (`clientWidth` in a layout effect):
+ * that makes the browser lay the whole page out in the middle of drawing it, inside one long block with the commit. A
+ * chart's box keeps its height meanwhile (`minHeight` on the wrapper), so nothing below it moves when the chart appears.
+ */
 export function useWidth<T extends HTMLElement>(): [RefObject<T | null>, number] {
   const ref = useRef<T>(null);
   const [width, setWidth] = useState(0);
-  useIsoLayoutEffect(() => {
+  useEffect(() => {
     const el = ref.current;
     if (!el) return;
-    setWidth(el.clientWidth);
     const ro = new ResizeObserver(([e]) => setWidth(Math.round(e!.contentRect.width)));
     ro.observe(el);
     return () => ro.disconnect();

@@ -14,7 +14,7 @@ import { Callout } from "@/components/ui/primitives";
 import { useDsAction } from "@/hooks/use-data-source";
 import { cn } from "@/lib/cn";
 import { formatBaht } from "@/lib/demo/selectors";
-import { directReady, openDrawerDirect, usePrinter } from "@/lib/escpos/printer";
+import { directReady, loadPrinterSend, usePrinter } from "@/lib/escpos/printer";
 import { printReceipt } from "@/lib/print";
 import { useSabai } from "@/lib/demo/store";
 import type { Order, PaymentMethod } from "@/lib/demo/types";
@@ -76,7 +76,7 @@ export function PaymentDialog({ order, open, onClose, onPaid }: { order: Order |
       // The till's own printer, if it has one: pop the drawer for cash, print the receipt if asked to.
       const printer = usePrinter.getState().settings;
       if (directReady() && method.kind === "cash" && printer.drawer) {
-        openDrawerDirect().catch(() => toast.error("เปิดลิ้นชักเก็บเงินไม่ได้", { description: "ตรวจสายที่ต่อจากเครื่องพิมพ์ไปลิ้นชัก หรือเปิดลิ้นชักด้วยกุญแจ" }));
+        loadPrinterSend().then(({ openDrawerDirect }) => openDrawerDirect()).catch(() => toast.error("เปิดลิ้นชักเก็บเงินไม่ได้", { description: "ตรวจสายที่ต่อจากเครื่องพิมพ์ไปลิ้นชัก หรือเปิดลิ้นชักด้วยกุญแจ" }));
       }
       // Auto-print never opens the print dialog on its own: with the printer away it says so, and the button below still works.
       if (printer.autoReceipt && printer.transport) {

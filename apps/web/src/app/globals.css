@@ -314,6 +314,12 @@
   .no-scrollbar::-webkit-scrollbar { display: none; }
   .safe-bottom { padding-bottom: max(env(safe-area-inset-bottom), 0px); }
   .text-balance { text-wrap: balance; }
+  /*
+   * For the parts of a long page that are well below the screen: they are not laid out or painted until they get near it, so
+   * the first screen is not held up by text nobody can see yet (Chrome, Safari 18, Firefox 125; elsewhere they are simply
+   * drawn at once). `auto` in the size makes the browser remember the real height once a part has been drawn.
+   */
+  .offscreen-lazy { content-visibility: auto; contain-intrinsic-size: auto 600px; }
   .bg-grain {
     background-image: radial-gradient(ellipse at top left, var(--brand-soft), transparent 55%),
       radial-gradient(ellipse at bottom right, var(--accent-soft), transparent 50%);

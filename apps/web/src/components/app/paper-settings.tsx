@@ -6,7 +6,7 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/overlay";
 import { Badge, Callout, Card, Field, Input, Segmented } from "@/components/ui/primitives";
-import { describePrinterError, initPrinter, openDrawerDirect, usePrinter, type PrintMode } from "@/lib/escpos/printer";
+import { describePrinterError, initPrinter, loadPrinterSend, usePrinter, type PrintMode } from "@/lib/escpos/printer";
 import type { TransportKind } from "@/lib/escpos/transports";
 import { getPaperWidth, printSampleReceipt, setPaperWidth, type PaperWidth } from "@/lib/print";
 
@@ -101,7 +101,7 @@ function DirectPrinter() {
             )}
             {ready ? (
               <>
-                <Button variant="secondary" icon={<Vault className="h-4 w-4" />} onClick={() => openDrawerDirect().catch((e) => toast.error("เปิดลิ้นชักไม่ได้", { description: describePrinterError(e) }))}>
+                <Button variant="secondary" icon={<Vault className="h-4 w-4" />} onClick={() => loadPrinterSend().then(({ openDrawerDirect }) => openDrawerDirect()).catch((e) => toast.error("เปิดลิ้นชักไม่ได้", { description: describePrinterError(e) }))}>
                   ทดลองเปิดลิ้นชัก
                 </Button>
                 <Button variant="ghost" icon={<Unplug className="h-4 w-4" />} onClick={() => void disconnect()}>

@@ -49,6 +49,21 @@ describe("demo shop", () => {
     }
   });
 
+  it("builds the recent fortnight of the history with exactly the rows the full history holds", () => {
+    const base = sampleState(today);
+    const full = generateHistory(base, today);
+    const recent = generateHistory(base, today, 30, 16);
+    const from = addDays(today, -16);
+    expect(recent.days.length).toBeGreaterThan(0);
+    expect(recent.days).toEqual(full.days.filter((d) => d.date >= from));
+    expect(recent.branchDays).toEqual(full.branchDays.filter((d) => d.date >= from));
+    // The home screen reads the same numbers from either.
+    const a = todayStats(sample(), recent, "br-ari", now);
+    const b = todayStats(sample(), full, "br-ari", now);
+    expect(a.spark).toEqual(b.spark);
+    expect([a.lastWeekSales, a.lastWeekOrders]).toEqual([b.lastWeekSales, b.lastWeekOrders]);
+  });
+
   it("produces believable 30-day economics", () => {
     const s = sample();
     const h = generateHistory(s, today);

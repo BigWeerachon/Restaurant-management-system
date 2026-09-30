@@ -53,7 +53,7 @@ export function MenuMatrix({ items, format, height = 300 }: { items: EngineeredI
   );
 
   return (
-    <div ref={ref} className="relative w-full">
+    <div ref={ref} className="relative w-full" style={{ minHeight: height }}>
       {width > 0 && (
         <svg
           width={width}

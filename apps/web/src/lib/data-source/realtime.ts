@@ -4,10 +4,13 @@
  * listens, works out which parts of the store that event makes stale, and reads just those again, and only
  * the parts a mounted screen is actually showing.
  */
-import { useSyncExternalStore } from "react";
 import { apiBaseUrl, getApiSession, tryRenewSession } from "./http-client";
+import { isSliceActive, realtimeStatus, setRealtimeStatus } from "./realtime-status";
 import { createSseParser } from "./sse";
 import type { Slice } from "./types";
+
+// Where the screens read all of this from is `realtime-status.ts`; it is re-exported so the stream and its users have one address.
+export { activeSlices, realtimeStatus, registerActiveSlices, useRealtimeStatus, type RealtimeStatus } from "./realtime-status";
 
 // ---------------------------------------------------------------------------
 // What an event makes stale
@@ -32,52 +35,6 @@ const BY_EVENT: [prefix: string, slices: Slice[]][] = [
 export function slicesForEvent(type: string): Slice[] {
   for (const [prefix, slices] of BY_EVENT) if (type.startsWith(prefix)) return slices;
   return ["reports"];
-}
-
-// ---------------------------------------------------------------------------
-// Which slices are on screen
-// ---------------------------------------------------------------------------
-const active = new Map<Slice, number>();
-
-/** A screen that shows these slices says so while it is mounted; returns the undo. */
-export function registerActiveSlices(slices: readonly Slice[]): () => void {
-  for (const s of slices) active.set(s, (active.get(s) ?? 0) + 1);
-  return () => {
-    for (const s of slices) {
-      const n = (active.get(s) ?? 1) - 1;
-      if (n <= 0) active.delete(s);
-      else active.set(s, n);
-    }
-  };
-}
-
-export const activeSlices = (): Slice[] => [...active.keys()];
-
-// ---------------------------------------------------------------------------
-// Connection status, for the screen to show
-// ---------------------------------------------------------------------------
-export type RealtimeStatus = "off" | "connecting" | "live" | "offline";
-
-let status: RealtimeStatus = "off";
-const listeners = new Set<() => void>();
-
-function setStatus(next: RealtimeStatus) {
-  if (status === next) return;
-  status = next;
-  for (const l of listeners) l();
-}
-
-export const realtimeStatus = (): RealtimeStatus => status;
-
-export function useRealtimeStatus(): RealtimeStatus {
-  return useSyncExternalStore(
-    (l) => {
-      listeners.add(l);
-      return () => listeners.delete(l);
-    },
-    () => status,
-    () => "off" as const,
-  );
 }
 
 // ---------------------------------------------------------------------------
@@ -159,13 +116,13 @@ export function startRealtime(opts: RealtimeOptions): () => void {
     if (m.event === "ready") {
       attempt = 0;
       renewedOnce = false;
-      setStatus("live");
+      setRealtimeStatus("live");
       if (wasDown) opts.onCatchUp();
       wasDown = false;
     } else if (m.event === "domain") {
       try {
         const { type } = JSON.parse(m.data) as { type?: string };
-        if (type) opts.onStale(slicesForEvent(type).filter((s) => active.has(s)));
+        if (type) opts.onStale(slicesForEvent(type).filter((s) => isSliceActive(s)));
       } catch {
         // A message we cannot read is not worth dropping the stream over.
       }
@@ -174,9 +131,9 @@ export function startRealtime(opts: RealtimeOptions): () => void {
 
   const connect = async () => {
     if (stopped) return;
-    setStatus(wasDown ? "offline" : "connecting");
+    setRealtimeStatus(wasDown ? "offline" : "connecting");
     const { token, tenantId } = getApiSession();
-    if (!token) return setStatus("off");
+    if (!token) return setRealtimeStatus("off");
     const mine = new AbortController();
     current = mine;
     let lastByteAt = Date.now();
@@ -200,7 +157,7 @@ export function startRealtime(opts: RealtimeOptions): () => void {
       }
       if (res.status === 401 || res.status === 403) {
         stopped = true;
-        setStatus("off");
+        setRealtimeStatus("off");
         opts.onUnauthorized?.();
         return;
       }
@@ -220,7 +177,7 @@ export function startRealtime(opts: RealtimeOptions): () => void {
     }
     if (stopped) return;
     wasDown = true;
-    setStatus("offline");
+    setRealtimeStatus("offline");
     retryTimer = setTimeout(connect, backoff(attempt++));
   };
 
@@ -229,7 +186,7 @@ export function startRealtime(opts: RealtimeOptions): () => void {
     if (!stopped) current?.abort();
   };
   const onOnline = () => {
-    if (stopped || status === "live") return;
+    if (stopped || realtimeStatus() === "live") return;
     if (retryTimer) clearTimeout(retryTimer);
     void connect();
   };
@@ -247,6 +204,6 @@ export function startRealtime(opts: RealtimeOptions): () => void {
       window.removeEventListener("offline", onOffline);
       window.removeEventListener("online", onOnline);
     }
-    setStatus("off");
+    setRealtimeStatus("off");
   };
 }

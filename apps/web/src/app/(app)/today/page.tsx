@@ -172,7 +172,7 @@ export default function TodayPage() {
           </Card>
 
           {actions.length > 0 && (
-            <section aria-labelledby="quick">
+            <section aria-labelledby="quick" className="offscreen-lazy">
               <h2 id="quick" className="mb-3 text-[17px] font-semibold text-ink">
                 งานประจำวัน
               </h2>
@@ -195,7 +195,7 @@ export default function TodayPage() {
 
         <div className="space-y-6">
           {can("kds.view") && (
-            <Card as="section" className="p-5">
+            <Card as="section" className="offscreen-lazy p-5">
               <div className="flex items-center gap-3">
                 <span className="grid h-10 w-10 place-items-center rounded-xl bg-surface-2 text-ink-2">
                   <ChefHat className="h-5 w-5" aria-hidden="true" />
@@ -219,7 +219,7 @@ export default function TodayPage() {
             </Card>
           )}
 
-          <Card as="section" aria-labelledby="feed">
+          <Card as="section" aria-labelledby="feed" className="offscreen-lazy">
             <CardHeader title={<span id="feed">ความเคลื่อนไหวล่าสุด</span>} description="ใครทำอะไร เมื่อไร — ยกเลิก ส่วนลด รับของ ของเสีย" />
             {feed.length === 0 ? (
               <EmptyState compact emoji="🗒️" title="ยังไม่มีความเคลื่อนไหว" description="ทุกการเปลี่ยนแปลงสำคัญจะขึ้นที่นี่ เจ้าของร้านตรวจย้อนหลังได้เสมอ" />

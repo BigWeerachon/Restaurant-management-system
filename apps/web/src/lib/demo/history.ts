@@ -76,7 +76,12 @@ function weightedPicker<T>(items: T[], weight: (t: T) => number): (rnd: () => nu
 const HOURS = HOUR_WEIGHTS.map((_, h) => h);
 const pickHour = weightedPicker(HOURS, (h) => HOUR_WEIGHTS[h]!);
 
-export function generateHistory(state: DemoState, today: string, days = 30): History {
+/**
+ * `lastDays` limits the work to the most recent days of the `days`-day window: every day is worked out from its own date
+ * and branch, so the rows are the same ones the full window holds (and, cut short, it carries no expenses). The home
+ * screen only looks a fortnight back and is the one every visit opens on, so it asks for just that.
+ */
+export function generateHistory(state: DemoState, today: string, days = 30, lastDays = days): History {
   if (state.mode !== "demo") return { days: [], branchDays: [], expenses: [] };
   const book = recipeBook(state);
   const itemCost = new Map<string, number>();
@@ -91,7 +96,7 @@ export function generateHistory(state: DemoState, today: string, days = 30): His
   const pickFood = weightedPicker(items.filter((m) => m.route === "kitchen"), (m) => m.weight);
   const takesShot = new Set(items.filter((m) => m.modifierGroupIds.includes("mg-extra")).map((m) => m.id));
 
-  for (let d = days; d >= 1; d--) {
+  for (let d = Math.min(lastDays, days); d >= 1; d--) {
     const date = addDays(today, -d);
     const dow = new Date(`${date}T12:00:00Z`).getUTCDay();
     const growth = 1 + (days - d) * 0.0028;
@@ -143,7 +148,7 @@ export function generateHistory(state: DemoState, today: string, days = 30): His
     }
   }
 
-  return { days: out, branchDays, expenses: historyExpenses(today, days) };
+  return { days: out, branchDays, expenses: lastDays >= days ? historyExpenses(today, days) : [] };
 }
 
 /** Recurring costs the owner recorded (rent, wages, utilities, marketing, supplies). */

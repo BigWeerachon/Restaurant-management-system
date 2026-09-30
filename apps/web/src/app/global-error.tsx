@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
-import { reportClientError } from "@/lib/observability/client-errors";
+import { reportBoundaryError } from "@/lib/observability/report";
 import "./globals.css";
 
 /**
@@ -9,7 +9,7 @@ import "./globals.css";
  * it must work even when nothing else in the app does, so it uses no component from the app.
  */
 export default function GlobalError({ error, retry }: { error: Error & { digest?: string }; retry: () => void }) {
-  useEffect(() => reportClientError(error, "boundary", { digest: error.digest }), [error]);
+  useEffect(() => reportBoundaryError(error, error.digest), [error]);
   return (
     <html lang="th">
       <body>

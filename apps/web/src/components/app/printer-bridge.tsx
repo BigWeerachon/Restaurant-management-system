@@ -6,8 +6,7 @@ import { useLoad } from "@/hooks/use-data-source";
 import { useSabai } from "@/lib/demo/store";
 import type { Ticket } from "@/lib/demo/types";
 import { ticketsToPrint } from "@/lib/escpos/kitchen";
-import { slipFromTicket } from "@/lib/escpos/layout";
-import { initPrinter, printKitchenDirect, usePrinter } from "@/lib/escpos/printer";
+import { initPrinter, loadPrinterSend, usePrinter } from "@/lib/escpos/printer";
 import { getPaperWidth } from "@/lib/print";
 
 /** Prints one ticket's slip; on failure says so and offers to try again, because a missed slip means a missed order. */
@@ -15,6 +14,8 @@ export async function printTicketSlip(t: Ticket) {
   const { stations } = useSabai.getState().db;
   const station = stations.length > 1 ? stations.find((s) => s.id === t.stationId)?.name : undefined;
   try {
+    // The drawing and encoding code is fetched the first time a slip is printed (ahead of time when a printer is set up, see below).
+    const [{ printKitchenDirect }, { slipFromTicket }] = await Promise.all([loadPrinterSend(), import("@/lib/escpos/layout")]);
     await printKitchenDirect(slipFromTicket(t, station), { widthMm: getPaperWidth() });
     return true;
   } catch (e) {
@@ -37,6 +38,8 @@ export function PrinterBridge() {
 
   useEffect(() => {
     initPrinter();
+    // A till with a printer prints on every sale: have the code for it ready now, and kept for when the line is down.
+    if (usePrinter.getState().settings.transport) void loadPrinterSend().catch(() => undefined);
     void usePrinter.getState().reconnect();
     const nav = navigator as unknown as { usb?: EventTarget; serial?: EventTarget };
     const targets = [nav.usb, nav.serial].filter((t): t is EventTarget => !!t);

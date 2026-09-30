@@ -5,7 +5,7 @@ import { toast } from "sonner";
 import { dataSourceMode } from "@/lib/data-source/config";
 import { refresh } from "@/lib/data-source/http-context";
 import { offlineQueue, onQueueSettled, useOfflineQueue } from "@/lib/data-source/offline";
-import { useRealtimeStatus } from "@/lib/data-source/realtime";
+import { useRealtimeStatus } from "@/lib/data-source/realtime-status";
 import { useSabai } from "@/lib/demo/store";
 
 /** How often to try again while something is waiting and the line is not known to be back. */

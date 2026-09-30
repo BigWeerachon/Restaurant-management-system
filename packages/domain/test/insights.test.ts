@@ -8,12 +8,14 @@ import {
   channelProfitability,
   crc16,
   formatElapsed,
+  formatThaiDate,
   menuEngineering,
   parsePromptPayId,
   percentChange,
   profitWaterfall,
   promptPayPayload,
   reconciliationStatus,
+  shopClock,
   sortTickets,
   suggestMatches,
   trend,
@@ -166,6 +168,25 @@ describe("business date", () => {
     // 06:00 Bangkok on 28 Sep → 28 Sep
     expect(businessDate(new Date("2026-09-27T23:00:00Z"))).toBe("2026-09-28");
     expect(addDays("2026-09-30", 1)).toBe("2026-10-01");
+  });
+
+  it("keeps its date formatters per time zone and per cut-off, so asking again gives the right answer for each", () => {
+    const at = new Date("2026-09-27T18:30:00Z");
+    // Asked in turn, in the same process: the formatter made for one zone must never answer for another.
+    const asks = () => [
+      businessDate(at),
+      businessDate(at, { timeZone: "Asia/Tokyo", cutoff: "00:00" }),
+      businessDate(at, { timeZone: "America/New_York", cutoff: "00:00" }),
+      businessDate(at, { timeZone: "Asia/Bangkok", cutoff: "00:00" }),
+    ];
+    // 01:30 Bangkok (before the 05:00 cut-off) is still the 27th; 03:30 Tokyo is the 28th; 14:30 in New York is the 27th.
+    expect(asks()).toEqual(["2026-09-27", "2026-09-28", "2026-09-27", "2026-09-28"]);
+    expect(asks()).toEqual(["2026-09-27", "2026-09-28", "2026-09-27", "2026-09-28"]);
+    expect(shopClock(at)).toEqual({ hour: 1, minute: 30 });
+    expect(shopClock(at, "Asia/Tokyo")).toEqual({ hour: 3, minute: 30 });
+    expect(shopClock(at)).toEqual({ hour: 1, minute: 30 });
+    expect(formatThaiDate("2026-09-27", false)).not.toBe(formatThaiDate("2026-09-27", true));
+    expect(formatThaiDate("2026-09-27")).toBe(formatThaiDate("2026-09-27"));
   });
 });
 

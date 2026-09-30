@@ -4,11 +4,11 @@ import type { Permission } from "@sabai/domain";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { dataSourceMode, getDataSource } from "@/lib/data-source";
-import { registerActiveSlices, useRealtimeStatus } from "@/lib/data-source/realtime";
+import { registerActiveSlices, useRealtimeStatus } from "@/lib/data-source/realtime-status";
 import type { ApprovalToken, DataSource, ReportFilter, ReportSummary, Slice, TodayStats } from "@/lib/data-source/types";
 import type { BillingState } from "@/lib/demo/types";
 import { billing as selectBilling, reportSummary as selectReportSummary, todayStats as selectTodayStats } from "@/lib/demo/selectors";
-import { getHistory, isDomainError, useSabai } from "@/lib/demo/store";
+import { getHistory, getRecentHistory, isDomainError, useSabai } from "@/lib/demo/store";
 import { showError, useAccess, useUi } from "./use-sabai";
 
 interface ExecOptions<T> {
@@ -190,7 +190,7 @@ export function useReportSummary(filter: ReportFilter | null): QueryState<Report
 export function useTodayStats(branchId: string, now: Date): QueryState<TodayStats> {
   const api = dataSourceMode() === "api";
   const db = useSabai((s) => s.db);
-  const local = useMemo(() => (api ? undefined : selectTodayStats(db, getHistory(db), branchId, now)), [api, db, branchId, now]);
+  const local = useMemo(() => (api ? undefined : selectTodayStats(db, getRecentHistory(db), branchId, now)), [api, db, branchId, now]);
   const remote = useApiQuery(api ? `today|${branchId}` : null, () => getDataSource().today(branchId), { everyMs: 30_000 });
   return api ? remote : { ...NOT_ASKED, data: local };
 }

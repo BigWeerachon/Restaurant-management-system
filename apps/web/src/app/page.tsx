@@ -3,17 +3,25 @@
 import { accessFromRole, homeFor, type Home, type Permission } from "@sabai/domain";
 import { ArrowRight, Banknote, ChefHat, PiggyBank, Sparkles, Store } from "lucide-react";
 import { motion } from "motion/react";
+import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { Logo } from "@/components/app/app-shell";
-import { ConnectPanel } from "@/components/app/connect-panel";
+import { PanelLoading } from "@/components/app/panel-loading";
 import { Splash } from "@/components/app/gate";
 import { RoleCards } from "@/components/app/role-cards";
 import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/overlay";
 import { Field, Input, Segmented } from "@/components/ui/primitives";
+import { useAfterHydration } from "@/hooks/use-sabai";
 import { dataSourceMode } from "@/lib/data-source/config";
 import { useSabai } from "@/lib/demo/store";
+
+// The real sign-in (accounts, shops, PINs, the HTTP client) is a download of its own: the demo, which has none of it, never asks.
+const loadConnectPanel = () => import("@/components/app/connect-panel").then((m) => m.ConnectPanel);
+const ConnectPanel = dynamic(loadConnectPanel, { loading: () => <PanelLoading /> });
+// In API mode it is the whole point of the page: start fetching it now, alongside the page itself.
+if (typeof window !== "undefined" && dataSourceMode() === "api") void loadConnectPanel();
 
 export default function Welcome() {
   const hydrated = useSabai((s) => s.hydrated);
@@ -21,12 +29,13 @@ export default function Welcome() {
   const signIn = useSabai((s) => s.signIn);
   const reset = useSabai((s) => s.reset);
   const router = useRouter();
+  const settled = useAfterHydration();
   const [freshOpen, setFreshOpen] = useState(false);
   const [shopName, setShopName] = useState("");
   const [type, setType] = useState<"cafe" | "restaurant">("restaurant");
   const [nameError, setNameError] = useState<string | null>(null);
 
-  if (!hydrated) return <Splash />;
+  if (!hydrated || !settled) return <Splash />;
 
   const enter = (memberId: string) => {
     const m = db.members.find((x) => x.id === memberId)!;

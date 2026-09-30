@@ -1,13 +1,19 @@
 "use client";
 
 import { motion } from "motion/react";
+import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import { useEffect } from "react";
 import { Logo } from "@/components/app/app-shell";
 import { Splash } from "@/components/app/gate";
-import { SignupForm } from "@/components/app/signup-form";
+import { PanelLoading } from "@/components/app/panel-loading";
 import { dataSourceMode } from "@/lib/data-source/config";
 import { useSabai } from "@/lib/demo/store";
+
+// Only a real shop is opened here; the demo never gets this far, so its download is left until it is wanted.
+const loadSignupForm = () => import("@/components/app/signup-form").then((m) => m.SignupForm);
+const SignupForm = dynamic(loadSignupForm, { loading: () => <PanelLoading lines={5} /> });
+if (typeof window !== "undefined" && dataSourceMode() === "api") void loadSignupForm();
 
 /** Opening a real shop. The sample shop needs no account, so in demo mode this page just sends people to the welcome page. */
 export default function SignupPage() {

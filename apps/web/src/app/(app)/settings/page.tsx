@@ -3,11 +3,12 @@
 import { cheapestPlanFor, FEATURE_COPY, isValidThaiTaxId, PLANS, planLimit, planOf, type PlanCode } from "@sabai/domain";
 import { Check, MapPin, Plus, Sparkles } from "lucide-react";
 import { motion } from "motion/react";
+import dynamic from "next/dynamic";
 import { useSearchParams } from "next/navigation";
 import { Suspense, useState } from "react";
 import { toast } from "sonner";
 import { BillingPanel, InvoicePayDialog } from "@/components/app/billing-panel";
-import { DevicesPanel } from "@/components/app/devices-panel";
+import { PanelLoading } from "@/components/app/panel-loading";
 import { PaperSettings } from "@/components/app/paper-settings";
 import { LoadBanner } from "@/components/app/load-banner";
 import { PageHeader } from "@/components/app/page-header";
@@ -22,6 +23,9 @@ import { dataSourceMode } from "@/lib/data-source/config";
 import type { DataSource } from "@/lib/data-source/types";
 import { useSabai } from "@/lib/demo/store";
 import type { BillingInvoice, Branch, Tenant } from "@/lib/demo/types";
+
+// The registered tills and printers of a real shop: the demo has none of them, so it never fetches the panel (or the HTTP client behind it).
+const DevicesPanel = dynamic(() => import("@/components/app/devices-panel").then((m) => m.DevicesPanel), { loading: () => <PanelLoading lines={4} /> });
 
 const BUSINESS_TYPES: { value: Tenant["businessType"]; label: string }[] = [
   { value: "cafe", label: "คาเฟ่" },

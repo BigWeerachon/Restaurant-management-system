@@ -69,7 +69,7 @@ export function TrendChart<T extends { date: string } & Record<string, number | 
   const key = data.map((d) => d.date).join(",");
 
   return (
-    <div ref={ref} className="relative w-full">
+    <div ref={ref} className="relative w-full" style={{ minHeight: height }}>
       {width > 0 && (
         <svg
           width={width}

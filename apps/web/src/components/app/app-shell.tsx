@@ -22,11 +22,16 @@ import { onboarding } from "@/lib/demo/selectors";
 import { useSabai } from "@/lib/demo/store";
 import { CommandPalette } from "./command-palette";
 
+/**
+ * The brand mark. `width`/`height` are the size it is drawn at, not the size of the file: they decide which sizes of the
+ * picture the browser is offered (a phone asks for twice as many pixels as it shows). Given the file's own 1465 or 512
+ * pixels, the first screen downloaded 80 KB of logo to draw 130 px of it.
+ */
 export function Logo({ compact }: { compact?: boolean }) {
   if (compact) {
-    return <Image src="/brand/paakin-icon.png" alt="Paak In" width={512} height={512} priority className="h-9 w-9" />;
+    return <Image src="/brand/paakin-icon.png" alt="Paak In" width={36} height={36} priority className="h-9 w-9" />;
   }
-  return <Image src="/brand/paakin-logo.png" alt="Paak In" width={1465} height={364} priority className="h-8 w-auto" />;
+  return <Image src="/brand/paakin-logo.png" alt="Paak In" width={128} height={32} priority className="h-8 w-auto" />;
 }
 
 function useTheme() {

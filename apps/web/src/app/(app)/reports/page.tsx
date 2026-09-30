@@ -26,7 +26,7 @@ const pct = (v: number, d = 0) => `${(v * 100).toFixed(d)}%`;
 
 function Section({ q, title, children }: { q: string; title: string; children: React.ReactNode }) {
   return (
-    <section className="space-y-4" aria-labelledby={`q-${q}`}>
+    <section className="offscreen-lazy space-y-4" aria-labelledby={`q-${q}`}>
       <div>
         <p className="text-xs font-semibold uppercase tracking-wide text-brand">{q}</p>
         <h2 id={`q-${q}`} className="text-xl font-semibold text-ink">

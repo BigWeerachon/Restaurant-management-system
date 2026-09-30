@@ -4,7 +4,7 @@ import { routeAllowed } from "@sabai/domain";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, type ReactNode } from "react";
 import NoAccessPage from "@/app/(app)/no-access/page";
-import { useAccess } from "@/hooks/use-sabai";
+import { useAccess, useAfterHydration } from "@/hooks/use-sabai";
 import { getDataSource } from "@/lib/data-source";
 import { useSabai } from "@/lib/demo/store";
 import { Logo } from "./app-shell";
@@ -15,6 +15,7 @@ export function Gate({ children }: { children: ReactNode }) {
   const memberId = useSabai((s) => s.session.memberId);
   const router = useRouter();
   const { member } = useAccess();
+  const settled = useAfterHydration();
 
   const signedIn = !!member?.active;
 
@@ -25,7 +26,8 @@ export function Gate({ children }: { children: ReactNode }) {
     router.replace("/");
   }, [hydrated, signedIn, memberId, router]);
 
-  if (!hydrated || !signedIn) return <Splash />;
+  // `settled` keeps the first screen out of the synchronous render that ends hydration (see `useAfterHydration`).
+  if (!hydrated || !settled || !signedIn) return <Splash />;
   return <>{children}</>;
 }
 

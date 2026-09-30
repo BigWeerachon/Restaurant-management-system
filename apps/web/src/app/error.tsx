@@ -4,7 +4,7 @@ import { TriangleAlert } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Button, LinkButton } from "@/components/ui/button";
 import { Card } from "@/components/ui/primitives";
-import { reportClientError } from "@/lib/observability/client-errors";
+import { reportBoundaryError } from "@/lib/observability/report";
 
 /** A code a person can read out over the phone; the same one is on the report the team receives. */
 const referenceOf = (digest?: string) => {
@@ -19,7 +19,7 @@ const referenceOf = (digest?: string) => {
  */
 export default function RouteError({ error, retry }: { error: Error & { digest?: string }; retry: () => void }) {
   const [reference] = useState(() => referenceOf(error.digest));
-  useEffect(() => reportClientError(error, "boundary", { digest: error.digest ?? reference }), [error, reference]);
+  useEffect(() => reportBoundaryError(error, error.digest ?? reference), [error, reference]);
   return (
     <main id="main" className="mx-auto flex min-h-dvh max-w-lg items-center px-4 py-10">
       <Card className="w-full p-6 text-center">

@@ -7,7 +7,7 @@
  */
 import type { Permission } from "@sabai/domain";
 import * as engine from "../demo/engine";
-import { getHistory, useSabai } from "../demo/store";
+import { getHistory, getRecentHistory, useSabai } from "../demo/store";
 import { reportSummary as selectReportSummary, stockRows, todayStats as selectTodayStats } from "../demo/selectors";
 import type { DataSource, ReportFilter, ReportSummary, Slice, TodayStats } from "./types";
 
@@ -170,6 +170,6 @@ export const demoDataSource: DataSource = {
   },
   async today(branchId: string | null): Promise<TodayStats> {
     const { db } = useSabai.getState();
-    return selectTodayStats(db, getHistory(db), branchId, new Date());
+    return selectTodayStats(db, getRecentHistory(db), branchId, new Date());
   },
 };

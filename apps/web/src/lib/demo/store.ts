@@ -22,10 +22,27 @@ export function todayIso(now = new Date()) {
 }
 
 let historyCache: { key: string; value: History } | null = null;
+let recentCache: { key: string; value: History } | null = null;
+const historyKey = (db: DemoState) => `${db.mode}:${db.seededFor}:${db.version}`;
+
 export function getHistory(db: DemoState): History {
-  const key = `${db.mode}:${db.seededFor}:${db.version}`;
+  const key = historyKey(db);
   if (!historyCache || historyCache.key !== key) historyCache = { key, value: generateHistory(db, db.seededFor) };
   return historyCache.value;
+}
+
+/** Days the home screen looks back (a week ago, a 14-day sparkline) and a couple more, so a business date that is a day off still finds its rows. */
+const RECENT_DAYS = 16;
+
+/**
+ * The last couple of weeks of the history, for the screen every visit opens on. The same rows as `getHistory` holds for
+ * those days, at roughly half the work; the full history is only built when a screen that needs all of it opens.
+ */
+export function getRecentHistory(db: DemoState): History {
+  const key = historyKey(db);
+  if (historyCache?.key === key) return historyCache.value;
+  if (!recentCache || recentCache.key !== key) recentCache = { key, value: generateHistory(db, db.seededFor, 30, RECENT_DAYS) };
+  return recentCache.value;
 }
 
 function build(mode: "demo" | "fresh", shopName?: string): DemoState {
@@ -99,6 +116,7 @@ export const useSabai = create<SabaiStore>()(
 
       reset(mode, shopName) {
         historyCache = null;
+        recentCache = null;
         set({ db: build(mode, shopName), session: { memberId: null, branchId: null } });
       },
 

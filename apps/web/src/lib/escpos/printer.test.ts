@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { decodeEscPos, printedLines } from "./decode";
-import { DEFAULT_SETTINGS, colsForWidth, describePrinterError, dotsFor, encodeBlocks, loadSettings, openDrawerDirect, printKitchenDirect, setTransportFactory, usePrinter } from "./printer";
+import { DEFAULT_SETTINGS, describePrinterError, loadSettings, setTransportFactory, usePrinter } from "./printer";
+import { colsForWidth, dotsFor, encodeBlocks, openDrawerDirect, printKitchenDirect } from "./printer-send";
 import { PrinterError, type PrinterTransport, type TransportKind } from "./transports";
 
 vi.mock("./raster", () => ({
