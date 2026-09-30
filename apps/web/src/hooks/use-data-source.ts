@@ -6,9 +6,10 @@ import { toast } from "sonner";
 import { dataSourceMode, getDataSource } from "@/lib/data-source";
 import { registerActiveSlices, useRealtimeStatus } from "@/lib/data-source/realtime";
 import type { ApprovalToken, DataSource, ReportFilter, ReportSummary, Slice, TodayStats } from "@/lib/data-source/types";
-import { reportSummary as selectReportSummary, todayStats as selectTodayStats } from "@/lib/demo/selectors";
+import type { BillingState } from "@/lib/demo/types";
+import { billing as selectBilling, reportSummary as selectReportSummary, todayStats as selectTodayStats } from "@/lib/demo/selectors";
 import { getHistory, isDomainError, useSabai } from "@/lib/demo/store";
-import { showError, useUi } from "./use-sabai";
+import { showError, useAccess, useUi } from "./use-sabai";
 
 interface ExecOptions<T> {
   success?: string | ((r: T) => string);
@@ -82,7 +83,8 @@ const HEARTBEAT_MS = 60_000;
  * relaxes to a slow heartbeat.
  */
 export function useLoad(slices: Slice[], opts: { everyMs?: number } = {}): LoadState {
-  const api = dataSourceMode() === "api";
+  // Asking for no slices (a part of a screen this person may not see) asks for nothing.
+  const api = dataSourceMode() === "api" && slices.length > 0;
   const hydrated = useSabai((s) => s.hydrated);
   const memberId = useSabai((s) => s.session.memberId);
   const branchId = useSabai((s) => s.session.branchId);
@@ -191,4 +193,18 @@ export function useTodayStats(branchId: string, now: Date): QueryState<TodayStat
   const local = useMemo(() => (api ? undefined : selectTodayStats(db, getHistory(db), branchId, now)), [api, db, branchId, now]);
   const remote = useApiQuery(api ? `today|${branchId}` : null, () => getDataSource().today(branchId), { everyMs: 30_000 });
   return api ? remote : { ...NOT_ASKED, data: local };
+}
+
+/**
+ * The shop's own bill for using Sabai — only for someone who may manage billing (`null` for everyone else, who is never
+ * shown it and is never asked the server for it). API mode reads it (again on a live subscription event, and after a
+ * plan change); the demo works it out from the plan and the trial.
+ */
+export function useBilling(): { billing: BillingState | null; load: LoadState } {
+  const { can } = useAccess();
+  const allowed = can("billing.manage");
+  const db = useSabai((s) => s.db);
+  const load = useLoad(allowed ? ["billing"] : []);
+  if (!allowed) return { billing: null, load };
+  return { billing: dataSourceMode() === "api" ? db.billing ?? null : selectBilling(db), load };
 }

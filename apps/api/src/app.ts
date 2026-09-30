@@ -5,6 +5,7 @@ import { secureHeaders } from "hono/secure-headers";
 import { verifyToken } from "./auth";
 import { ApiFailure, toErrorResponse } from "./errors";
 import { openApiDocument, type Deps, type Env } from "./http";
+import { registerBilling } from "./routes/billing";
 import { registerCatalog } from "./routes/catalog";
 import { registerDevAuth } from "./routes/dev-auth";
 import { registerFinance } from "./routes/finance";
@@ -95,6 +96,7 @@ export function createApp(deps: Deps): Hono<Env> {
   registerFinance(app, deps);
   registerReports(app, deps);
   registerSettings(app, deps);
+  registerBilling(app, deps);
 
   app.get("/v1/openapi.json", (c) => c.json(openApiDocument()));
 

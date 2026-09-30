@@ -26,6 +26,56 @@ export interface Tenant {
   onboarding: { skipped: string[]; paymentsConfirmed: boolean };
 }
 
+/** How to pay one invoice (money in satang). Shown with the invoice; the reference is what makes the payment find it. */
+export interface PaymentInstructions {
+  reference: string;
+  amount: number;
+  promptpayId: string | null;
+  bankName: string | null;
+  accountNo: string | null;
+  accountName: string | null;
+}
+
+/** A bill for using Sabai (money in satang). */
+export interface BillingInvoice {
+  id: ID;
+  invoiceNo: string;
+  status: "draft" | "open" | "paid" | "void" | "uncollectible";
+  /** A renewal is what the schedule asks for; a plan change is what the shop asked for. */
+  kind: "renewal" | "plan_change";
+  planCode: Tenant["plan"] | null;
+  billingCycle: "monthly" | "yearly" | null;
+  subtotal: number;
+  vatAmount: number;
+  total: number;
+  periodStart: string;
+  periodEnd: string;
+  dueAt: string | null;
+  paidAt: string | null;
+  createdAt: string;
+  payment: PaymentInstructions | null;
+}
+
+/**
+ * Where the shop stands with its own bill (checklist 8.1). `stage.grow` is the only thing a late bill takes away —
+ * adding branches, staff and tills. Selling never stops, and there is no field here that could say it does.
+ */
+export interface BillingState {
+  /** "off": no online billing is switched on, so choosing a plan applies it at once. */
+  mode: "off" | "invoice";
+  planCode: Tenant["plan"];
+  status: "trialing" | "active" | "past_due" | "restricted" | "canceled";
+  billingCycle: "monthly" | "yearly";
+  stage: { kind: "trial" | "ok" | "past_due" | "restricted" | "canceled"; daysLeft: number | null; grow: boolean };
+  trialEndsAt: string | null;
+  currentPeriodEnd: string | null;
+  cancelAtPeriodEnd: boolean;
+  pastDueSince: string | null;
+  graceDays: number;
+  openInvoice: BillingInvoice | null;
+  invoices: BillingInvoice[];
+}
+
 export interface Branch {
   id: ID;
   code: string;
@@ -482,6 +532,8 @@ export interface DemoState {
   statementLines: StatementLine[];
   /** Where the shop stands on the first-run checklist, as the server works it out from real data. API mode only; the demo works it out itself. */
   onboardingProgress?: OnboardingProgress;
+  /** The shop's own bill for using Sabai, as the server reports it. API mode only; the demo derives it (there is nothing to pay). */
+  billing?: BillingState;
   activity: ActivityEvent[];
   seq: Record<string, number>;
 }

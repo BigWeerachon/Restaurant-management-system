@@ -24,7 +24,7 @@ const BY_EVENT: [prefix: string, slices: Slice[]][] = [
   ["inventory.", ["stock", "reports"]],
   ["purchasing.", ["purchasing", "reports"]],
   ["finance.", ["finance", "orders", "shifts", "reports"]],
-  ["subscription.", ["settings", "reports"]],
+  ["subscription.", ["settings", "reports", "billing"]],
   ["branch.", ["settings", "reports"]],
 ];
 

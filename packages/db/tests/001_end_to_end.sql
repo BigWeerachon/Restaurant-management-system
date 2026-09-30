@@ -403,6 +403,270 @@ rollback;
 -- The rollback restored the role and claims as they were before section 4b.
 
 -- ---------------------------------------------------------------------------
+-- 4c. Billing (8.1): the invoice, the provider's "paid", the nightly job — and a shop that never stops selling.
+--     Undone at the end, like 4b.
+-- ---------------------------------------------------------------------------
+begin;
+
+reset role;
+create or replace function test.sell() returns text language plpgsql as $$
+declare
+  oid uuid := app.uuid_v7();
+  r jsonb;
+  cash uuid := (select id from app.payment_methods where tenant_id = test.id('tenant_a') and kind = 'cash');
+begin
+  r := app.submit_order(jsonb_build_object('id', oid, 'branch_id', test.id('branch_a'),
+    'channel_id', (select id from app.sales_channels where tenant_id = test.id('tenant_a') and key = 'dine_in'),
+    'items', jsonb_build_array(jsonb_build_object('id', app.uuid_v7(), 'menu_item_id', test.id('latte'), 'qty', 1))));
+  r := app.pay_order(oid, jsonb_build_array(jsonb_build_object('method_id', cash, 'amount', (r->>'total')::numeric)));
+  return r->>'receipt_no';
+end $$;
+-- Puts the neighbour's subscription into a state and says which stage that is at a fixed moment (2026-10-15 05:00 UTC).
+-- The same facts and answers as VECTORS in packages/domain/test/billing.test.ts.
+create or replace function test.stage(p_status text, p_trial timestamptz, p_since timestamptz, p_grace int default 14) returns text language plpgsql as $$
+begin
+  update app.subscriptions set status = p_status, trial_ends_at = p_trial, past_due_since = p_since, grace_days = p_grace where tenant_id = test.id('tenant_b');
+  return app.billing_stage(test.id('tenant_b'), timestamptz '2026-10-15 05:00+00');
+end $$;
+grant execute on function test.sell() to authenticated;
+
+select test.ok(test.stage('active', null, null) = 'ok', 'paying');
+select test.ok(test.stage('trialing', '2026-10-24 05:00+00', null) = 'trial', 'trial with days left');
+select test.ok(test.stage('trialing', '2026-10-15 04:59:59+00', null) = 'canceled', 'a trial that ended a second ago is over');
+select test.ok(test.stage('past_due', null, '2026-10-15 05:00+00') = 'past_due', 'just missed a payment');
+select test.ok(test.stage('past_due', null, '2026-10-10 05:00+00') = 'past_due', 'missed 5 days ago');
+select test.ok(test.stage('past_due', null, '2026-10-02 05:00+00') = 'past_due', 'one day of grace left');
+select test.ok(test.stage('past_due', null, '2026-10-01 05:00+00') = 'restricted', 'grace ran out exactly now');
+select test.ok(test.stage('past_due', null, '2026-09-05 05:00+00') = 'restricted', 'long overdue, the job has not run yet');
+select test.ok(test.stage('past_due', null, '2026-10-11 05:00+00', 3) = 'restricted', 'a shorter grace period');
+select test.ok(test.stage('restricted', null, '2026-09-25 05:00+00') = 'restricted', 'already marked restricted');
+select test.ok(test.stage('canceled', null, null) = 'canceled', 'canceled');
+select test.ok(app.billing_stage(gen_random_uuid()) = 'ok', 'a shop with no subscription record is not blocked');
+-- The neighbour is a trial that has run out: the job ends it, and it carries on with the free plan, owing nothing.
+update app.subscriptions set status = 'trialing', trial_ends_at = now() - interval '1 hour', past_due_since = null, grace_days = 14 where tenant_id = test.id('tenant_b');
+select test.ok((app.effective_plan(test.id('tenant_b'))).code = 'free', 'an ended trial is the free plan even before the job runs');
+select test.ok((app.billing_run(now())->>'trials_ended')::int = 1, 'the job ends the trial');
+select test.ok((select status from app.subscriptions where tenant_id = test.id('tenant_b')) = 'canceled', 'and records it');
+select test.ok((app.billing_run(now())->>'trials_ended')::int = 0, 'a second run finds nothing to do');
+
+-- Asking for a plan while on a trial: an invoice to pay first. Nothing is applied until the money arrives.
+set role authenticated;
+select test.as_user(test.id('owner_a'));
+do $$
+declare
+  ym text := to_char(now() at time zone 'Asia/Bangkok', 'YYMM');
+  r jsonb;
+  inv app.subscription_invoices;
+begin
+  r := app.request_plan_change(test.id('tenant_a'), 'pro', 'monthly');
+  perform test.ok((r->>'applied')::boolean = false and r->>'invoice_no' = 'INV-' || ym || '-00001', 'a trial asks for payment first, got ' || r::text);
+  select * into inv from app.subscription_invoices where id = (r->>'invoice_id')::uuid;
+  -- Prices include VAT: 1490 = 1392.52 + 97.48 (the same 7/107 split as a receipt).
+  perform test.ok(inv.subtotal = 1392.52 and inv.vat_amount = 97.48 and inv.total = 1490 and inv.status = 'open'
+                  and inv.kind = 'plan_change' and inv.plan_code = 'pro' and inv.billing_cycle = 'monthly', 'invoice amounts and kind');
+  perform test.ok((select status = 'trialing' from app.subscriptions where tenant_id = test.id('tenant_a')), 'nothing changes until it is paid');
+  -- Another request replaces it: only one invoice is ever waiting.
+  r := app.request_plan_change(test.id('tenant_a'), 'pro', 'yearly');
+  perform test.ok(r->>'invoice_no' = 'INV-' || ym || '-00002' and (r->>'total')::numeric = 14900, 'yearly invoice is number 2');
+  perform test.ok((select count(*) from app.subscription_invoices where status = 'open') = 1
+                  and (select count(*) from app.subscription_invoices where status = 'void') = 1, 'one open invoice, the old one voided');
+end $$;
+select test.throws(format('select app.request_plan_change(%L, %L, %L)', test.id('tenant_a'), 'enterprise', 'monthly'), 'VALIDATION');
+select test.throws(format('select app.request_plan_change(%L, %L, %L)', test.id('tenant_a'), 'pro', 'weekly'), 'VALIDATION');
+select test.throws(format('select app.request_plan_change(%L, %L, %L)', test.id('tenant_a'), 'platinum', 'monthly'), 'NOT_FOUND');
+
+-- Only whoever may manage billing can ask, or see the invoices; and neither can the other shop.
+do $$
+declare k uuid;
+begin
+  insert into app.memberships (tenant_id, display_name, role_id)
+  values (test.id('tenant_a'), 'น้องครัว', (select id from app.roles where tenant_id = test.id('tenant_a') and key = 'kitchen')) returning id into k;
+  perform test.put('kitchen_mem', k);
+end $$;
+select test.as_member(test.id('kitchen_mem'));
+select test.throws(format('select app.request_plan_change(%L, %L, %L)', test.id('tenant_a'), 'pro', 'monthly'), 'PERMISSION_DENIED');
+select test.ok((select count(*) from app.subscription_invoices) = 0, 'the kitchen sees no invoices');
+select test.as_user(test.id('owner_b'));
+select test.ok((select count(*) from app.subscription_invoices) = 0, 'the other shop sees no invoices');
+select test.throws(format('select app.request_plan_change(%L, %L, %L)', test.id('tenant_a'), 'pro', 'monthly'), 'PERMISSION_DENIED');
+-- Provider events, invoice numbers and the job are for the server only.
+select test.throws('select count(*) from app.billing_events', 'permission denied for table billing_events');
+select test.throws(format('select app.apply_billing_event(%L, %L, %L, %L::jsonb)', 'omise', 'evt_x', 'invoice.paid', '{}'), 'permission denied for function apply_billing_event');
+select test.throws('select app.billing_run()', 'permission denied for function billing_run');
+
+-- The provider tells us what happened (as the API's service role). Each event counts once.
+reset role;
+do $$
+declare
+  yearly text := (select invoice_no from app.subscription_invoices where tenant_id = test.id('tenant_a') and status = 'open');
+  voided text := (select invoice_no from app.subscription_invoices where tenant_id = test.id('tenant_a') and status = 'void');
+  today date := (now() at time zone 'Asia/Bangkok')::date;
+  o text;
+  s app.subscriptions;
+begin
+  o := app.apply_billing_event('omise', 'evt_void', 'invoice.paid', jsonb_build_object('invoice_no', voided, 'amount', 1490));
+  perform test.ok(o = 'needs_review', 'money for a replaced invoice goes to a person, got ' || o);
+  o := app.apply_billing_event('omise', 'evt_short', 'invoice.paid', jsonb_build_object('invoice_no', yearly, 'amount', 14000));
+  perform test.ok(o = 'amount_mismatch', 'a different amount is not applied, got ' || o);
+  o := app.apply_billing_event('omise', 'evt_nobody', 'invoice.paid', jsonb_build_object('invoice_no', 'INV-0000-00000', 'amount', 1));
+  perform test.ok(o = 'unknown_invoice', 'an invoice we never issued, got ' || o);
+  o := app.apply_billing_event('omise', 'evt_declined', 'invoice.payment_failed', jsonb_build_object('invoice_no', yearly));
+  perform test.ok(o = 'noted', 'a declined card on a plan change is only noted, got ' || o);
+  perform test.ok((select status = 'trialing' and past_due_since is null from app.subscriptions where tenant_id = test.id('tenant_a')), 'none of that changed the subscription');
+
+  o := app.apply_billing_event('omise', 'evt_paid', 'invoice.paid', jsonb_build_object('invoice_no', yearly, 'amount', 14900, 'provider_customer_id', 'cus_1', 'provider_subscription_id', 'sub_1'));
+  perform test.ok(o = 'paid', 'the payment, got ' || o);
+  select * into s from app.subscriptions where tenant_id = test.id('tenant_a');
+  perform test.ok(s.status = 'active' and s.plan_code = 'pro' and s.billing_cycle = 'yearly' and s.past_due_since is null
+                  and s.provider = 'omise' and s.provider_customer_id = 'cus_1' and s.provider_subscription_id = 'sub_1', 'paid: active on the plan they paid for');
+  perform test.ok(s.current_period_start = today::timestamp at time zone 'Asia/Bangkok'
+                  and s.current_period_end = ((today + interval '1 year')::date)::timestamp at time zone 'Asia/Bangkok', 'a year from today');
+  perform test.ok((select status = 'paid' and paid_at is not null from app.subscription_invoices where invoice_no = yearly), 'the invoice is paid');
+  perform test.ok((select count(*) from app.domain_events where event_type = 'subscription.paid' and tenant_id = test.id('tenant_a')) = 1, 'in the activity feed');
+  -- The provider sends it again (it does): nothing happens twice.
+  perform test.ok(app.apply_billing_event('omise', 'evt_paid', 'invoice.paid', jsonb_build_object('invoice_no', yearly, 'amount', 14900)) = 'duplicate', 'same event id → duplicate');
+  perform test.ok(app.apply_billing_event('omise', 'evt_paid_again', 'invoice.paid', jsonb_build_object('invoice_no', yearly, 'amount', 14900)) = 'already_paid', 'same invoice, new event id → already paid');
+  perform test.ok((select count(*) from app.domain_events where event_type = 'subscription.paid' and tenant_id = test.id('tenant_a')) = 1, 'still one payment in the feed');
+  perform test.ok((select outcome from app.billing_events where provider = 'omise' and event_id = 'evt_paid') = 'paid'
+                  and (select tenant_id from app.billing_events where event_id = 'evt_paid') = test.id('tenant_a'), 'every event is recorded with what came of it');
+end $$;
+
+-- The nightly job, at moments we choose. A year on, the renewal is invoiced a week ahead, is overdue at the due date,
+-- and after the grace period the shop can no longer grow — but it can still sell.
+do $$
+declare
+  pe timestamptz := (select current_period_end from app.subscriptions where tenant_id = test.id('tenant_a'));
+  j jsonb;
+  inv app.subscription_invoices;
+  s app.subscriptions;
+begin
+  j := app.billing_run(pe - interval '30 days');
+  perform test.ok((j->>'invoiced')::int = 0, 'nothing is invoiced a month ahead, got ' || j::text);
+  j := app.billing_run(pe - interval '6 days');
+  perform test.ok((j->>'invoiced')::int = 1, 'the renewal is invoiced a week ahead, got ' || j::text);
+  select * into inv from app.subscription_invoices where tenant_id = test.id('tenant_a') and status = 'open';
+  perform test.ok(inv.kind = 'renewal' and inv.total = 14900 and inv.plan_code = 'pro' and inv.billing_cycle = 'yearly' and inv.due_at = pe
+                  and inv.period_start = (pe at time zone 'Asia/Bangkok')::date, 'the renewal: same plan, next period, due at the end of this one');
+  perform test.ok((app.billing_run(pe - interval '5 days')->>'invoiced')::int = 0, 'running again invoices nothing twice');
+  perform test.ok((select status = 'active' from app.subscriptions where tenant_id = test.id('tenant_a')), 'not overdue before the due date');
+
+  j := app.billing_run(pe + interval '1 hour');
+  perform test.ok((j->>'past_due')::int = 1, 'overdue once the period is over, got ' || j::text);
+  select * into s from app.subscriptions where tenant_id = test.id('tenant_a');
+  perform test.ok(s.status = 'past_due' and s.past_due_since = pe, 'the clock started at the due date, not when the job ran');
+  perform test.ok(app.billing_stage(test.id('tenant_a'), pe + interval '13 days') = 'past_due'
+                  and app.billing_stage(test.id('tenant_a'), pe + interval '14 days') = 'restricted', 'the grace period is 14 days');
+  perform test.ok(app.apply_billing_event('omise', 'evt_declined2', 'invoice.payment_failed', jsonb_build_object('invoice_no', inv.invoice_no)) = 'past_due', 'a declined renewal');
+  perform test.ok((select past_due_since = pe from app.subscriptions where tenant_id = test.id('tenant_a')), 'and it does not restart the clock');
+  perform test.ok((app.billing_run(pe + interval '10 days')->>'restricted')::int = 0, 'still inside the grace period');
+  j := app.billing_run(pe + interval '15 days');
+  perform test.ok((j->>'restricted')::int = 1, 'the grace period is over, got ' || j::text);
+  perform test.ok((select status = 'restricted' from app.subscriptions where tenant_id = test.id('tenant_a')), 'restricted');
+end $$;
+
+-- Restricted: no new branches, staff or tills. Everything they already have keeps working — above all, selling.
+set role authenticated;
+select test.as_user(test.id('owner_a'));
+select test.ok(test.sell() is not null, 'a restricted shop still sells and takes payment');
+select test.ok(app.has_feature(test.id('tenant_a'), 'finance'), 'and keeps its plan features');
+select test.throws(format('select app.add_branch(%L::jsonb)', jsonb_build_object('tenant_id', test.id('tenant_a'), 'code', 'R2', 'name', 'สาขาใหม่')), 'BILLING_RESTRICTED');
+select test.throws(format('select app.register_device(%L, %L, %L, %L)', test.id('branch_a'), 'เครื่องใหม่', 'pos', repeat('c', 64)), 'BILLING_RESTRICTED');
+reset role;
+select test.throws(format('insert into app.memberships (tenant_id, display_name, role_id) values (%L, %L, %L)', test.id('tenant_a'), 'คนใหม่',
+                          (select id from app.roles where tenant_id = test.id('tenant_a') and key = 'kitchen')), 'BILLING_RESTRICTED');
+
+-- Paying puts everything back.
+do $$
+declare
+  renewal text := (select invoice_no from app.subscription_invoices where tenant_id = test.id('tenant_a') and status = 'open');
+  pe timestamptz := (select current_period_end from app.subscriptions where tenant_id = test.id('tenant_a'));
+begin
+  perform test.ok(app.apply_billing_event('omise', 'evt_renewed', 'invoice.paid', jsonb_build_object('invoice_no', renewal, 'amount', 14900)) = 'paid', 'the renewal is paid');
+  perform test.ok((select status = 'active' and past_due_since is null and current_period_start = pe and current_period_end > pe + interval '360 days'
+                     from app.subscriptions where tenant_id = test.id('tenant_a')), 'active again, the next period starts where the last ended');
+end $$;
+set role authenticated;
+select test.as_user(test.id('owner_a'));
+select test.ok(app.add_branch(jsonb_build_object('tenant_id', test.id('tenant_a'), 'code', 'R2', 'name', 'สาขาที่สอง')) is not null, 'adding a branch works again');
+
+-- Leaving: the shop asks to end at the period's end; no renewal is invoiced, and on the day it becomes the free plan.
+reset role;
+do $$
+declare
+  pe timestamptz := (select current_period_end from app.subscriptions where tenant_id = test.id('tenant_a'));
+  j jsonb;
+begin
+  perform test.ok(app.apply_billing_event('omise', 'evt_leave', 'subscription.canceled', jsonb_build_object('provider_subscription_id', 'sub_1')) = 'cancel_scheduled', 'leaving is noted');
+  perform test.ok((app.billing_run(pe - interval '6 days')->>'invoiced')::int = 0, 'no renewal for a shop that is leaving');
+  perform test.ok((select status = 'active' from app.subscriptions where tenant_id = test.id('tenant_a')), 'they keep what they paid for until the period ends');
+  j := app.billing_run(pe + interval '1 hour');
+  perform test.ok((j->>'canceled')::int = 1, 'the day it ends, got ' || j::text);
+  perform test.ok((app.effective_plan(test.id('tenant_a'))).code = 'free', 'now the free plan');
+end $$;
+set role authenticated;
+select test.as_user(test.id('owner_a'));
+select test.ok(test.sell() is not null, 'a shop that left still sells');
+select test.throws(format('select app.add_branch(%L::jsonb)', jsonb_build_object('tenant_id', test.id('tenant_a'), 'code', 'R3', 'name', 'สาขาที่สาม')), 'FEATURE_NOT_IN_PLAN');
+-- (More branches are a Pro feature.) Coming back: a plan that is too small for what they have is refused before they are asked to pay.
+select test.throws(format('select app.request_plan_change(%L, %L, %L)', test.id('tenant_a'), 'starter', 'monthly'), 'PLAN_LIMIT_REACHED');
+select test.ok((select count(*) from app.subscription_invoices where status = 'open') = 0, 'and no invoice was written for it');
+select test.ok((app.request_plan_change(test.id('tenant_a'), 'pro', 'monthly')->>'applied')::boolean = false, 'a plan that fits is an invoice again');
+
+-- Once paying, changing plan: bigger = an invoice, smaller = now. An unpaid plan change lapses after three days.
+reset role;
+do $$
+declare
+  inv text := (select invoice_no from app.subscription_invoices where tenant_id = test.id('tenant_a') and status = 'open');
+begin
+  perform test.ok(app.apply_billing_event('omise', 'evt_back', 'invoice.paid', jsonb_build_object('invoice_no', inv, 'amount', 1490)) = 'paid', 'back on Pro');
+end $$;
+set role authenticated;
+select test.as_user(test.id('owner_a'));
+do $$
+declare r jsonb;
+begin
+  r := app.request_plan_change(test.id('tenant_a'), 'business', 'monthly');
+  perform test.ok((r->>'applied')::boolean = false and (r->>'total')::numeric = 3490, 'going up is an invoice');
+  perform test.ok((select plan_code = 'pro' from app.subscriptions where tenant_id = test.id('tenant_a')), 'the plan stays until it is paid');
+end $$;
+reset role;
+select test.ok((app.billing_run(now() + interval '4 days')->>'plan_changes_lapsed')::int = 1, 'an unpaid plan change lapses');
+set role authenticated;
+select test.as_user(test.id('owner_a'));
+-- Same plan, another cycle: nothing to pay now; the next renewal is invoiced for it.
+select test.ok((app.request_plan_change(test.id('tenant_a'), 'pro', 'yearly')->>'applied')::boolean, 'same plan, yearly: applied, no invoice');
+select test.ok((select billing_cycle = 'yearly' and status = 'active' from app.subscriptions where tenant_id = test.id('tenant_a'))
+               and (select count(*) from app.subscription_invoices where status = 'open') = 0, 'the cycle is what the next renewal is for');
+-- Dearer or cheaper is compared per month: Business monthly (3490) is more than Pro yearly (14900 / 12).
+select test.ok((app.request_plan_change(test.id('tenant_a'), 'business', 'monthly')->>'applied')::boolean = false, 'Business is dearer per month than Pro on a yearly plan: an invoice');
+select test.ok((app.request_plan_change(test.id('tenant_a'), 'pro', 'monthly')->>'applied')::boolean, 'back to Pro monthly is applied, and withdraws the open plan change');
+select test.ok((select count(*) from app.subscription_invoices where status = 'open') = 0 and (select billing_cycle = 'monthly' from app.subscriptions where tenant_id = test.id('tenant_a')), 'and it shows');
+select test.ok((app.request_plan_change(test.id('tenant_a'), 'pro', 'monthly')->>'applied')::boolean, 'asking for what they already have changes nothing');
+
+-- Changing their mind: a plan-change invoice can be withdrawn; a renewal (a bill) and a paid invoice cannot.
+do $$
+declare r jsonb;
+begin
+  r := app.request_plan_change(test.id('tenant_a'), 'business', 'monthly');
+  perform test.throws(format('select app.void_subscription_invoice(%L)', (select id from app.subscription_invoices where status = 'paid' limit 1)), 'INVOICE_NOT_OPEN');
+  perform app.void_subscription_invoice((r->>'invoice_id')::uuid);
+  perform test.ok((select status = 'void' from app.subscription_invoices where id = (r->>'invoice_id')::uuid), 'withdrawn');
+  perform test.throws(format('select app.void_subscription_invoice(%L)', (r->>'invoice_id')::uuid), 'INVOICE_NOT_OPEN');
+  perform test.put('renewal_inv', (select id from app.subscription_invoices where kind = 'renewal' and status = 'paid' limit 1));
+end $$;
+select test.throws(format('select app.void_subscription_invoice(%L)', gen_random_uuid()), 'NOT_FOUND');
+reset role;
+update app.subscription_invoices set status = 'open' where id = test.id('renewal_inv');
+set role authenticated;
+select test.as_user(test.id('owner_a'));
+select test.throws(format('select app.void_subscription_invoice(%L)', test.id('renewal_inv')), 'VALIDATION');
+select test.as_user(test.id('owner_b'));
+select test.throws(format('select app.void_subscription_invoice(%L)', test.id('renewal_inv')), 'PERMISSION_DENIED');
+
+rollback;
+-- The rollback restored the role and claims as they were before section 4c.
+
+-- ---------------------------------------------------------------------------
 -- 5. PIN-only cashier: limited powers, manager approval by PIN
 -- ---------------------------------------------------------------------------
 do $$

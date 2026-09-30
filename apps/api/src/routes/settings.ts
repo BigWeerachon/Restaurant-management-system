@@ -1,5 +1,4 @@
 import {
-  ChangePlanBody,
   CreateBranchBody,
   SetChannelCommissionBody,
   UpdateBranchBody,
@@ -130,13 +129,6 @@ export function registerSettings(app: Hono<Env>, deps: Deps) {
                  coalesce(settings->'onboarding', '{}'::jsonb) || jsonb_build_object('payments_confirmed', true))
          where id = ${tenantId}`;
       return { ok: true };
-    }),
-  );
-
-  route(app, deps, { method: "POST", path: "/v1/settings/plan", tag: "Settings", summary: "เปลี่ยนแพ็กเกจ", tenant: true, body: ChangePlanBody, permission: "settings.manage" }, async ({ tenantId, body, tx }) =>
-    tx(async (t) => {
-      await t`select app.change_plan(${tenantId}, ${body.planCode})`;
-      return { planCode: body.planCode };
     }),
   );
 }

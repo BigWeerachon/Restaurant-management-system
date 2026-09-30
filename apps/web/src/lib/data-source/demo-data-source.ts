@@ -155,6 +155,12 @@ export const demoDataSource: DataSource = {
   },
   async changePlan(plan) {
     await run((d, c) => engine.changePlan(d, c, plan));
+    // Nothing to pay in the demo: choosing a plan is all there is to it.
+    return { applied: true, invoice: null };
+  },
+  async voidInvoice() {
+    // The demo has no invoices, so there is never one to withdraw.
+    throw new engine.DomainError("NOT_FOUND", { entity: "invoice" });
   },
 
   // ------------------------------------------------------------- queries

@@ -17,7 +17,7 @@ Sabai is a restaurant & café management SaaS (Thai-first). Read `docs/00-master
 ## Rules that tests enforce
 
 - Business rules live in Postgres commands (`supabase/migrations`) and pure TS (`packages/domain`); the API and UI are thin.
-  When a formula exists in both (pricing, costing, expense allocation, reconciliation), change both and keep the parity tests green.
+  When a formula exists in both (pricing, costing, expense allocation, reconciliation, billing stage), change both and keep the parity tests green.
 - Every table has `tenant_id`, RLS via `app.apply_tenant_rls`, and composite FKs `(tenant_id, id)`.
 - Ledgers (`stock_movements`, `payments`, `journal_lines`, `audit.log`) are append-only — correct with reversals.
 - Money is integer satang in TS, `numeric` in SQL, decimal strings in the API. Never floats.

@@ -157,11 +157,80 @@ describe("HttpDataSource settings", () => {
     expect(calls.filter((c) => c.key.startsWith("PATCH")).map((c) => c.body)).toEqual([{ promptpayId: "0891234567", active: true, feeRate: 0 }]);
   });
 
+  const billingApi = (over: Record<string, unknown> = {}) => ({
+    mode: "invoice",
+    planCode: "pro",
+    status: "trialing",
+    billingCycle: "monthly",
+    stage: { kind: "trial", daysLeft: 9, grow: true },
+    trialEndsAt: "2026-10-09T05:00:00.000Z",
+    currentPeriodEnd: null,
+    cancelAtPeriodEnd: false,
+    pastDueSince: null,
+    graceDays: 14,
+    openInvoice: null,
+    invoices: [],
+    ...over,
+  });
+  const invoiceApi = {
+    id: "inv-1",
+    invoiceNo: "INV-2610-00001",
+    status: "open",
+    kind: "plan_change",
+    planCode: "pro",
+    billingCycle: "yearly",
+    subtotal: "13925.23",
+    vatAmount: "974.77",
+    total: "14900.00",
+    periodStart: "2026-09-30",
+    periodEnd: "2027-09-29",
+    dueAt: "2026-10-03T02:00:00.000Z",
+    paidAt: null,
+    createdAt: "2026-09-30T02:00:00.000Z",
+    payment: { method: "transfer", reference: "INV-2610-00001", amount: "14900.00", promptpayId: "0105536001239", bankName: null, accountNo: "123-4-56789-0", accountName: null },
+  };
+
   it("changes the plan and reloads, and passes on a refusal", async () => {
-    const calls = fakeApi({ "POST /v1/settings/plan": { body: { planCode: "pro" } }, "GET /v1/shop": { body: shop() } });
-    await ds.changePlan("pro");
-    expect(calls[0]).toEqual({ key: "POST /v1/settings/plan", body: { planCode: "pro" } });
+    const calls = fakeApi({ "POST /v1/settings/plan": { body: { applied: true, planCode: "pro", invoice: null } }, "GET /v1/shop": { body: shop() }, "GET /v1/billing": { body: billingApi() } });
+    const r = await ds.changePlan("pro");
+    expect(r).toEqual({ applied: true, invoice: null });
+    expect(calls[0]).toEqual({ key: "POST /v1/settings/plan", body: { planCode: "pro", billingCycle: "monthly" } });
+    // It reads the shop and the bill again: both may have changed.
+    expect(calls.map((c) => c.key)).toEqual(expect.arrayContaining(["GET /v1/shop", "GET /v1/billing"]));
     fakeApi({ "POST /v1/settings/plan": { status: 402, body: { error: { code: "FEATURE_NOT_IN_PLAN" } } } });
     await expect(ds.changePlan("enterprise")).rejects.toMatchObject({ code: "FEATURE_NOT_IN_PLAN" });
+  });
+
+  it("asks for a yearly plan, and hands back the invoice to pay with its money in satang", async () => {
+    const calls = fakeApi({
+      "POST /v1/settings/plan": { body: { applied: false, planCode: "pro", invoice: invoiceApi } },
+      "GET /v1/shop": { body: shop() },
+      "GET /v1/billing": { body: billingApi({ openInvoice: invoiceApi, invoices: [invoiceApi] }) },
+    });
+    const r = await ds.changePlan("pro", "yearly");
+    expect(calls[0]!.body).toEqual({ planCode: "pro", billingCycle: "yearly" });
+    expect(r.applied).toBe(false);
+    expect(r.invoice).toMatchObject({ invoiceNo: "INV-2610-00001", total: 1_490_000, vatAmount: 97_477, subtotal: 1_392_523 });
+    expect(r.invoice!.payment).toMatchObject({ amount: 1_490_000, reference: "INV-2610-00001", promptpayId: "0105536001239" });
+    // The bill in the store is what the server says.
+    const b = useSabai.getState().db.billing!;
+    expect(b.mode).toBe("invoice");
+    expect(b.openInvoice!.id).toBe("inv-1");
+    expect(b.stage).toEqual({ kind: "trial", daysLeft: 9, grow: true });
+  });
+
+  it("withdraws a plan-change invoice and reads the bill again; a renewal is refused by the server and passed on", async () => {
+    const calls = fakeApi({ "POST /v1/billing/invoices/inv-1/void": { body: { ok: true } }, "GET /v1/billing": { body: billingApi() } });
+    await ds.voidInvoice("inv-1");
+    expect(calls.map((c) => c.key)).toEqual(["POST /v1/billing/invoices/inv-1/void", "GET /v1/billing"]);
+    expect(useSabai.getState().db.billing!.openInvoice).toBeNull();
+    fakeApi({ "POST /v1/billing/invoices/inv-2/void": { status: 422, body: { error: { code: "VALIDATION" } } } });
+    await expect(ds.voidInvoice("inv-2")).rejects.toMatchObject({ code: "VALIDATION" });
+  });
+
+  it("reads the bill only for the slice 'billing', and a person who may not see it is not an error for the rest", async () => {
+    fakeApi({ "GET /v1/billing": { status: 403, body: { error: { code: "PERMISSION_DENIED" } } } });
+    await expect(ds.load(["billing"])).resolves.toBeUndefined();
+    expect(useSabai.getState().db.billing).toBeUndefined();
   });
 });

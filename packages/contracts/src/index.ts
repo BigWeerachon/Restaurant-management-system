@@ -149,7 +149,30 @@ export const UpdatePaymentMethodBody = z
   })
   .refine((b) => Object.keys(b).length > 0, { message: "ไม่มีอะไรให้แก้ไข" });
 
-export const ChangePlanBody = z.object({ planCode: z.enum(["free", "starter", "pro", "business", "enterprise"]) });
+export const ChangePlanBody = z.object({
+  planCode: z.enum(["free", "starter", "pro", "business", "enterprise"]),
+  /** How they pay for it. Ignored while online billing is off. */
+  billingCycle: z.enum(["monthly", "yearly"]).default("monthly"),
+});
+
+/**
+ * What a payment provider tells us, in one shape whichever provider it is (V1.1 8.1). Each provider's own adapter turns its
+ * payloads into this; the amount is a THB decimal string. `id` is the provider's event id: the same event is applied once.
+ */
+export const BillingWebhookBody = z.object({
+  id: z.string().min(1).max(120),
+  type: z.enum(["invoice.paid", "invoice.payment_failed", "subscription.canceled"]),
+  data: z
+    .object({
+      invoiceNo: z.string().max(40).optional(),
+      amount: z.string().regex(/^\d{1,10}(\.\d{1,2})?$/, "จำนวนเงินเป็นทศนิยมสตริง").optional(),
+      providerInvoiceId: z.string().max(120).optional(),
+      customerId: z.string().max(120).optional(),
+      subscriptionId: z.string().max(120).optional(),
+    })
+    .default({}),
+});
+
 
 export const ApprovalBody = z.object({
   branchId: Id,

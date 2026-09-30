@@ -2,7 +2,9 @@ import {
   addDays,
   shopClock,
   allocateToRange,
+  billingStage,
   channelProfitability,
+  DEFAULT_GRACE_DAYS,
   menuEngineering,
   onboardingProgress,
   profitWaterfall,
@@ -14,7 +16,7 @@ import {
 } from "@sabai/domain";
 import { balanceKey, currentBusinessDate, unitCostOf } from "./engine";
 import type { History } from "./history";
-import type { DemoState, Ingredient } from "./types";
+import type { BillingState, DemoState, Ingredient } from "./types";
 
 // ---------------------------------------------------------------------------
 // Stock
@@ -82,6 +84,31 @@ export function onboardingFacts(state: DemoState): OnboardingFacts {
 export function onboarding(state: DemoState) {
   // On the API the server has the whole story (a first sale from last week, staff on other branches); this device only holds today.
   return state.onboardingProgress ?? onboardingProgress(onboardingFacts(state));
+}
+
+/**
+ * The shop's bill for using Sabai. On the API the server says; the demo has nothing to pay, so it is only ever the plan
+ * and, while there is one, the free trial (with online billing "off", choosing a plan applies it at once).
+ */
+export function billing(state: DemoState, now: Date = new Date()): BillingState {
+  if (state.billing) return state.billing;
+  const trialEndsAt = state.tenant.trialEndsAt || null;
+  const trialing = trialEndsAt !== null && Date.parse(trialEndsAt) > now.getTime();
+  const stage = billingStage({ status: trialing ? "trialing" : "active", trialEndsAt }, now);
+  return {
+    mode: "off",
+    planCode: state.tenant.plan,
+    status: trialing ? "trialing" : "active",
+    billingCycle: "monthly",
+    stage: { kind: stage.kind, daysLeft: stage.daysLeft, grow: stage.grow },
+    trialEndsAt,
+    currentPeriodEnd: null,
+    cancelAtPeriodEnd: false,
+    pastDueSince: null,
+    graceDays: DEFAULT_GRACE_DAYS,
+    openInvoice: null,
+    invoices: [],
+  };
 }
 
 // ---------------------------------------------------------------------------

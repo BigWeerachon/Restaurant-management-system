@@ -1,6 +1,7 @@
 /** Settings commands for the API adapter: the business, its branches, sales channels, ways to be paid, and the plan. */
 import { DomainError, currentBusinessDate } from "../demo/engine";
 import { useSabai } from "../demo/store";
+import { mapInvoice, type InvoiceApi } from "./billing-mappers";
 import { apiFetch } from "./http-client";
 import { currentBranchId, refresh } from "./http-context";
 import type { DataSource } from "./types";
@@ -103,8 +104,14 @@ export const settingsCommands = {
     await refresh(["settings", "onboarding"]);
   },
 
-  async changePlan(plan) {
-    await apiFetch("/v1/settings/plan", { method: "POST", body: { planCode: plan } });
-    await refresh(["settings"]);
+  async changePlan(plan, cycle = "monthly") {
+    const r = await apiFetch<{ applied: boolean; invoice: InvoiceApi | null }>("/v1/settings/plan", { method: "POST", body: { planCode: plan, billingCycle: cycle } });
+    await refresh(["settings", "billing"]);
+    return { applied: r.applied, invoice: r.invoice ? mapInvoice(r.invoice) : null };
+  },
+
+  async voidInvoice(id) {
+    await apiFetch(`/v1/billing/invoices/${id}/void`, { method: "POST", body: {} });
+    await refresh(["billing"]);
   },
 } satisfies Partial<DataSource>;

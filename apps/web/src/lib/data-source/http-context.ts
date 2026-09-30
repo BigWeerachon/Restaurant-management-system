@@ -41,6 +41,7 @@ import {
   type StockRowApi,
   type TicketApi,
 } from "./live-mappers";
+import { mapBilling, type BillingApi } from "./billing-mappers";
 import { mapShopBootstrap, type ShopApiResponse } from "./mappers";
 import { queuedOrderIds } from "./offline";
 import type { Slice } from "./types";
@@ -205,6 +206,14 @@ const loaders: Partial<Record<Exclude<Slice, "bootstrap">, (branchId: string) =>
     const progress = await apiFetch<OnboardingProgress>("/v1/onboarding");
     return (d) => {
       d.onboardingProgress = progress;
+    };
+  },
+
+  // The shop's own bill for using Sabai: plan, where it stands, the invoice waiting to be paid. Only for whoever may manage billing.
+  async billing() {
+    const billing = mapBilling(await apiFetch<BillingApi>("/v1/billing"));
+    return (d) => {
+      d.billing = billing;
     };
   },
 

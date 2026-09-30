@@ -15,6 +15,7 @@
  * them on top of existing demo commands, documented at each method.
  */
 import type {
+  BillingInvoice,
   Branch,
   Channel,
   DayClose,
@@ -64,7 +65,13 @@ export type Slice =
   | "team"
   | "settings"
   | "onboarding"
-  | "reports";
+  | "reports"
+  | "billing";
+
+export interface PlanChangeResult {
+  applied: boolean;
+  invoice: BillingInvoice | null;
+}
 
 export interface ReportFilter {
   from: string;
@@ -178,7 +185,13 @@ export interface DataSource {
   updatePaymentMethod(id: string, patch: Partial<Pick<PaymentMethod, "active" | "promptpayId" | "feeRate">>): Promise<void>;
   skipOnboardingStep(key: string): Promise<void>;
   confirmCashOnly(): Promise<void>;
-  changePlan(plan: PlanCode): Promise<void>;
+  /**
+   * Choosing a plan. With online billing off (and always in the demo) it applies at once; with it on, a dearer plan is
+   * an invoice to pay first (`applied: false`, the invoice carries how to pay) and a cheaper one applies now.
+   */
+  changePlan(plan: PlanCode, cycle?: "monthly" | "yearly"): Promise<PlanChangeResult>;
+  /** Withdraws a plan-change invoice that has not been paid. A renewal cannot be withdrawn. API-only; the demo has no invoices. */
+  voidInvoice(id: string): Promise<void>;
 
   // ------------------------------------------------------------- queries
   reportSummary(filter: ReportFilter): Promise<ReportSummary>;

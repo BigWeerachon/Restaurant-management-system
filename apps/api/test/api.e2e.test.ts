@@ -1,7 +1,8 @@
 import { addDays, amountBeforeVat, calculateOrderTotals, channelPrice, PERMISSIONS, toSatang } from "@sabai/domain";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { createApp } from "../src/app";
-import { createTestContext, uuidv7 } from "./helpers";
+import { signWebhook } from "../src/billing/webhook";
+import { BILLING_SECRET, createTestContext, JOB_SECRET, uuidv7 } from "./helpers";
 
 type Ctx = Awaited<ReturnType<typeof createTestContext>>;
 let ctx: Ctx;
@@ -71,6 +72,10 @@ describe("platform basics", () => {
       ["patch", "/v1/payment-methods/{id}"],
       ["post", "/v1/settings/payments/confirm-cash-only"],
       ["post", "/v1/settings/plan"],
+      ["get", "/v1/billing"],
+      ["post", "/v1/billing/invoices/{id}/void"],
+      ["post", "/v1/billing/webhook/{id}"],
+      ["post", "/v1/billing/run"],
       ["get", "/v1/reports/today"],
     ];
     for (const [method, path] of v11Routes) {
@@ -1296,5 +1301,232 @@ describe("receipt numbers per till and full tax invoices", () => {
     await x.call("DELETE", `/v1/devices/${reg.json.id}`);
     const after = await sell(till);
     expect(after.receiptNo).toMatch(/^HQ-\d{4}-\d{5}$/);
+  });
+});
+
+describe("billing: invoices, signed payments, and a shop that never stops selling", () => {
+  let bctx: Ctx;
+  const b: Record<string, any> = {};
+  // Signs exactly the bytes that are sent.
+  const send = async (id: string, type: string, data: Record<string, unknown>, opts: { at?: Date; secret?: string; signature?: string } = {}) => {
+    const raw = JSON.stringify({ id, type, data });
+    const res = await bctx.app.request("/v1/billing/webhook/manual", {
+      method: "POST",
+      headers: { "content-type": "application/json", ...(opts.signature !== "" ? { "x-sabai-signature": opts.signature ?? signWebhook(opts.secret ?? BILLING_SECRET, raw, opts.at) } : {}) },
+      body: raw,
+    });
+    return { status: res.status, json: (await res.json()) as any };
+  };
+
+  beforeAll(async () => {
+    bctx = await createTestContext({
+      billing: {
+        provider: "manual",
+        webhookSecret: BILLING_SECRET,
+        payTo: { promptpayId: "0105536001239", bankName: "ธนาคารตัวอย่าง", accountNo: "123-4-56789-0", accountName: "บริษัท สบาย จำกัด" },
+        jobIntervalMinutes: 0,
+        jobSecret: JOB_SECRET,
+      },
+    });
+  });
+  afterAll(async () => {
+    await bctx.close();
+  });
+
+  it("opens a shop on its free trial and says so, to the person who may see the bill", async () => {
+    b.owner = await bctx.newUser();
+    const r = await bctx.client(b.owner.token)("POST", "/v1/tenants", { name: "ร้านเรียกเก็บเงิน", businessType: "cafe", ownerName: "คุณซี" });
+    expect(r.status).toBe(201);
+    b.tenantId = r.json.tenant_id;
+    b.branchId = r.json.branch_id;
+    b.call = bctx.client(b.owner.token, b.tenantId);
+    b.latte = (await b.call("POST", "/v1/menu-items", { categoryName: "กาแฟ", name: "ลาเต้", price: 65, kitchenRoute: "bar" })).json.id;
+    b.cash = (await b.call("GET", "/v1/shop")).json.paymentMethods.find((p: any) => p.kind === "cash").id;
+    expect((await b.call("POST", "/v1/shifts", { branchId: b.branchId, openingFloat: 0 })).status).toBe(201);
+
+    const st = await b.call("GET", "/v1/billing");
+    expect(st.status).toBe(200);
+    expect(st.json).toMatchObject({ mode: "invoice", status: "trialing", planCode: "pro", stage: { kind: "trial", grow: true }, openInvoice: null, invoices: [] });
+    expect(st.json.stage.daysLeft).toBeGreaterThanOrEqual(13);
+
+    // Someone from another shop cannot read this shop's bill.
+    const other = await bctx.newUser();
+    const otherShop = await bctx.client(other.token)("POST", "/v1/tenants", { name: "ร้านอื่น", businessType: "cafe", ownerName: "คุณดี" });
+    expect(otherShop.status).toBe(201);
+    const peek = await bctx.client(other.token, b.tenantId)("GET", "/v1/billing");
+    expect(peek.status).toBe(403);
+  });
+
+  it("answers a request for a paid plan with an invoice to pay first, VAT split out, and how to pay", async () => {
+    const r = await b.call("POST", "/v1/settings/plan", { planCode: "pro", billingCycle: "yearly" }, { "idempotency-key": "plan-change-0001" });
+    expect(r.status).toBe(200);
+    expect(r.json.applied).toBe(false);
+    const inv = r.json.invoice;
+    expect(inv).toMatchObject({ status: "open", kind: "plan_change", planCode: "pro", billingCycle: "yearly", total: "14900.00", subtotal: "13925.23", vatAmount: "974.77" });
+    expect(inv.invoiceNo).toMatch(/^INV-\d{4}-\d{5}$/);
+    expect(inv.payment).toMatchObject({ method: "transfer", reference: inv.invoiceNo, amount: "14900.00", promptpayId: "0105536001239", accountNo: "123-4-56789-0" });
+    b.invoice = inv;
+
+    // A retry with the same key is answered with the first result, and did not write a second invoice.
+    const again = await b.call("POST", "/v1/settings/plan", { planCode: "pro", billingCycle: "yearly" }, { "idempotency-key": "plan-change-0001" });
+    expect(again.headers.get("idempotent-replayed")).toBe("true");
+    expect(again.json.invoice.invoiceNo).toBe(inv.invoiceNo);
+
+    const st = await b.call("GET", "/v1/billing");
+    expect(st.json.status).toBe("trialing");
+    expect(st.json.openInvoice.id).toBe(inv.id);
+    expect(st.json.invoices).toHaveLength(1);
+
+    // Enterprise is a conversation, not a checkout.
+    const ent = await b.call("POST", "/v1/settings/plan", { planCode: "enterprise" });
+    expect(ent.status).toBe(422);
+  });
+
+  it("accepts a payment only when it is signed, recent and for the right amount — and applies it once", async () => {
+    const good = { invoiceNo: b.invoice.invoiceNo, amount: "14900.00" };
+    // Unsigned, mis-signed, signed with someone else's secret, or signed ten minutes ago: nothing happens.
+    expect((await send("evt-1", "invoice.paid", good, { signature: "" })).status).toBe(401);
+    expect((await send("evt-1", "invoice.paid", good, { signature: "t=1,v1=abc" })).status).toBe(401);
+    expect((await send("evt-1", "invoice.paid", good, { secret: "another-secret-that-is-long-enough-1234567" })).status).toBe(401);
+    expect((await send("evt-1", "invoice.paid", good, { at: new Date(Date.now() - 10 * 60_000) })).status).toBe(401);
+    expect((await b.call("GET", "/v1/billing")).json.status).toBe("trialing");
+    // A provider we do not use is not a route.
+    const raw = JSON.stringify({ id: "evt-1", type: "invoice.paid", data: good });
+    const stripe = await bctx.app.request("/v1/billing/webhook/stripe", { method: "POST", body: raw, headers: { "x-sabai-signature": signWebhook(BILLING_SECRET, raw) } });
+    expect(stripe.status).toBe(404);
+    // Not the shape we know.
+    expect((await send("evt-1", "invoice.exploded", good)).status).toBe(422);
+
+    const short = await send("evt-short", "invoice.paid", { invoiceNo: b.invoice.invoiceNo, amount: "14000.00" });
+    expect(short.status).toBe(200);
+    expect(short.json.outcome).toBe("amount_mismatch");
+    expect((await b.call("GET", "/v1/billing")).json.status).toBe("trialing");
+
+    const paid = await send("evt-2", "invoice.paid", { ...good, customerId: "cus_1", subscriptionId: "sub_1" });
+    expect(paid.status).toBe(200);
+    expect(paid.json.outcome).toBe("paid");
+    expect((await send("evt-2", "invoice.paid", good)).json.outcome).toBe("duplicate");
+    expect((await send("evt-3", "invoice.paid", good)).json.outcome).toBe("already_paid");
+
+    const st = (await b.call("GET", "/v1/billing")).json;
+    expect(st).toMatchObject({ status: "active", planCode: "pro", billingCycle: "yearly", stage: { kind: "ok", daysLeft: null, grow: true }, openInvoice: null });
+    expect(st.invoices[0]).toMatchObject({ status: "paid", invoiceNo: b.invoice.invoiceNo, payment: null });
+    expect(st.invoices[0].paidAt).toBeTruthy();
+    expect(new Date(st.currentPeriodEnd).getTime()).toBeGreaterThan(Date.now() + 360 * 86_400_000);
+  });
+
+  it("runs the nightly job only for someone holding its secret", async () => {
+    const call = bctx.client();
+    expect((await call("POST", "/v1/billing/run", {})).status).toBe(401);
+    expect((await call("POST", "/v1/billing/run", {}, { "x-job-secret": "nope" })).status).toBe(401);
+    const ok = await call("POST", "/v1/billing/run", {}, { "x-job-secret": JOB_SECRET });
+    expect(ok.status).toBe(200);
+    expect(ok.json).toMatchObject({ invoiced: expect.any(Number), restricted: expect.any(Number) });
+    // Without a secret configured the route does not exist.
+    const off = await ctx.client()("POST", "/v1/billing/run", {}, { "x-job-secret": JOB_SECRET });
+    expect(off.status).toBe(404);
+  });
+
+  it("invoices the renewal, then marks the shop overdue from the due date, then restricted after the grace period", async () => {
+    // A year passes: what was paid for ended an hour ago.
+    await bctx.sql`update app.subscription_invoices set period_start = period_start - 365, period_end = period_end - 365 where tenant_id = ${b.tenantId}`;
+    await bctx.sql`update app.subscriptions set current_period_start = now() - interval '365 days 1 hour', current_period_end = now() - interval '1 hour' where tenant_id = ${b.tenantId}`;
+    const run = (await bctx.client()("POST", "/v1/billing/run", {}, { "x-job-secret": JOB_SECRET })).json;
+    expect(run.invoiced).toBeGreaterThanOrEqual(1);
+    expect(run.past_due).toBeGreaterThanOrEqual(1);
+    let st = (await b.call("GET", "/v1/billing")).json;
+    expect(st.status).toBe("past_due");
+    expect(st.stage).toMatchObject({ kind: "past_due", grow: true });
+    expect(st.stage.daysLeft).toBeGreaterThanOrEqual(13);
+    expect(st.openInvoice).toMatchObject({ kind: "renewal", total: "14900.00", status: "open" });
+    expect(st.openInvoice.payment.reference).toBe(st.openInvoice.invoiceNo);
+    b.renewal = st.openInvoice;
+
+    // A run again the same night changes nothing.
+    const again = (await bctx.client()("POST", "/v1/billing/run", {}, { "x-job-secret": JOB_SECRET })).json;
+    expect(again.invoiced).toBe(0);
+    expect((await b.call("GET", "/v1/billing")).json.openInvoice.invoiceNo).toBe(b.renewal.invoiceNo);
+
+    // A renewal is a bill: the shop cannot withdraw it.
+    const nope = await b.call("POST", `/v1/billing/invoices/${b.renewal.id}/void`, {});
+    expect(nope.status).toBe(422);
+
+    // Grace over (20 days late, the job has run).
+    await bctx.sql`update app.subscriptions set past_due_since = now() - interval '20 days' where tenant_id = ${b.tenantId}`;
+    await bctx.client()("POST", "/v1/billing/run", {}, { "x-job-secret": JOB_SECRET });
+    st = (await b.call("GET", "/v1/billing")).json;
+    expect(st.status).toBe("restricted");
+    expect(st.stage).toMatchObject({ kind: "restricted", grow: false });
+  });
+
+  it("keeps selling when the bill is overdue, and only stops the shop from growing", async () => {
+    // Selling, paying and closing go on exactly as before.
+    const id = uuidv7();
+    const placed = await b.call("POST", "/v1/orders", { id, branchId: b.branchId, items: [{ id: uuidv7(), menuItemId: b.latte, qty: 2 }] });
+    expect(placed.status).toBe(200);
+    const paid = await b.call("POST", `/v1/orders/${id}/pay`, { payments: [{ methodId: b.cash, amount: Number(placed.json.total) }] });
+    expect(paid.status).toBe(200);
+    expect((await b.call("GET", `/v1/reports/today?branchId=${b.branchId}`)).status).toBe(200);
+
+    // Growth is what is paused — with a message that says what to do, not a database error.
+    const branch = await b.call("POST", "/v1/branches", { code: "NEW", name: "สาขาใหม่" });
+    expect(branch.status).toBe(402);
+    expect(branch.json.error).toMatchObject({ code: "BILLING_RESTRICTED", action: "upgrade", actionLabel: "ไปชำระค่าบริการ" });
+    expect(branch.json.error.message).toContain("สาขา");
+    expect(JSON.stringify(branch.json)).not.toMatch(/violates|relation|SQLSTATE/i);
+    const member = await b.call("POST", "/v1/members", { displayName: "น้องใหม่", roleKey: "cashier", pin: "2222" });
+    expect(member.status).toBe(402);
+    expect(member.json.error.code).toBe("BILLING_RESTRICTED");
+    const { createHash, randomBytes } = await import("node:crypto");
+    const till = await b.call("POST", "/v1/devices", { branchId: b.branchId, name: "เครื่องใหม่", kind: "pos", tokenHash: createHash("sha256").update(`sbd_${randomBytes(32).toString("base64url")}`).digest("hex") });
+    expect(till.status).toBe(402);
+    expect(till.json.error.code).toBe("BILLING_RESTRICTED");
+    // The plan's features are all still there.
+    expect((await b.call("GET", "/v1/expenses")).status).toBe(200);
+  });
+
+  it("puts everything back when the renewal is paid", async () => {
+    const paid = await send("evt-renew", "invoice.paid", { invoiceNo: b.renewal.invoiceNo, amount: "14900.00" });
+    expect(paid.json.outcome).toBe("paid");
+    const st = (await b.call("GET", "/v1/billing")).json;
+    expect(st).toMatchObject({ status: "active", stage: { kind: "ok", grow: true }, openInvoice: null, pastDueSince: null });
+    expect((await b.call("POST", "/v1/branches", { code: "BR2", name: "สาขาที่สอง" })).status).toBe(201);
+  });
+
+  it("lets the shop withdraw a plan change it no longer wants, and lower its plan at once", async () => {
+    // Business is dearer per month than Pro on a yearly plan (14 900 / 12), so it is an invoice.
+    const up = await b.call("POST", "/v1/settings/plan", { planCode: "business", billingCycle: "monthly" });
+    expect(up.json.applied).toBe(false);
+    expect((await b.call("POST", `/v1/billing/invoices/${up.json.invoice.id}/void`, {})).status).toBe(200);
+    const twice = await b.call("POST", `/v1/billing/invoices/${up.json.invoice.id}/void`, {});
+    expect(twice.status).toBe(409);
+    expect(twice.json.error.code).toBe("INVOICE_NOT_OPEN");
+    expect((await b.call("GET", "/v1/billing")).json.openInvoice).toBeNull();
+
+    // Same plan, another cycle: nothing to pay now, and the next renewal is invoiced for it.
+    const cycle = await b.call("POST", "/v1/settings/plan", { planCode: "pro", billingCycle: "monthly" });
+    expect(cycle.json).toMatchObject({ applied: true, invoice: null });
+    expect((await b.call("GET", "/v1/billing")).json.billingCycle).toBe("monthly");
+
+    // A plan smaller than the shop is refused before anyone is asked to pay (two branches do not fit Starter).
+    const tooSmall = await b.call("POST", "/v1/settings/plan", { planCode: "starter", billingCycle: "monthly" });
+    expect(tooSmall.status).toBe(402);
+    expect(tooSmall.json.error.code).toBe("PLAN_LIMIT_REACHED");
+    expect((await b.call("GET", "/v1/billing")).json.openInvoice).toBeNull();
+  });
+
+  it("does not make an online bill until it is switched on: choosing a plan applies it, and the bill reads 'off'", async () => {
+    const own = await ctx.newUser();
+    const shop = await ctx.client(own.token)("POST", "/v1/tenants", { name: "ร้านไม่เก็บเงินออนไลน์", businessType: "cafe", ownerName: "คุณอี" });
+    const call = ctx.client(own.token, shop.json.tenant_id);
+    const st = await call("GET", "/v1/billing");
+    expect(st.json.mode).toBe("off");
+    const r = await call("POST", "/v1/settings/plan", { planCode: "starter" });
+    expect(r.json).toMatchObject({ applied: true, planCode: "starter", invoice: null });
+    expect((await call("GET", "/v1/billing")).json).toMatchObject({ planCode: "starter", status: "active" });
+    // No payment route either.
+    const raw = JSON.stringify({ id: "e", type: "invoice.paid", data: {} });
+    const hook = await ctx.app.request("/v1/billing/webhook/manual", { method: "POST", body: raw, headers: { "x-sabai-signature": signWebhook(BILLING_SECRET, raw) } });
+    expect(hook.status).toBe(404);
   });
 });

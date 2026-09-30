@@ -13,6 +13,7 @@ import { ProgressRing } from "@/components/ui/feedback";
 import { Icon } from "@/components/ui/icon";
 import { Avatar, Kbd } from "@/components/ui/primitives";
 import { useLoad } from "@/hooks/use-data-source";
+import { BillingBanner } from "./billing-banner";
 import { ConnectionBadge } from "./connection-badge";
 import { useAccess, useBusinessDate, useUi } from "@/hooks/use-sabai";
 import { cn } from "@/lib/cn";
@@ -292,7 +293,12 @@ export function AppShell({ children }: { children: ReactNode }) {
         </header>
 
         <main id="main" className="mx-auto max-w-[1400px] px-4 pb-28 pt-6 sm:px-6 lg:px-8 lg:pb-12">
-          {member ? children : null}
+          {member ? (
+            <>
+              <BillingBanner />
+              {children}
+            </>
+          ) : null}
         </main>
       </div>
 

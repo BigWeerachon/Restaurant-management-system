@@ -16,7 +16,10 @@ export function testDatabaseUrl(): string {
   return `postgres://${user}:${pass}@${host}:5432/${db}`;
 }
 
-export async function createTestContext() {
+export const BILLING_SECRET = "billing-webhook-secret-that-is-32-chars-long!!";
+export const JOB_SECRET = "billing-job-secret-that-is-at-least-32-chars!!";
+
+export async function createTestContext(overrides: Partial<Config> = {}) {
   const sql: Sql = createDb(testDatabaseUrl(), 5);
   const events = new EventHub();
   await events.start(sql);
@@ -27,6 +30,8 @@ export async function createTestContext() {
     jwtSecret: SECRET,
     corsOrigins: ["http://localhost:3000"],
     staffTokenTtlSeconds: 3600,
+    billing: { provider: "none", webhookSecret: "", payTo: { promptpayId: null, bankName: null, accountNo: null, accountName: null }, jobIntervalMinutes: 0, jobSecret: null },
+    ...overrides,
   };
   const deps = { sql, config, log: createLogger({ silent: true }), events };
   const app = createApp(deps);

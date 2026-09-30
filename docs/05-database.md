@@ -15,6 +15,7 @@ Postgres 16, เข้ากันได้กับ Supabase — **72 ตาร
 | `0600_purchasing_inventory_ops` | suppliers, supplier_items, purchase_orders/lines, goods_receipts/lines | ผู้ขาย แพ็กที่ซื้อ, PO, รับของ (แจ้งราคาขึ้น > 5%), ของเสีย, นับ, โอน |
 | `0700_finance` | accounts, bank_accounts, tenant_sequences, journal_entries/lines, bills, bill_payments, expenses, expected_receipts, statement_imports/lines, reconciliation_matches | บัญชีคู่ (ตรวจงบดุล), เจ้าหนี้ + WHT, ค่าใช้จ่ายมีงวดบริการ, ปิดยอด/เปิดใหม่, เงินที่ต้องเข้า, กระทบยอด |
 | `0800_saas_billing` | plans, subscriptions, subscription_invoices, usage_counters | แพ็กเกจ/ขีดจำกัด บังคับด้วย trigger |
+| `20260930000100_billing` | billing_events, billing_sequences (+ คอลัมน์ใหม่ใน subscriptions, subscription_invoices) | ใบแจ้งหนี้ค่าบริการ (เลข `INV-YYMM-00001`, เปิดค้างได้ครั้งละ 1 ใบต่อร้าน, แยก VAT 7/107), `billing_stage` (คำนวณจากเวลา ตรงกับ `billingStage` ใน domain), `request_plan_change`, `apply_billing_event` (บันทึกทุกเหตุการณ์จากผู้ให้บริการครั้งเดียว), `billing_run` (งานประจำวัน) |
 | `0900_audit` | audit.log | trigger บันทึกทุกการเปลี่ยนแปลงสำคัญ (ตัด `pin_hash`), ห้ามแก้ |
 | `1000_reporting` | *(views)* | `v_stock_status`, `v_daily_sales`, `v_item_sales`, `v_menu_costing`, `v_reorder_suggestions`, `v_branch_daily_pnl`, `v_onboarding_facts` (ทั้งหมด `security_invoker`) |
 | `1100_bootstrap` | — | สิทธิ์ 34 รายการ, ตำแหน่งเริ่มต้น 7 แบบ, ผังบัญชี SME ไทย, `create_tenant` (พร้อมขายทันที), `add_branch`, ปิดสิทธิ์ `public` |
@@ -35,6 +36,8 @@ Postgres 16, เข้ากันได้กับ Supabase — **72 ตาร
 | ส่งซ้ำไม่ซ้ำ | order id สร้างบนเครื่อง (UUIDv7) + `pay_order` คืนผลเดิมถ้าจ่ายแล้ว + API idempotency store | `submit is idempotent` |
 | มีเจ้าของร้านเสมอ | trigger `protect_last_owner` | `LAST_OWNER` |
 | แพ็กเกจ | `enforce_plan_limits` (จำกัดการเพิ่ม ไม่ล็อกการขาย) | `PLAN_LIMIT_REACHED` (สาขาที่ 4 บนแพ็กเกจโปร) |
+| ค่าบริการค้างชำระไม่หยุดการขาย | `billing_stage` → `restricted` หลังช่วงผ่อนผัน 14 วัน หยุดได้เฉพาะ *เพิ่ม* สาขา/พนักงาน/เครื่อง (`enforce_plan_limits`) — `submit_order`/`pay_order`/ปิดยอด/รายงานไม่ตรวจสถานะค่าบริการเลย | `BILLING_RESTRICTED` + ขายและรับเงินได้ตามปกติ (SQL 4c, API e2e) |
+| เหตุการณ์จากผู้ให้บริการนับครั้งเดียว | PK `(provider, event_id)` ใน `billing_events`; `paid` ซ้ำ → `duplicate`/`already_paid`, ยอดไม่ตรง → `amount_mismatch` (ไม่เปลี่ยนแพ็กเกจ), ใบที่ถูกแทนที่แล้วมีเงินเข้า → `needs_review` | SQL 4c, API e2e |
 
 ## 3. RLS pattern
 

@@ -157,6 +157,25 @@ export const ERROR_CATALOG = {
     "info",
   ),
   FEATURE_NOT_IN_PLAN: c("ฟีเจอร์นี้อยู่ในแพ็กเกจที่สูงกว่า", "อัปเกรดเพื่อใช้งาน ข้อมูลทั้งหมดของร้านยังอยู่ครบ", "Upgrade to use this", "Your data stays safe; upgrade anytime.", "upgrade", "ดูแพ็กเกจ", "info"),
+  BILLING_RESTRICTED: c(
+    "ค่าบริการค้างชำระ เพิ่มสิ่งใหม่ไม่ได้ชั่วคราว",
+    (p) => `ตอนนี้เพิ่ม${p.metric === "branches" ? "สาขา" : p.metric === "staff" ? "พนักงาน" : "เครื่องใหม่"}ไม่ได้จนกว่าจะชำระค่าบริการที่ค้างอยู่ การขาย ครัว และรายงานยังใช้ได้ตามปกติ`,
+    "Payment overdue — adding is paused",
+    "You can't add anything new until the overdue invoice is paid. Selling, the kitchen and reports keep working.",
+    "upgrade",
+    "ไปชำระค่าบริการ",
+    "warning",
+  ),
+  BILLING_NOT_CONFIGURED: c(
+    "ยังไม่เปิดรับชำระออนไลน์",
+    "ระบบเรียกเก็บเงินยังไม่ได้เปิดใช้ ติดต่อทีมงานเพื่อเปลี่ยนแพ็กเกจ",
+    "Online payment isn't switched on yet",
+    "Billing isn't enabled yet. Contact us to change your plan.",
+    "contact_manager",
+    "ติดต่อทีมงาน",
+    "info",
+  ),
+  INVOICE_NOT_OPEN: c("ใบแจ้งหนี้นี้ปิดไปแล้ว", "ใบแจ้งหนี้นี้ชำระแล้วหรือถูกแทนที่ด้วยใบใหม่ โหลดหน้าใหม่เพื่อดูรายการล่าสุด", "That invoice is closed", "It has been paid or replaced by a newer one. Refresh to see the latest.", "refresh", "โหลดใหม่", "info"),
 
   // Generic / transport
   LAST_OWNER: c("ต้องมีเจ้าของร้านอย่างน้อย 1 คน", "เพิ่มหรือแต่งตั้งเจ้าของร้านคนใหม่ก่อน แล้วค่อยเปลี่ยนตำแหน่งหรือปิดบัญชีนี้", "At least one owner is required", "Make someone else an owner first.", "fix_input", "เข้าใจแล้ว"),

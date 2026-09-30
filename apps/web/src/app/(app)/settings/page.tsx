@@ -1,10 +1,12 @@
 "use client";
 
 import { cheapestPlanFor, FEATURE_COPY, isValidThaiTaxId, PLANS, planLimit, planOf, type PlanCode } from "@sabai/domain";
-import { Check, Crown, MapPin, Plus, ShieldCheck, Sparkles } from "lucide-react";
+import { Check, MapPin, Plus, Sparkles } from "lucide-react";
 import { motion } from "motion/react";
 import { useSearchParams } from "next/navigation";
 import { Suspense, useState } from "react";
+import { toast } from "sonner";
+import { BillingPanel, InvoicePayDialog } from "@/components/app/billing-panel";
 import { DevicesPanel } from "@/components/app/devices-panel";
 import { PaperSettings } from "@/components/app/paper-settings";
 import { LoadBanner } from "@/components/app/load-banner";
@@ -13,13 +15,13 @@ import { PromptPayQr } from "@/components/app/promptpay-qr";
 import { Button } from "@/components/ui/button";
 import { Dialog, Switch, TabPanel, Tabs } from "@/components/ui/overlay";
 import { Badge, Callout, Card, Field, Input, Segmented, Select } from "@/components/ui/primitives";
-import { useDsAction, useLoad } from "@/hooks/use-data-source";
+import { useBilling, useDsAction, useLoad } from "@/hooks/use-data-source";
 import { useAccess } from "@/hooks/use-sabai";
 import { cn } from "@/lib/cn";
 import { dataSourceMode } from "@/lib/data-source/config";
 import type { DataSource } from "@/lib/data-source/types";
 import { useSabai } from "@/lib/demo/store";
-import type { Branch, Tenant } from "@/lib/demo/types";
+import type { BillingInvoice, Branch, Tenant } from "@/lib/demo/types";
 
 const BUSINESS_TYPES: { value: Tenant["businessType"]; label: string }[] = [
   { value: "cafe", label: "คาเฟ่" },
@@ -323,25 +325,19 @@ function Plan() {
   const db = useSabai((s) => s.db);
   const { can } = useAccess();
   const { exec, pending } = useDsAction();
+  const { billing } = useBilling();
   const [yearly, setYearly] = useState(false);
   const [confirm, setConfirm] = useState<PlanCode | null>(null);
-  const current = planOf(db.tenant.plan);
-  const trialDays = Math.max(0, Math.ceil((Date.parse(db.tenant.trialEndsAt) - Date.now()) / 86_400_000));
+  const [paying, setPaying] = useState<BillingInvoice | null>(null);
+  const current = planOf(billing?.planCode ?? db.tenant.plan);
+  const invoiced = billing?.mode === "invoice";
   return (
-    <div className="space-y-4">
-      <Card className="flex flex-col gap-3 p-5 sm:flex-row sm:items-center">
-        <Crown className="h-8 w-8 text-accent" aria-hidden="true" />
-        <div className="flex-1">
-          <p className="font-semibold text-ink">
-            แพ็กเกจปัจจุบัน: {current.name}
-            {trialDays > 0 && <span className="font-normal text-ink-3"> · ทดลองใช้ฟรีเหลือ {trialDays} วัน</span>}
-          </p>
-          <p className="flex items-center gap-1.5 text-sm text-ink-3">
-            <ShieldCheck className="h-4 w-4 text-success" aria-hidden="true" /> ไม่ว่าเกิดอะไรขึ้นกับการชำระค่าบริการ ระบบจะไม่หยุดการขายหน้าร้านของคุณ
-          </p>
-        </div>
+    <div>
+      <BillingPanel onPay={setPaying} />
+      <div className="mb-3 mt-6 flex flex-wrap items-center justify-between gap-3">
+        <h2 className="text-[17px] font-semibold text-ink">เลือกแพ็กเกจ</h2>
         <Segmented label="รอบบิล" value={yearly ? "y" : "m"} onChange={(v) => setYearly(v === "y")} options={[{ value: "m", label: "รายเดือน" }, { value: "y", label: "รายปี (ฟรี 2 เดือน)" }]} />
-      </Card>
+      </div>
       <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
         {PLANS.filter((p) => p.code !== "enterprise").map((p, i) => {
           const isCurrent = p.code === current.code;
@@ -359,7 +355,7 @@ function Plan() {
                   <span className="text-sm font-normal text-ink-3">/{yearly ? "ปี" : "เดือน"}</span>
                 </p>
                 <p className="text-xs text-ink-3">
-                  {p.limits.branches} สาขา · {p.limits.staff} พนักงาน · {p.limits.devices} เครื่อง
+                  {p.limits.branches} สาขา · {p.limits.staff} พนักงาน · {p.limits.devices} เครื่อง{p.priceMonthly ? " · ราคารวม VAT" : ""}
                 </p>
                 <ul className="mt-4 flex-1 space-y-1.5 text-sm text-ink-2">
                   {p.features.map((f) => (
@@ -379,18 +375,43 @@ function Plan() {
           );
         })}
       </div>
-      <p className="text-center text-sm text-ink-3">ร้านมากกว่า 10 สาขา หรือต้องการ SSO/API เฉพาะ — ติดต่อทีมงานเพื่อแพ็กเกจเอนเตอร์ไพรส์</p>
-      <Dialog open={!!confirm} onOpenChange={(v) => !v && setConfirm(null)} title={`เปลี่ยนเป็นแพ็กเกจ${confirm ? planOf(confirm).name : ""}?`} description="เปลี่ยนได้ทุกเมื่อ คิดเงินตามสัดส่วนวันที่ใช้จริง" size="sm" footer={
-        <Button loading={pending} onClick={async () => {
-          if (!confirm) return;
-          const r = await exec((ds) => ds.changePlan(confirm), { success: `เปลี่ยนเป็น${planOf(confirm).name}แล้ว` });
-          if (r.ok) setConfirm(null);
-        }}>
-          ยืนยัน
-        </Button>
-      }>
-        <p className="pb-2 text-sm text-ink-2">ข้อมูลทั้งหมดอยู่ครบ ฟีเจอร์ที่ไม่มีในแพ็กเกจใหม่จะถูกซ่อน (ไม่ลบ) และกลับมาเมื่ออัปเกรดอีกครั้ง</p>
+      <p className="mt-4 text-center text-sm text-ink-3">ร้านมากกว่า 10 สาขา หรือต้องการ SSO/API เฉพาะ — ติดต่อทีมงานเพื่อแพ็กเกจเอนเตอร์ไพรส์</p>
+      <Dialog
+        open={!!confirm}
+        onOpenChange={(v) => !v && setConfirm(null)}
+        title={`เปลี่ยนเป็นแพ็กเกจ${confirm ? planOf(confirm).name : ""}?`}
+        description={invoiced ? "แพ็กเกจที่แพงกว่าออกเป็นใบแจ้งหนี้ให้ชำระก่อน แล้วเริ่มใช้เมื่อได้รับเงิน" : "เปลี่ยนได้ทุกเมื่อ"}
+        size="sm"
+        footer={
+          <Button
+            loading={pending}
+            onClick={async () => {
+              if (!confirm) return;
+              const name = planOf(confirm).name;
+              const r = await exec((ds) => ds.changePlan(confirm, yearly ? "yearly" : "monthly"));
+              if (!r.ok) return;
+              setConfirm(null);
+              // An invoice opens its own "how to pay" window, which says everything a toast would.
+              if (r.value.applied) toast.success(`เปลี่ยนเป็น${name}แล้ว`);
+              else if (r.value.invoice?.payment) setPaying(r.value.invoice);
+              else toast.success(`ออกใบแจ้งหนี้ ${r.value.invoice?.invoiceNo ?? ""} แล้ว`);
+            }}
+          >
+            ยืนยัน
+          </Button>
+        }
+      >
+        {invoiced ? (
+          <ul className="list-disc space-y-1.5 pb-2 pl-5 text-sm text-ink-2">
+            <li>แพ็กเกจที่ถูกกว่าเริ่มใช้ทันที ส่วนที่แพงกว่าจะมีใบแจ้งหนี้ให้ชำระก่อน</li>
+            <li>ราคารวม VAT แล้ว · ไม่คิดตามสัดส่วนวัน และไม่คืนเงินส่วนที่จ่ายไปแล้ว</li>
+            <li>ข้อมูลทั้งหมดอยู่ครบ ฟีเจอร์ที่ไม่มีในแพ็กเกจใหม่จะถูกซ่อน (ไม่ลบ) และกลับมาเมื่ออัปเกรดอีกครั้ง</li>
+          </ul>
+        ) : (
+          <p className="pb-2 text-sm text-ink-2">ข้อมูลทั้งหมดอยู่ครบ ฟีเจอร์ที่ไม่มีในแพ็กเกจใหม่จะถูกซ่อน (ไม่ลบ) และกลับมาเมื่ออัปเกรดอีกครั้ง</p>
+        )}
       </Dialog>
+      <InvoicePayDialog invoice={paying} onClose={() => setPaying(null)} />
     </div>
   );
 }
