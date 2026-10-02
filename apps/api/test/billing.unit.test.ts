@@ -68,5 +68,7 @@ describe("billing configuration", () => {
     expect(loadConfig({ BILLING_JOB_SECRET: secret }).billing.jobSecret).toBe(secret);
     expect(loadConfig({ NODE_ENV: "test" }).billing.jobIntervalMinutes).toBe(0);
     expect(loadConfig({}).billing.jobIntervalMinutes).toBe(60);
+    expect(loadConfig({ NODE_ENV: "test" }).maintenance.idempotencyPurgeMinutes).toBe(0);
+    expect(loadConfig({}).maintenance.idempotencyPurgeMinutes).toBe(60);
   });
 });

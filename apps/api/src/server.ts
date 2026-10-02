@@ -2,6 +2,7 @@ import { serve } from "@hono/node-server";
 import { createErrorReporter } from "@sabai/observability";
 import { createApp } from "./app";
 import { startBillingJob } from "./billing/job";
+import { startMaintenanceJob } from "./maintenance";
 import { loadConfig } from "./config";
 import { createDb } from "./db";
 import { EventHub } from "./events";
@@ -27,6 +28,7 @@ await events.start(sql);
 
 const app = createApp({ sql, config, log, events, reporter });
 const stopBillingJob = startBillingJob(sql, log, config.billing.jobIntervalMinutes);
+const stopMaintenanceJob = startMaintenanceJob(sql, log, config.maintenance.idempotencyPurgeMinutes);
 const server = serve({ fetch: app.fetch, port: config.port }, (info) => {
   log.info("listening", { port: info.port, env: config.env, tracing: telemetry.enabled, error_tracking: reporter.enabled });
 });
@@ -35,6 +37,7 @@ async function shutdown(signal: string) {
   log.info("shutdown", { signal });
   server.close();
   stopBillingJob();
+  stopMaintenanceJob();
   await events.close();
   await sql.end({ timeout: 5 });
   await reporter.flush();

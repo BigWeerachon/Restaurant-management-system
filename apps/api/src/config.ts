@@ -15,6 +15,11 @@ export interface BillingConfig {
   jobSecret: string | null;
 }
 
+export interface MaintenanceConfig {
+  /** Minutes between purges of Idempotency-Key rows older than 24 h. 0 = not here. */
+  idempotencyPurgeMinutes: number;
+}
+
 export interface ObservabilityConfig {
   serviceName: string;
   environment: string;
@@ -37,6 +42,7 @@ export interface Config {
   /** Lifetime of a PIN-switched staff token on a shared device. */
   staffTokenTtlSeconds: number;
   billing: BillingConfig;
+  maintenance: MaintenanceConfig;
   observability: ObservabilityConfig;
   limits: {
     /** PIN sign-ins and approvals per minute, per address and branch. Brute-force protection: keep it low in production. */
@@ -88,6 +94,9 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
       payTo,
       jobIntervalMinutes: Number(env.BILLING_JOB_INTERVAL_MINUTES ?? (mode === "test" ? 0 : 60)),
       jobSecret: env.BILLING_JOB_SECRET && env.BILLING_JOB_SECRET.length >= 32 ? env.BILLING_JOB_SECRET : null,
+    },
+    maintenance: {
+      idempotencyPurgeMinutes: Number(env.IDEMPOTENCY_PURGE_INTERVAL_MINUTES ?? (mode === "test" ? 0 : 60)),
     },
   };
 }
