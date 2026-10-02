@@ -7,6 +7,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Keypad, PinDots } from "@/components/ui/feedback";
+import { usePinEntry } from "@/hooks/use-pin-entry";
 import { Dialog } from "@/components/ui/overlay";
 import { Callout, Field, Input } from "@/components/ui/primitives";
 import { getAuthProvider } from "@/lib/auth";
@@ -45,8 +46,7 @@ export function ConnectPanel() {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [picked, setPicked] = useState<Member | null>(null);
-  const [pin, setPin] = useState("");
-  const [pinError, setPinError] = useState<string | null>(null);
+  const { pin, setPin, error: pinError, setError: setPinError, reset: resetPin, keypad } = usePinEntry((v) => submitPin(v));
   const [meError, setMeError] = useState<string | null>(null);
   /** Good or neutral news for the top of the form: e-mail confirmed, reset link sent, link expired. */
   const [notice, setNotice] = useState<{ tone: "success" | "info" | "warning"; text: string } | null>(null);
@@ -196,18 +196,9 @@ export function ConnectPanel() {
     }
   };
 
-  const onKey = (k: string) => {
-    if (pin.length >= 4) return;
-    const next = pin + k;
-    setPinError(null);
-    setPin(next);
-    if (next.length === 4) setTimeout(() => submitPin(next), 120);
-  };
-
   const pick = (memberId: string) => {
     setPicked(db.members.find((m) => m.id === memberId) ?? null);
-    setPin("");
-    setPinError(null);
+    resetPin();
   };
 
   if (phase === "device") return <DeviceSignIn onEmail={() => setPhase("email")} />;
@@ -327,7 +318,7 @@ export function ConnectPanel() {
           <p className={pinError ? "text-center text-sm text-danger" : "sr-only"} role={pinError ? "alert" : undefined}>
             {pinError}
           </p>
-          <Keypad onKey={onKey} onBackspace={() => setPin((p) => p.slice(0, -1))} onClear={() => setPin("")} size="lg" />
+          <Keypad {...keypad} size="lg" />
         </div>
       </Dialog>
     </>
