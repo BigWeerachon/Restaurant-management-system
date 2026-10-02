@@ -12,11 +12,10 @@ async function undersized(page: Page, scope: string) {
     if (!root) return ["(scope not found)"];
     return [...root.querySelectorAll<HTMLElement>("button, a[href], [role=button], [role=radio]")]
       .filter((e) => {
-        const r = e.getBoundingClientRect();
-        const s = getComputedStyle(e);
-        return r.width > 0 && r.height > 0 && s.visibility !== "hidden" && (r.height < 43.5 || r.width < 43.5);
+        // Layout size, not the drawn size: a dialog that is still scaling in would read a pixel short.
+        return e.offsetWidth > 0 && e.offsetHeight > 0 && getComputedStyle(e).visibility !== "hidden" && (e.offsetHeight < 44 || e.offsetWidth < 44);
       })
-      .map((e) => `${(e.getAttribute("aria-label") ?? e.textContent ?? "").trim().slice(0, 30)} ${Math.round(e.getBoundingClientRect().width)}×${Math.round(e.getBoundingClientRect().height)}`);
+      .map((e) => `${(e.getAttribute("aria-label") ?? e.textContent ?? "").trim().slice(0, 30)} ${e.offsetWidth}×${e.offsetHeight}`);
   }, scope);
 }
 
