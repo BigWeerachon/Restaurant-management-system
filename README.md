@@ -36,7 +36,7 @@ POS · จอครัว · สูตรและต้นทุน · สต�
 | Lighthouse mobile (จำลอง 4G + CPU 4×) | Performance **85–94** (กลาง ~90) · Accessibility / Best practices / SEO **100** · LCP 1.1–1.5 s · TBT 0.3–0.6 s — ต่ำกว่า V1 (93–100) เพราะฟีเจอร์ V1.1 ([ที่มา](docs/04-architecture.md#5e-หน้าจอแรกบนมือถือ-ประสิทธิภาพที่วัดแล้วและกฎที่ต้องรักษา)) |
 | Lighthouse โหมด API (ต่อ API + Postgres จริง) | Desktop Performance **96–100** · Mobile Performance **71–85** (ทุกหน้ารอข้อมูลจาก API บนเครือข่ายจำลอง 4G; ยังไม่ได้วัดบนมือถือจริง) · Accessibility / Best practices / SEO **100**, CLS ≤ 0.015 |
 | axe-core WCAG 2.2 AA | **0 violations** — 21 หน้า × สว่าง/มืด, มือถือ, dialog/wizard/ใบเสร็จ อยู่ใน browser tests ที่ **ขวางการ merge** |
-| Tests | SQL 275 assertions (231 end-to-end + 44 ประวัติขาย) · domain 114 · API 101 (กับ Postgres จริง) · web 393 · observability 17 · browser tests 72 (โหมดเดโม) + 68 (โหมด API) — ผ่านทั้งหมด |
+| Tests | SQL 341 assertions (231 end-to-end + 44 ประวัติขาย + 58 โอนสต็อก/เปิดวันปิดยอด + 8 index) · domain 119 · API 119 (กับ Postgres จริง) · web 394 · observability 17 · browser tests 73 (โหมดเดโม) + 69 (โหมด API) — ผ่านทั้งหมด |
 | CI ทุก push | `check` (typecheck + tests + SQL + build) · `e2e` ทั้งสองโหมด · `lighthouse` (งบประมาณคะแนน) |
 | คะแนนประเมิน | ฟังก์ชัน **96** · หน้าตา **96** · animation **95** · รวมทั้งโปรเจกต์ 95.1 ([scorecard](docs/08-scorecard.md) — พร้อมข้อจำกัดที่ยังเหลือ) |
 
@@ -96,7 +96,7 @@ packages/
   contracts/  zod schemas (validation + OpenAPI)
   observability/  OpenTelemetry + log JSON + รายงานข้อผิดพลาด (ปิดเป็นค่าเริ่มต้น)
   db/         SQL test runner + seed ร้านตัวอย่าง
-supabase/migrations/   Postgres: 75 ตาราง (+ audit.log), RLS ทุกตาราง, 103 functions, 7 views ใน 23 migrations
+supabase/migrations/   Postgres: 75 ตาราง (+ audit.log), RLS ทุกตาราง, 103 functions, 7 views ใน 26 migrations
 tools/qa/     Lighthouse (งบประมาณ, โหมดเดโม/API) · tools/load/ load probe ของ API
 scripts/      e2e.sh (เหมือน CI) · stack-dev.sh
 docs/         เอกสารทั้งหมด (ด้านล่าง)

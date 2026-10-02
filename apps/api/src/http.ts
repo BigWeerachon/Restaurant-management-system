@@ -110,7 +110,7 @@ export function route<B extends ZodType | undefined = undefined, Q extends ZodTy
     const idempotency = meta.method === "POST" && idemKey && idemScope ? { scope: idemScope, key: idemKey } : null;
     if (idempotency) {
       // Refused up front: a key the store cannot hold would otherwise fail only after the command had run.
-      if (idemKey!.length < MIN_KEY_LENGTH || idemKey!.length > MAX_KEY_LENGTH) {
+      if (idempotency.key.length < MIN_KEY_LENGTH || idempotency.key.length > MAX_KEY_LENGTH) {
         throw new ApiFailure("VALIDATION", 400, {}, { "Idempotency-Key": `ต้องยาว ${MIN_KEY_LENGTH}–${MAX_KEY_LENGTH} ตัวอักษร` });
       }
       const requestHash = createHash("sha256").update(`${meta.method} ${c.req.path}\n${JSON.stringify(rawBody ?? null)}`).digest("hex");

@@ -19,7 +19,10 @@ export const MIN_KEY_LENGTH = 8;
 export const MAX_KEY_LENGTH = 128;
 /** How long a stored answer is replayed. */
 const KEEP_ANSWER = "24 hours";
-/** A claim older than this is taken over: its request died (process stopped) without finishing or letting go. */
+/**
+ * A claim older than this is taken over: its request died (the process stopped) without finishing or letting go. This assumes no
+ * command runs this long — they take milliseconds; if one ever could, its claim would have to be renewed while it runs.
+ */
 const ABANDONED_AFTER = "2 minutes";
 /** How long a request that finds its key being worked on waits for the first one before giving up. */
 const WAIT_FOR_FIRST_MS = 10_000;

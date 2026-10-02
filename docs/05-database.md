@@ -1,6 +1,6 @@
 # ฐานข้อมูล (Database)
 
-Postgres 16, เข้ากันได้กับ Supabase — **75 ตาราง (+ `audit.log`), 103 functions/commands, 7 views** ใน 23 migrations
+Postgres 16, เข้ากันได้กับ Supabase — **75 ตาราง (+ `audit.log`), 103 functions/commands, 7 views** ใน 26 migrations
 ([`supabase/migrations`](../supabase/migrations)) และ SQL end-to-end test ที่ [`packages/db/tests`](../packages/db/tests)
 
 ## 1. โครงสร้างตามโมดูล
@@ -30,6 +30,9 @@ Postgres 16, เข้ากันได้กับ Supabase — **75 ตาร
 | `20260929000700_receipt_settings` | (คอลัมน์ `receipt_footer` ใน tenants) | บรรทัดท้ายใบเสร็จ (ขอบคุณ, รหัส Wi-Fi, โปรโมชัน) |
 | `20260929000800_tax_invoices` | tax_invoices (+ `devices.receipt_code`) | เลขใบเสร็จแยกต่อเครื่อง POS (`HQ-T1-YYMM-00001`); ใบกำกับภาษีเต็มรูปตามที่ลูกค้าขอ บิลละหนึ่งใบ ห้ามแก้/ลบ เก็บภาพถ่ายของผู้ขาย/ผู้ซื้อ ณ วันนั้น เลขเฉพาะ (`HQ-TI-YYMM-00001`) |
 | `20260930000100_billing` | billing_events, billing_sequences (+ คอลัมน์ใหม่ใน subscriptions, subscription_invoices) | ใบแจ้งหนี้ค่าบริการ (เลข `INV-YYMM-00001`, เปิดค้างได้ครั้งละ 1 ใบต่อร้าน, แยก VAT 7/107), `billing_stage` (คำนวณจากเวลา ตรงกับ `billingStage` ใน domain), `request_plan_change`, `apply_billing_event` (บันทึกทุกเหตุการณ์จากผู้ให้บริการครั้งเดียว), `billing_run` (งานประจำวัน) |
+| `20261001000100_transfer_receive_guard` | — (แก้ `receive_transfer`) | รับของโอนเกินที่ส่งมาไม่ได้ (`TRANSFER_OVER_RECEIVED`) — เดิมพิมพ์จำนวนเกินแล้วสต็อกปลายทางเพิ่มโดยต้นทางไม่ลด; รับน้อยกว่ายังได้ ส่วนต่างเป็นของเสียที่สาขาปลายทาง |
+| `20261001000200_close_day_after_reopen` | — (แก้ `close_business_day`) | วันที่เปิดใหม่แล้ว (`reopen_business_day`) ปิดซ้ำได้ — เดิมล้มเสมอเพราะ `summary = summary` กำกวมระหว่างตัวแปรกับคอลัมน์ (ตัวแปรเปลี่ยนชื่อเป็น `v_summary`) |
+| `20261001000300_hot_path_indexes` | index 7 ตัว | `kitchen_tickets (branch_id, status, fired_at)`, `kitchen_ticket_items (order_item_id)`, `payments (shift_id)`, `cash_movements (shift_id)`, `stock_balances (ingredient_id)`, `purchase_order_lines (ingredient_id)`, `expected_receipts (branch_id, business_date)` — เฉพาะ lookup ที่หน้าจอทำทั้งวันบนตารางที่โตตามยอดขาย (FK 68 จาก 132 ไม่มี index แต่ส่วนใหญ่ไม่จำเป็น เหตุผลที่เว้นไว้อยู่ในไฟล์ migration) |
 
 ## 2. Invariants (กฎที่ฐานข้อมูลบังคับเอง)
 
