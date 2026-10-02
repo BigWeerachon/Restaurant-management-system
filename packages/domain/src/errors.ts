@@ -129,6 +129,7 @@ export const ERROR_CATALOG = {
   COUNT_NOT_SUBMITTED: c("ยังนับไม่เสร็จ", "ส่งผลการนับก่อน แล้วจึงอนุมัติได้", "Count not submitted", "Submit the count before approving.", "dismiss", "ตกลง", "info"),
   TRANSFER_NOT_DRAFT: c("ส่งของรายการนี้ไปแล้ว", "ใบโอนนี้ถูกส่งไปแล้ว", "Already sent", "This transfer was already sent.", "refresh", "โหลดใหม่", "info"),
   TRANSFER_NOT_SENT: c("ยังไม่ได้ส่งของ", "รอให้ต้นทางกดส่งของก่อน แล้วจึงกดรับได้", "Not sent yet", "Wait until the sender confirms dispatch.", "dismiss", "ตกลง", "info"),
+  TRANSFER_OVER_RECEIVED: c("รับของเกินที่ส่งมา", "จำนวนที่รับมากกว่าที่ต้นทางส่ง ตรวจจำนวนอีกครั้ง ถ้าของมากกว่าจริง ให้ต้นทางแก้ใบโอนก่อน", "More than was sent", "The amount received is higher than what was sent. Check it again; if it is really more, ask the sender to correct the transfer.", "fix_input", "แก้จำนวน"),
 
   // Finance
   PERIOD_CLOSED: c("วันนี้ปิดยอดไปแล้ว", "รายการใหม่จะไปอยู่ในวันถัดไปโดยอัตโนมัติ หากต้องแก้ไขวันเดิมให้ผู้จัดการเปิดวันใหม่", "Day already closed", "New entries go to the next day. A manager can reopen the day.", "contact_manager", "ติดต่อผู้จัดการ", "info"),
