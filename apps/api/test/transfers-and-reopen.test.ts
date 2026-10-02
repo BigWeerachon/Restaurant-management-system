@@ -129,9 +129,9 @@ describe("reopening a closed day", () => {
   });
 
   it("keeps the books balanced through all of it", async () => {
-    const [{ unbalanced }] = await ctx.sql<{ unbalanced: number }[]>`
+    const [row] = await ctx.sql<{ unbalanced: number }[]>`
       select count(*)::int as unbalanced from (
         select entry_id from app.journal_lines where tenant_id = ${tenantId} group by entry_id having sum(debit) <> sum(credit)) x`;
-    expect(unbalanced).toBe(0);
+    expect(row!.unbalanced).toBe(0);
   });
 });
