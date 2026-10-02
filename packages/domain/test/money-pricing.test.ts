@@ -7,7 +7,9 @@ import {
   changeDue,
   channelPrice,
   divRound,
+  effectiveVatRate,
   formatMoney,
+  keepPerPortion,
   roundHalfAwayFromZero,
   satangToDecimalString,
   suggestTenders,
@@ -185,5 +187,42 @@ describe("channel prices (parity with app.resolve_menu_price)", () => {
         expect(p % 500).toBe(0);
       }
     }
+  });
+});
+
+describe("what a portion leaves the shop (keepPerPortion)", () => {
+  const shop = { vatRate: 0.07, commissionRate: 0.3, cost: 2_500 };
+
+  it("takes VAT out of a price that includes it", () => {
+    // ฿100 with VAT inside: ฿6.54 of it is VAT; the platform takes 30 % of ฿100; ingredients ฿25.
+    expect(keepPerPortion({ ...shop, price: 10_000, pricesIncludeVat: true })).toEqual({ vat: 654, commission: 3_000, keep: 10_000 - 654 - 3_000 - 2_500 });
+  });
+
+  it("takes none out of a price that leaves VAT out: the VAT is on top, the shop keeps the whole price", () => {
+    expect(keepPerPortion({ ...shop, price: 10_000, pricesIncludeVat: false })).toEqual({ vat: 0, commission: 3_000, keep: 4_500 });
+  });
+
+  it("takes none out for a shop that is not registered for VAT", () => {
+    expect(keepPerPortion({ ...shop, vatRate: 0, price: 10_000, pricesIncludeVat: true }).vat).toBe(0);
+  });
+
+  it("agrees with the bill's own maths for one portion, in every VAT setting", () => {
+    for (const pricesIncludeVat of [true, false]) {
+      for (const vatRate of [0, 0.07]) {
+        for (let price = 500; price <= 40_000; price += 735) {
+          const bill = calculateOrderTotals({ lines: [{ qty: 1, unitPrice: price, modifiersTotal: 0 }], serviceChargeRate: 0, vatRate, pricesIncludeVat, commissionRate: 0.3 });
+          const kept = keepPerPortion({ price, cost: 1_200, vatRate, pricesIncludeVat, commissionRate: 0.3 });
+          // What the shop takes in, apart from the VAT it holds for the state, less the platform's cut and the ingredients.
+          expect(kept.keep, `price ${price}, VAT ${vatRate}, ${pricesIncludeVat ? "included" : "on top"}`).toBe(bill.total - bill.vatAmount - bill.commission - 1_200);
+        }
+      }
+    }
+  });
+});
+
+describe("effectiveVatRate", () => {
+  it("is the shop's rate only when it is registered for VAT", () => {
+    expect(effectiveVatRate({ vatRegistered: true, vatRate: 0.07 })).toBe(0.07);
+    expect(effectiveVatRate({ vatRegistered: false, vatRate: 0.07 })).toBe(0);
   });
 });
