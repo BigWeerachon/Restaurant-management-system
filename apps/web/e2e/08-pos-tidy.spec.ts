@@ -42,7 +42,9 @@ test.describe("the till, on a phone", () => {
 });
 
 test.describe("the PIN keypad", () => {
-  test("a wrong PIN is refused and cleared, the right one signs in", async ({ page }) => {
+  test("a wrong PIN is refused and cleared, the right one signs in", async ({ page, watch }) => {
+    // The wrong PIN is answered with a 401 in API mode; that is the point of the test.
+    watch.allow(/HTTP 401 POST \/v1\/auth\/pin/);
     await signIn(page, "owner");
     await page.goto("/pos");
     await page.getByRole("button", { name: /สลับผู้ใช้/ }).first().click();
