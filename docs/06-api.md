@@ -11,7 +11,7 @@ HTTP JSON API (Hono บน Node 22) — **88 endpoints + SSE** ครอบค�
 | **Auth** | `Authorization: Bearer <JWT>` (Supabase-compatible); พนักงานบนเครื่องร้านได้ token จาก `POST /v1/auth/pin` |
 | **Tenant** | endpoint ระดับร้านต้องส่ง `X-Tenant-Id` (ผู้ใช้หนึ่งคนอยู่ได้หลายร้าน) |
 | **RLS ทุก request** | transaction ใหม่ต่อ request → `set local role authenticated` + JWT claims → ข้อมูลที่เห็นถูกกรองโดย Postgres |
-| **Idempotency** | คำสั่งที่มีผลกับเงิน/สต็อกรับ `Idempotency-Key`; ส่งซ้ำได้ผลเดิม (เก็บใน `app.api_idempotency`) |
+| **Idempotency** | คำสั่งที่มีผลกับเงิน/สต็อกรับ `Idempotency-Key` (8–128 ตัวอักษร); ส่งซ้ำได้ผลเดิม (เก็บใน `app.api_idempotency` 24 ชม.) **คีย์ถูกจองก่อนรันคำสั่ง** จึงส่งพร้อมกันกี่ครั้งก็รันครั้งเดียว — คำขอที่มาทีหลังรอผลของคำขอแรกได้สูงสุด 10 วินาที แล้วได้ผลเดียวกัน (หรือ `REQUEST_IN_PROGRESS` 409 ถ้ายังไม่เสร็จ — เว็บส่งซ้ำเอง); คำสั่งที่ล้มเหลวไม่เก็บผล ส่งซ้ำด้วยคีย์เดิมได้; คำขอที่ค้างเกิน 2 นาทีถือว่าตายและถูกแทนที่ได้ |
 | **ภาษา** | `Accept-Language: th` (ค่าเริ่มต้น) หรือ `en` — ข้อความ error เปลี่ยนตาม |
 | **Request id** | ทุก response มี `X-Request-Id`; error มี `reference` สั้นให้ลูกค้าแจ้ง support |
 | **Rate limit** | PIN สลับผู้ใช้/อนุมัติ 10 ครั้ง/นาที/ที่อยู่และสาขา (ตั้งได้ด้วย `PIN_ATTEMPTS_PER_MINUTE` — อย่าเพิ่มบน production), PIN บนเครื่องร้านที่ลงทะเบียนแล้ว 10 ครั้ง/นาที/เครื่อง → `RATE_LIMITED` (429) พร้อม `retry_after_s` |

@@ -187,6 +187,7 @@ export const ERROR_CATALOG = {
   CONFLICT: c("มีข้อมูลนี้อยู่แล้ว", "ชื่อหรือรหัสนี้ถูกใช้แล้ว ลองใช้ชื่ออื่น", "Already exists", "That name or code is taken.", "fix_input", "แก้ไข"),
   LEDGER_IMMUTABLE: c("แก้รายการย้อนหลังไม่ได้", "เพื่อความถูกต้องของบัญชี ให้บันทึกรายการปรับปรุงแทนการแก้ไข", "Can't edit history", "Record a correcting entry instead.", "dismiss", "ตกลง"),
   RATE_LIMITED: c("ทำรายการถี่เกินไป", "รอสักครู่แล้วลองใหม่อีกครั้ง", "Too many attempts", "Wait a moment and try again.", "retry", "ลองใหม่"),
+  REQUEST_IN_PROGRESS: c("รายการนี้กำลังถูกบันทึกอยู่", "คำขอเดียวกันถูกส่งมาแล้วและยังทำไม่เสร็จ รอสักครู่แล้วลองอีกครั้ง ระบบจะไม่บันทึกซ้ำ", "Already being saved", "The same request is still being processed. Wait a moment and try again; it will not be saved twice.", "retry", "ลองใหม่"),
   NETWORK_OFFLINE: c("อินเทอร์เน็ตหลุด", "ขายต่อได้ตามปกติ ระบบจะส่งข้อมูลให้อัตโนมัติเมื่อกลับมาออนไลน์", "You're offline", "Keep selling — we'll sync automatically when you're back online.", "dismiss", "ขายต่อ", "info"),
   TIMEOUT: c("ระบบตอบช้ากว่าปกติ", "ข้อมูลยังไม่หาย ลองอีกครั้งได้เลย ระบบกันการบันทึกซ้ำให้แล้ว", "Taking too long", "Nothing was lost; retrying is safe.", "retry", "ลองอีกครั้ง"),
   INTERNAL: c("เกิดข้อผิดพลาดชั่วคราว", "ข้อมูลยังไม่หาย ลองอีกครั้ง ถ้ายังไม่ได้ แจ้งรหัสอ้างอิงนี้กับทีมงาน", "Something went wrong", "Nothing was lost. Try again, or share the reference with support.", "retry", "ลองอีกครั้ง", "error"),

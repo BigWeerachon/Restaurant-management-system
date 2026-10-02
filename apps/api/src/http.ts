@@ -7,6 +7,7 @@ import type { Config } from "./config";
 import { asActor, type Sql, type Tx } from "./db";
 import { ApiFailure } from "./errors";
 import type { EventHub } from "./events";
+import { claimKey, MAX_KEY_LENGTH, MIN_KEY_LENGTH, releaseKey, storeAnswer } from "./idempotency";
 import type { Logger } from "./logger";
 
 export interface Deps {
@@ -100,43 +101,53 @@ export function route<B extends ZodType | undefined = undefined, Q extends ZodTy
     const query = (meta.query ? meta.query.parse(c.req.query()) : undefined) as Infer<Q>;
     const requestId = c.get("requestId");
 
-    // Idempotent replay for retried POSTs (flaky shop Wi-Fi, double taps).
+    // Idempotent replay for retried POSTs (flaky shop Wi-Fi, double taps): the key is claimed before the command runs, so two
+    // requests that arrive together cannot both run it.
     const idemKey = c.req.header("idempotency-key");
     // A call made inside a shop is scoped to the shop. One made before any shop exists (opening the first one) is scoped
     // to the signed-in person — without that, a retried "create my shop" made a second, third… shop.
     const idemScope = meta.idempotent === false ? null : UUID.safeParse(rawTenant).success ? rawTenant : (actor?.userId ?? null);
-    let requestHash: string | null = null;
-    if (meta.method === "POST" && idemKey && idemScope) {
-      requestHash = createHash("sha256").update(`${meta.method} ${c.req.path}\n${JSON.stringify(rawBody ?? null)}`).digest("hex");
-      const [hit] = await deps.sql<{ request_hash: string; status: number; response: unknown }[]>`
-        select request_hash, status, response from app.api_idempotency
-         where tenant_id = ${idemScope} and key = ${idemKey} and created_at > now() - interval '24 hours'`;
-      if (hit) {
-        if (hit.request_hash !== requestHash) throw new ApiFailure("CONFLICT", 409, { reason: "idempotency_key_reused" });
+    const idempotency = meta.method === "POST" && idemKey && idemScope ? { scope: idemScope, key: idemKey } : null;
+    if (idempotency) {
+      // Refused up front: a key the store cannot hold would otherwise fail only after the command had run.
+      if (idemKey!.length < MIN_KEY_LENGTH || idemKey!.length > MAX_KEY_LENGTH) {
+        throw new ApiFailure("VALIDATION", 400, {}, { "Idempotency-Key": `ต้องยาว ${MIN_KEY_LENGTH}–${MAX_KEY_LENGTH} ตัวอักษร` });
+      }
+      const requestHash = createHash("sha256").update(`${meta.method} ${c.req.path}\n${JSON.stringify(rawBody ?? null)}`).digest("hex");
+      const claim = await claimKey(deps.sql, idempotency.scope, idempotency.key, meta.method, c.req.path, requestHash);
+      if (!claim.owner) {
         c.header("Idempotent-Replayed", "true");
-        return c.json(hit.response as object, hit.status as 200);
+        return c.json(claim.response as object, claim.status as 200);
       }
     }
 
-    const result = await handler({
-      c,
-      deps,
-      body,
-      query,
-      params: c.req.param() as unknown as { id: string; date: string },
-      actor: actor as Actor,
-      requestId,
-      tenantId: rawTenant,
-      tx: (fn) => asActor(deps.sql, actor as Actor, requestId, fn),
-    });
-    if (result instanceof Response) return result;
+    let result: unknown;
+    try {
+      result = await handler({
+        c,
+        deps,
+        body,
+        query,
+        params: c.req.param() as unknown as { id: string; date: string },
+        actor: actor as Actor,
+        requestId,
+        tenantId: rawTenant,
+        tx: (fn) => asActor(deps.sql, actor as Actor, requestId, fn),
+      });
+    } catch (err) {
+      // Errors are not kept: a retry runs the command again.
+      if (idempotency) await releaseKey(deps.sql, idempotency.scope, idempotency.key).catch(() => undefined);
+      throw err;
+    }
+    if (result instanceof Response) {
+      if (idempotency) await releaseKey(deps.sql, idempotency.scope, idempotency.key).catch(() => undefined);
+      return result;
+    }
 
     const status = meta.status ?? 200;
-    if (requestHash && idemScope && idemKey) {
-      await deps.sql`
-        insert into app.api_idempotency (tenant_id, key, method, path, request_hash, status, response)
-        values (${idemScope}, ${idemKey}, ${meta.method}, ${c.req.path}, ${requestHash}, ${status}, ${deps.sql.json(result as never)})
-        on conflict (tenant_id, key) do nothing`;
+    // The command has run and the person must get its answer even if keeping it for replays fails; the claim then ages out.
+    if (idempotency) {
+      await storeAnswer(deps.sql, idempotency.scope, idempotency.key, status, result).catch((err) => deps.log.error("idempotency_store_failed", { requestId, path: c.req.path, error: String(err) }));
     }
     return c.json(result as object, status);
   });
