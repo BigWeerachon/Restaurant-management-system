@@ -630,7 +630,7 @@ export function describeActivity(a: ActivityApi, ingredientName: (id: string) =>
     case "finance.day_closed":
       return { text: `${who} ปิดยอดวันที่ ${str(p.business_date)} ยอดขาย ${baht0(p.total)} (${p.orders} บิล)`, tone: "good" };
     case "finance.day_reopened":
-      return { text: `${who} เปิดวันที่ ${str(p.business_date)} เพื่อแก้ไข${inParens(p.reason)}`, tone: "warn" };
+      return { text: `${who} เปิดยอดวันที่ ${str(p.business_date)} อีกครั้งเพื่อแก้ไข${inParens(p.reason)}`, tone: "warn" };
     case "branch.created":
       return { text: `${who} เปิดสาขา “${str(p.name)}”`, tone: "good" };
     default: {

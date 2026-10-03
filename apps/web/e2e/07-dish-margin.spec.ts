@@ -15,7 +15,7 @@ async function keptOnChannel(page: Page, channel: string): Promise<number> {
 async function openDish(page: Page, name: RegExp) {
   await page.goto("/menu");
   await page.getByRole("link", { name }).first().click();
-  await expect(page.getByText("เหลือจริงต่อจาน แยกตามช่องทาง")).toBeVisible();
+  await expect(page.getByText("เงินเหลือจริงต่อจาน แยกตามช่องทาง")).toBeVisible();
 }
 
 async function setPricesIncludeVat(page: Page, includeVat: boolean) {

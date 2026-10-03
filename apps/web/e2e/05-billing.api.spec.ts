@@ -125,8 +125,8 @@ for (const theme of ["light", "dark"] as const) {
         const add = page.getByRole("dialog");
         await add.getByLabel(/^ชื่อสาขา/).fill("สาขาที่ไม่ควรเพิ่มได้");
         await add.getByRole("button", { name: /^(เพิ่มสาขา|บันทึก)/ }).last().click();
-        await expect(page.getByText("ค่าบริการค้างชำระ เพิ่มสิ่งใหม่ไม่ได้ชั่วคราว").first()).toBeVisible();
-        await expect(page.getByText(/ตอนนี้เพิ่มสาขาไม่ได้/).first()).toBeVisible();
+        await expect(page.getByText("ค่าบริการค้างชำระ", { exact: true }).first()).toBeVisible();
+        await expect(page.getByText(/ตอนนี้เพิ่มสาขาใหม่ไม่ได้/).first()).toBeVisible();
         expect(sql("select count(*) from app.branches where name='สาขาที่ไม่ควรเพิ่มได้'"), "the branch was not created").toBe("0");
       });
 

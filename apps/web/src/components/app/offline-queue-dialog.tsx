@@ -89,7 +89,7 @@ export function OfflineQueueDialog({ open, onOpenChange }: { open: boolean; onOp
                           <p className="text-ink">
                             {c.kind === "payOrder"
                               ? "ลูกค้าจ่ายเงินไปแล้ว ถ้าลบ ยอดนี้จะไม่เข้าระบบ ตรวจกับลูกค้าหรือยอดเงินสดในลิ้นชักก่อนนะ"
-                              : "ถ้าลบ ออเดอร์นี้จะไม่ขึ้นจอครัวและไม่ถูกบันทึก"}
+                              : "ถ้าลบ ออเดอร์นี้จะหายไป ไม่ขึ้นจอครัว และไม่นับในยอดขาย"}
                           </p>
                           <div className="mt-3 flex flex-wrap gap-2">
                             <Button size="sm" variant="danger" icon={<Trash2 className="h-4 w-4" />} onClick={() => discard(c)}>
@@ -117,7 +117,7 @@ export function OfflineQueueDialog({ open, onOpenChange }: { open: boolean; onOp
           })}
         </ul>
       )}
-      {failed > 0 && <p className="pb-2 text-xs text-ink-3">รายการที่ส่งไม่สำเร็จจะหยุดรายการหลังมันของบิลเดียวกันไว้ จนกว่าจะลองส่งใหม่หรือลบทิ้ง</p>}
+      {failed > 0 && <p className="pb-2 text-xs text-ink-3">ถ้ามีรายการส่งไม่สำเร็จ รายการถัดไปของบิลเดียวกันจะรอไว้ก่อน จนกว่าจะส่งรายการนั้นได้หรือลบทิ้ง</p>}
     </Dialog>
   );
 }

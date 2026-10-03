@@ -28,13 +28,13 @@ import type { BillingInvoice, Branch, Tenant } from "@/lib/demo/types";
 const DevicesPanel = dynamic(() => import("@/components/app/devices-panel").then((m) => m.DevicesPanel), { loading: () => <PanelLoading lines={4} /> });
 
 const BUSINESS_TYPES: { value: Tenant["businessType"]; label: string }[] = [
-  { value: "cafe", label: "คาเฟ่" },
   { value: "restaurant", label: "ร้านอาหาร" },
+  { value: "cafe", label: "คาเฟ่" },
   { value: "bakery", label: "เบเกอรี่" },
   { value: "bar", label: "บาร์" },
-  { value: "cloud_kitchen", label: "ครัวออนไลน์ (เดลิเวอรีอย่างเดียว)" },
-  { value: "food_truck", label: "ฟู้ดทรัค" },
   { value: "buffet", label: "บุฟเฟต์" },
+  { value: "food_truck", label: "ฟู้ดทรัค" },
+  { value: "cloud_kitchen", label: "ขายเดลิเวอรีอย่างเดียว (ไม่มีหน้าร้าน)" },
   { value: "other", label: "อื่นๆ" },
 ];
 
@@ -379,7 +379,7 @@ function Plan() {
           );
         })}
       </div>
-      <p className="mt-4 text-center text-sm text-ink-3">ร้านมากกว่า 10 สาขา หรือต้องการ SSO/API เฉพาะ — ติดต่อทีมงานเพื่อแพ็กเกจเอนเตอร์ไพรส์</p>
+      <p className="mt-4 text-center text-sm text-ink-3">ร้านมากกว่า 10 สาขา หรือต้องการ SSO/API เฉพาะ — ติดต่อทีมงาน Sabai เพื่อแพ็กเกจเอนเตอร์ไพรส์</p>
       <Dialog
         open={!!confirm}
         onOpenChange={(v) => !v && setConfirm(null)}
@@ -409,10 +409,10 @@ function Plan() {
           <ul className="list-disc space-y-1.5 pb-2 pl-5 text-sm text-ink-2">
             <li>แพ็กเกจที่ถูกกว่าเริ่มใช้ทันที ส่วนที่แพงกว่าจะมีใบแจ้งหนี้ให้ชำระก่อน</li>
             <li>ราคารวม VAT แล้ว · ไม่คิดตามสัดส่วนวัน และไม่คืนเงินส่วนที่จ่ายไปแล้ว</li>
-            <li>ข้อมูลทั้งหมดอยู่ครบ ฟีเจอร์ที่ไม่มีในแพ็กเกจใหม่จะถูกซ่อน (ไม่ลบ) และกลับมาเมื่ออัปเกรดอีกครั้ง</li>
+            <li>ข้อมูลทั้งหมดอยู่ครบ ฟีเจอร์ที่ไม่มีในแพ็กเกจใหม่จะซ่อนไว้ (ไม่ลบ) และกลับมาเมื่ออัปเกรดอีกครั้ง</li>
           </ul>
         ) : (
-          <p className="pb-2 text-sm text-ink-2">ข้อมูลทั้งหมดอยู่ครบ ฟีเจอร์ที่ไม่มีในแพ็กเกจใหม่จะถูกซ่อน (ไม่ลบ) และกลับมาเมื่ออัปเกรดอีกครั้ง</p>
+          <p className="pb-2 text-sm text-ink-2">ข้อมูลทั้งหมดอยู่ครบ ฟีเจอร์ที่ไม่มีในแพ็กเกจใหม่จะซ่อนไว้ (ไม่ลบ) และกลับมาเมื่ออัปเกรดอีกครั้ง</p>
         )}
       </Dialog>
       <InvoicePayDialog invoice={paying} onClose={() => setPaying(null)} />

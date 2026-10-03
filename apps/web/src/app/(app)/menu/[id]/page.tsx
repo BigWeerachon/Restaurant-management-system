@@ -140,7 +140,7 @@ export default function MenuItemPage() {
 
           {showCost && lines.length > 0 && (
             <Card>
-              <CardHeader title="เหลือจริงต่อจาน แยกตามช่องทาง" description="หลังหัก VAT ต้นทุนวัตถุดิบ และค่า GP" icon={<Bike className="h-5 w-5" />} />
+              <CardHeader title="เงินเหลือจริงต่อจาน แยกตามช่องทาง" description="หลังหัก VAT ต้นทุนวัตถุดิบ และค่า GP" icon={<Bike className="h-5 w-5" />} />
               <ul className="space-y-2 p-5 pt-4">
                 {db.channels
                   .filter((c) => c.active)

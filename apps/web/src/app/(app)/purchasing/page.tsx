@@ -182,7 +182,7 @@ export default function PurchasingPage() {
         <TabPanel value="suppliers" className="pt-4">
           {db.suppliers.length === 0 ? (
             <Card>
-              <EmptyState compact emoji="🚚" title="ยังไม่มีผู้ขาย" description="ผู้ขายจะถูกเพิ่มให้อัตโนมัติเมื่อรับของครั้งแรก" />
+              <EmptyState compact emoji="🚚" title="ยังไม่มีผู้ขาย" description="ระบบจะเพิ่มผู้ขายให้เองตอนรับของครั้งแรก" />
             </Card>
           ) : (
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">

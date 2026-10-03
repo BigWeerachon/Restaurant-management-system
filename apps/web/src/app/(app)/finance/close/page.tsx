@@ -34,7 +34,7 @@ export default function CloseDayPage() {
   const paid = db.orders.filter((o) => o.branchId === branch.id && o.businessDate === date && o.status === "paid");
   const total = paid.reduce((s, o) => s + o.totals.total, 0);
 
-  if (!can("finance.close_day")) return <Callout tone="info">การปิดยอดทำได้โดยผู้จัดการหรือบัญชี</Callout>;
+  if (!can("finance.close_day")) return <Callout tone="info">ปิดยอดได้เฉพาะผู้จัดการหรือฝ่ายบัญชี</Callout>;
 
   if (summary) {
     return (
@@ -67,7 +67,7 @@ export default function CloseDayPage() {
   }
 
   const checks = [
-    { ok: openOrders.length === 0, title: "ไม่มีบิลค้าง", fail: `ยังมีบิลที่ยังไม่ชำระ ${openOrders.length} บิล`, action: <LinkButton href="/pos" size="sm" variant="secondary">ไปเก็บเงิน/ยกเลิก</LinkButton> },
+    { ok: openOrders.length === 0, title: "ไม่มีบิลค้าง", fail: `มีบิลที่ยังไม่ชำระ ${openOrders.length} บิล`, action: <LinkButton href="/pos" size="sm" variant="secondary">ไปเก็บเงิน/ยกเลิก</LinkButton> },
     { ok: !shift, title: "ปิดกะและนับเงินสดแล้ว", fail: "กะยังเปิดอยู่ — นับเงินสดในลิ้นชักก่อน", action: <Button size="sm" variant="secondary" onClick={() => setShiftOpen(true)}>ปิดกะ</Button> },
   ];
 
@@ -105,7 +105,7 @@ export default function CloseDayPage() {
               <p className="text-sm text-ink-3">{paid.length} บิล</p>
             </Card>
             <Callout tone="info" title="หลังปิดยอด">
-              แก้ไขรายการของวันนี้ไม่ได้ (เพื่อให้บัญชีถูกต้อง) รายการใหม่จะไปอยู่ในวันถัดไปอัตโนมัติ หากจำเป็น ผู้จัดการเปิดวันใหม่ได้โดยระบุเหตุผล
+              แก้รายการของวันนี้ไม่ได้ (เพื่อให้บัญชีถูกต้อง) รายการใหม่จะไปอยู่ในวันถัดไปให้เอง ถ้าจำเป็นต้องแก้ ผู้จัดการเปิดยอดวันนี้อีกครั้งได้ โดยต้องใส่เหตุผล
             </Callout>
             <div className="flex justify-between pt-2">
               <Button variant="ghost" onClick={() => setStep(0)} icon={<ArrowLeft className="h-4 w-4" />}>

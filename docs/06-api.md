@@ -25,7 +25,7 @@ HTTP JSON API (Hono บน Node 22) — **88 endpoints + SSE** ครอบค�
   "error": {
     "code": "OPEN_SHIFTS_EXIST",
     "title": "ยังมีกะที่ยังไม่ปิด",
-    "message": "ปิดกะและนับเงินสด 1 กะก่อน แล้วค่อยปิดยอดวัน",
+    "message": "มีกะที่ยังเปิดอยู่ 1 กะ ปิดกะและนับเงินสดก่อน แล้วค่อยปิดยอด",
     "action": "fix_input",
     "actionLabel": "ไปปิดกะ",
     "severity": "warning",
@@ -183,7 +183,7 @@ HTTP JSON API (Hono บน Node 22) — **88 endpoints + SSE** ครอบค�
 | `PATCH` | `/v1/branches/{id}` | แก้ไขสาขา (ที่อยู่ เบอร์โทร เวลาตัดรอบวัน ค่าบริการ เปิด-ปิดใช้งาน) (สิทธิ์ `settings.manage`) |
 | `PATCH` | `/v1/channels/{id}` | แก้ไขช่องทางขาย (ชื่อ สี เปิด-ปิดใช้งาน ค่าบริการ) (สิทธิ์ `settings.manage`) |
 | `POST` | `/v1/channels/{id}/commission-rate` | ตั้งค่า GP ใหม่ พร้อมวันเริ่มมีผล (ของเดิมยังใช้กับยอดขายเก่า) (สิทธิ์ `settings.manage`) |
-| `PATCH` | `/v1/payment-methods/{id}` | แก้ไขช่องทางรับเงิน (ชื่อ เปิด-ปิดใช้งาน ค่าธรรมเนียม พร้อมเพย์) (สิทธิ์ `settings.manage`) |
+| `PATCH` | `/v1/payment-methods/{id}` | แก้ไขวิธีรับเงิน (ชื่อ เปิด-ปิดใช้งาน ค่าธรรมเนียม พร้อมเพย์) (สิทธิ์ `settings.manage`) |
 | `POST` | `/v1/settings/payments/confirm-cash-only` | ยืนยันว่าตั้งใจรับเงินสดอย่างเดียว (ข้ามขั้นตอนตั้งพร้อมเพย์) (สิทธิ์ `settings.manage`) |
 
 **Shop (ข้อมูลตั้งต้นทั้งร้านในคำขอเดียว)**

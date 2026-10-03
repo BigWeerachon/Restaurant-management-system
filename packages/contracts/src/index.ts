@@ -165,7 +165,7 @@ export const BillingWebhookBody = z.object({
   data: z
     .object({
       invoiceNo: z.string().max(40).optional(),
-      amount: z.string().regex(/^\d{1,10}(\.\d{1,2})?$/, "จำนวนเงินเป็นทศนิยมสตริง").optional(),
+      amount: z.string().regex(/^\d{1,10}(\.\d{1,2})?$/, "จำนวนเงินต้องเป็นตัวเลข เช่น 590.00").optional(),
       providerInvoiceId: z.string().max(120).optional(),
       customerId: z.string().max(120).optional(),
       subscriptionId: z.string().max(120).optional(),
@@ -247,7 +247,7 @@ export const CreateIngredientBody = z.object({
   /** Stock already on the shelf, recorded as an opening movement in this branch's default location. */
   openingQty: Qty.optional(),
   branchId: Id.optional(),
-}).refine((b) => b.openingQty === undefined || b.branchId !== undefined, { message: "ระบุสาขาที่นับของเปิดยอด", path: ["branchId"] });
+}).refine((b) => b.openingQty === undefined || b.branchId !== undefined, { message: "เลือกสาขาที่จะใส่ยอดตั้งต้น", path: ["branchId"] });
 
 export const CreateMenuItemBody = z.object({
   categoryId: Id.optional(),
@@ -319,7 +319,7 @@ export const PaymentInput = z.object({
 });
 
 export const PayOrderBody = z.object({
-  payments: z.array(PaymentInput).min(1, "เลือกวิธีชำระเงิน").max(10),
+  payments: z.array(PaymentInput).min(1, "เลือกวิธีรับเงิน").max(10),
 });
 
 export const DiscountBody = z.object({

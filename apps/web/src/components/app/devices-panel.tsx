@@ -89,7 +89,7 @@ export function DevicesPanel() {
 
       {error ? (
         <Callout tone="danger" title="โหลดรายการเครื่องไม่สำเร็จ" action={<Button size="sm" variant="secondary" onClick={() => void reload()}>ลองอีกครั้ง</Button>}>
-          {isDomainError(error) && error.code === "PERMISSION_DENIED" ? "ต้องมีสิทธิ์ตั้งค่าร้านจึงจะดูรายการเครื่องได้" : "ลองใหม่อีกครั้ง ถ้ายังไม่ได้ แจ้งผู้ดูแลระบบ"}
+          {isDomainError(error) && error.code === "PERMISSION_DENIED" ? "ต้องมีสิทธิ์ตั้งค่าร้านจึงจะดูรายการเครื่องได้" : "ลองอีกครั้ง ถ้ายังไม่ได้ ติดต่อทีมงาน Sabai"}
         </Callout>
       ) : rows === null ? (
         <p role="status" className="text-sm text-ink-3">กำลังโหลดรายการเครื่อง…</p>

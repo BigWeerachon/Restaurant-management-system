@@ -109,7 +109,7 @@ function MenuInner() {
                     <span className="w-24 text-right text-sm tabular text-ink-2">
                       {m.recipe ? (
                         <>
-                          ทุน {formatBaht(Math.round(cost * 100))}
+                          ต้นทุน {formatBaht(Math.round(cost * 100))}
                           <span className="block text-xs text-ink-3">{(pct * 100).toFixed(0)}%</span>
                         </>
                       ) : (

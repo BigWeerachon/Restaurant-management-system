@@ -44,7 +44,7 @@ export const ONBOARDING_STEPS: readonly StepDef[] = [
   },
   {
     key: "payments",
-    title: "เลือกช่องทางรับเงิน",
+    title: "เลือกวิธีรับเงิน",
     titleEn: "Choose how you get paid",
     why: "เปิดพร้อมเพย์หรือบัตร แล้วระบบจะสร้าง QR ตามยอดบิลและกระทบยอดให้อัตโนมัติ",
     cta: "ตั้งค่าการรับเงิน",
@@ -101,7 +101,7 @@ export const ONBOARDING_STEPS: readonly StepDef[] = [
     key: "first_sale",
     title: "ขายบิลแรก",
     titleEn: "Make your first sale",
-    why: "ลองขาย 1 บิล ดูออเดอร์เด้งขึ้นจอครัว แล้วดูสต็อกถูกตัดอัตโนมัติ",
+    why: "ลองขาย 1 บิล ดูออเดอร์เด้งขึ้นจอครัว แล้วดูสต็อกลดลงเอง",
     cta: "ไปหน้าขาย",
     href: "/pos",
     minutes: 1,

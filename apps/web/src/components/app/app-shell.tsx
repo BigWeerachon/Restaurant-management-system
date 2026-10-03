@@ -151,7 +151,7 @@ function UserMenu({ side = "top", compact }: { side?: "top" | "bottom"; compact?
         open={confirmReset}
         onOpenChange={setConfirmReset}
         title="เริ่มข้อมูลตัวอย่างใหม่?"
-        description="ข้อมูลที่ทดลองทำไว้ในเครื่องนี้จะถูกแทนที่ด้วยข้อมูลตั้งต้น"
+        description="ทุกอย่างที่ทดลองทำไว้ในเครื่องนี้จะหายไป และกลับเป็นข้อมูลตัวอย่างตั้งต้น"
         size="sm"
         footer={
           <>

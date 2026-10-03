@@ -145,7 +145,7 @@ export function PaymentDialog({ order, open, onClose, onPaid }: { order: Order |
                   <p className="mt-1 text-5xl font-bold tracking-tight text-ink">{formatBaht(total)}</p>
                   {order && order.totals.vatAmount > 0 && <p className="mt-1 text-xs text-ink-3">รวม VAT {formatBaht(order.totals.vatAmount)}</p>}
                 </div>
-                <div role="radiogroup" aria-label="วิธีชำระเงิน" className="grid grid-cols-3 gap-2">
+                <div role="radiogroup" aria-label="วิธีรับเงิน" className="grid grid-cols-3 gap-2">
                   {methods.map((m) => {
                     const Ico = ICON[m.kind] ?? Banknote;
                     const on = method?.id === m.id;
@@ -205,13 +205,13 @@ export function PaymentDialog({ order, open, onClose, onPaid }: { order: Order |
                   <div className="space-y-3 text-center">
                     <PromptPayQr id={method.promptpayId ?? "0812345678"} amount={total / 100} />
                     <p className="text-sm text-ink-2">ให้ลูกค้าสแกน QR ยอดจะขึ้นตรงบิลอัตโนมัติ ไม่ต้องพิมพ์ยอดเอง</p>
-                    <p className="text-xs text-ink-3">ตรวจว่ามีเงินเข้าแล้วค่อยกดยืนยัน ระบบจะกระทบยอดกับบัญชีธนาคารให้ภายหลัง</p>
+                    <p className="text-xs text-ink-3">ตรวจว่ามีเงินเข้าแล้วค่อยกดยืนยัน ระบบจะเทียบกับรายการเงินเข้าบัญชีธนาคารให้ภายหลัง</p>
                   </div>
                 )}
                 {method?.kind === "card" && (
                   <div className="space-y-3">
                     <Callout tone="info" title="รูดหรือแตะบัตรที่เครื่อง EDC">
-                      ใส่เลข 4 ตัวท้ายของสลิปเพื่อกระทบยอดกับธนาคาร (ค่าธรรมเนียม {(method.feeRate * 100).toFixed(1)}% คำนวณให้อัตโนมัติ)
+                      ใส่เลข 4 ตัวท้ายบนสลิปบัตร ใช้เทียบกับเงินที่ธนาคารโอนเข้า (ค่าธรรมเนียม {(method.feeRate * 100).toFixed(1)}% คำนวณให้อัตโนมัติ)
                     </Callout>
                     <div className="flex items-baseline justify-between rounded-2xl border border-line px-4 py-3">
                       <span className="text-sm text-ink-3">เลขอ้างอิง</span>

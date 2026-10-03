@@ -105,7 +105,7 @@ export function registerSettings(app: Hono<Env>, deps: Deps) {
       }),
   );
 
-  route(app, deps, { method: "PATCH", path: "/v1/payment-methods/{id}", tag: "Settings", summary: "แก้ไขช่องทางรับเงิน (ชื่อ เปิด-ปิดใช้งาน ค่าธรรมเนียม พร้อมเพย์)", tenant: true, body: UpdatePaymentMethodBody, permission: "settings.manage" }, async ({ tenantId, params, body, tx }) =>
+  route(app, deps, { method: "PATCH", path: "/v1/payment-methods/{id}", tag: "Settings", summary: "แก้ไขวิธีรับเงิน (ชื่อ เปิด-ปิดใช้งาน ค่าธรรมเนียม พร้อมเพย์)", tenant: true, body: UpdatePaymentMethodBody, permission: "settings.manage" }, async ({ tenantId, params, body, tx }) =>
     tx(async (t) => {
       const rows = await t`
         update app.payment_methods
