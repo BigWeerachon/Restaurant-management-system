@@ -5,7 +5,7 @@ import { motion } from "motion/react";
 import type { Member, Role } from "@/lib/demo/types";
 
 const ROLE_SEES: Record<string, string> = {
-  owner: "ภาพรวม · กำไรจริง · ทุกอย่าง",
+  owner: "ภาพรวม · เงินเหลือจริง · ทุกอย่าง",
   manager: "หน้าร้าน · สต็อก · ทีม · ปิดยอด",
   cashier: "ขายหน้าร้าน · บิลวันนี้ · จอครัว",
   waiter: "รับออเดอร์ · ส่งเข้าครัว",

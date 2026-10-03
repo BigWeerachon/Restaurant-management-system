@@ -50,7 +50,7 @@ export function profitWaterfall(i: ProfitInput): WaterfallStep[] {
   });
   out.push({
     key: "profit",
-    label: "เหลือเงินจริง",
+    label: "เงินเหลือจริง",
     labelEn: "What you keep",
     value: running,
     running,

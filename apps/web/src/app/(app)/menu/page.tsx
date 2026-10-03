@@ -1,6 +1,6 @@
 "use client";
 
-import { foodCostPct, marginHealth } from "@sabai/domain";
+import { effectiveVatRate, foodCostPct, marginHealth } from "@sabai/domain";
 import { AlertTriangle, ChefHat, Plus } from "lucide-react";
 import { motion } from "motion/react";
 import Link from "next/link";
@@ -30,7 +30,7 @@ function MenuInner() {
   const [q, setQ] = useState("");
   const [sort, setSort] = useState<"name" | "cost">(params.get("sort") === "cost" ? "cost" : "name");
   const showCost = can("costs.view");
-  const vat = db.tenant.vatRegistered ? db.tenant.vatRate : 0;
+  const vat = effectiveVatRate(db.tenant);
 
   const rows = useMemo(
     () =>
@@ -109,7 +109,7 @@ function MenuInner() {
                     <span className="w-24 text-right text-sm tabular text-ink-2">
                       {m.recipe ? (
                         <>
-                          ทุน {formatBaht(Math.round(cost * 100))}
+                          ต้นทุน {formatBaht(Math.round(cost * 100))}
                           <span className="block text-xs text-ink-3">{(pct * 100).toFixed(0)}%</span>
                         </>
                       ) : (

@@ -89,6 +89,24 @@ describe("offline queue", () => {
     expect(attempts).toEqual(["k1", "k1", "k2"]);
   });
 
+  it("treats \"the same request is still being saved\" like a lost line: keep it, do not count it against the command, try again next time", async () => {
+    let busy = true;
+    const { queue } = setup({
+      maxAttempts: 2,
+      send: async () => {
+        if (busy) throw new DomainError("REQUEST_IN_PROGRESS");
+      },
+    });
+    await queue.enqueue(cmd("k1", "o-1"));
+
+    // Far more often than maxAttempts: it is never set aside as failed, because nothing is wrong with the command.
+    for (let i = 0; i < 4; i++) expect(await queue.drain()).toEqual({ sent: 0, stopped: "network" });
+    expect(queue.snapshot()).toMatchObject({ pending: 1, failed: 0 });
+
+    busy = false;
+    expect(await queue.drain()).toEqual({ sent: 1, stopped: null });
+  });
+
   it("does not tell screens to reload when nothing reached the server", async () => {
     const { queue, settled } = setup({ send: async () => Promise.reject(new DomainError("NETWORK_OFFLINE")) });
     await queue.enqueue(cmd("k1", "o-1"));

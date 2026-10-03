@@ -102,7 +102,7 @@ export function InvoicePayDialog({ invoice, onClose }: { invoice: BillingInvoice
           )}
           {pay && (
             <p className="rounded-2xl bg-warning-soft p-3 text-sm text-warning">
-              ใส่เลขที่ใบแจ้งหนี้ <span className="font-semibold tabular">{pay.reference}</span> ในบันทึกการโอน เพื่อให้เราจับคู่การชำระได้ · ทีมงานจะตรวจสอบและยืนยัน แล้วแพ็กเกจเริ่มใช้ให้เอง (หน้านี้อัปเดตเอง ไม่ต้องกดอะไร)
+              ใส่เลขที่ใบแจ้งหนี้ <span className="font-semibold tabular">{pay.reference}</span> ในบันทึกการโอน เพื่อให้เราจับคู่การชำระได้ · ทีมงาน Sabai ตรวจแล้วแพ็กเกจจะเริ่มใช้ให้เอง หน้านี้อัปเดตเอง ไม่ต้องกดอะไร
             </p>
           )}
         </div>

@@ -1,6 +1,6 @@
 "use client";
 
-import { applyRate, divRound } from "@sabai/domain";
+import { effectiveVatRate, keepPerPortion } from "@sabai/domain";
 import { ArrowLeft, Bike, Save } from "lucide-react";
 import { motion } from "motion/react";
 import Link from "next/link";
@@ -140,15 +140,19 @@ export default function MenuItemPage() {
 
           {showCost && lines.length > 0 && (
             <Card>
-              <CardHeader title="เหลือจริงต่อจาน แยกตามช่องทาง" description="หลังหัก VAT ต้นทุนวัตถุดิบ และค่า GP" icon={<Bike className="h-5 w-5" />} />
+              <CardHeader title="เงินเหลือจริงต่อจาน แยกตามช่องทาง" description="หลังหัก VAT ต้นทุนวัตถุดิบ และค่า GP" icon={<Bike className="h-5 w-5" />} />
               <ul className="space-y-2 p-5 pt-4">
                 {db.channels
                   .filter((c) => c.active)
                   .map((c) => {
                     const p = priceFor({ price: Math.round(Number(price || 0) * 100) }, c);
-                    const vat = db.tenant.vatRegistered ? divRound(p * 700, 10700) : 0;
-                    const gp = applyRate(p, c.commissionRate);
-                    const keep = p - vat - gp - Math.round(costing.breakdown.cost * 100);
+                    const { keep } = keepPerPortion({
+                      price: p,
+                      cost: Math.round(costing.breakdown.cost * 100),
+                      vatRate: effectiveVatRate(db.tenant),
+                      pricesIncludeVat: db.tenant.pricesIncludeVat,
+                      commissionRate: c.commissionRate,
+                    });
                     return (
                       <li key={c.id} className="flex items-center justify-between gap-3 rounded-xl bg-surface-2 px-3 py-2.5 text-sm">
                         <span className="flex items-center gap-2 text-ink">

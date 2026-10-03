@@ -28,7 +28,7 @@ const BUSINESS: Feature[] = [...PRO, "central_kitchen", "analytics_advanced", "a
 export const PLANS: readonly Plan[] = [
   { code: "free", name: "เริ่มต้นฟรี", nameEn: "Free", priceMonthly: 0, priceYearly: 0, limits: { branches: 1, staff: 3, devices: 1 }, features: BASE, pitch: "ขายหน้าร้านและจอครัวสำหรับร้านเล็ก" },
   { code: "starter", name: "สตาร์ทเตอร์", nameEn: "Starter", priceMonthly: 590, priceYearly: 5900, limits: { branches: 1, staff: 10, devices: 3 }, features: STARTER, pitch: "สต็อกและสูตร ตัดวัตถุดิบอัตโนมัติ" },
-  { code: "pro", name: "โปร", nameEn: "Pro", priceMonthly: 1490, priceYearly: 14900, limits: { branches: 3, staff: 30, devices: 10 }, features: PRO, pitch: "รู้กำไรจริง สั่งซื้อ กระทบยอด หลายสาขา" },
+  { code: "pro", name: "โปร", nameEn: "Pro", priceMonthly: 1490, priceYearly: 14900, limits: { branches: 3, staff: 30, devices: 10 }, features: PRO, pitch: "รู้เงินเหลือจริง สั่งซื้อ กระทบยอด หลายสาขา" },
   { code: "business", name: "บิสิเนส", nameEn: "Business", priceMonthly: 3490, priceYearly: 34900, limits: { branches: 10, staff: 150, devices: 40 }, features: BUSINESS, pitch: "ครัวกลาง วิเคราะห์ขั้นสูง และ API" },
   { code: "enterprise", name: "เอนเตอร์ไพรส์", nameEn: "Enterprise", priceMonthly: null, priceYearly: null, limits: { branches: null, staff: null, devices: null }, features: [...BUSINESS, "ai_copilot", "sso"], pitch: "เครือร้านขนาดใหญ่ SSO และผู้ช่วย AI" },
 ];
@@ -40,7 +40,7 @@ export const FEATURE_COPY: Record<Feature, string> = {
   inventory: "สต็อกหลายคลัง ของเสีย โอนย้าย",
   recipes: "สูตรและต้นทุนต่อจาน",
   purchasing: "ใบสั่งซื้อและผู้ขาย",
-  finance: "บิลค้างจ่าย ค่าใช้จ่าย บัญชีคู่อัตโนมัติ",
+  finance: "บิลค้างจ่าย ค่าใช้จ่าย ลงบัญชีให้อัตโนมัติ",
   reconciliation: "กระทบยอดธนาคารและแพลตฟอร์ม",
   reports_basic: "รายงานยอดขาย",
   reports_profit: "รายงานเงินเหลือจริง",
@@ -49,7 +49,7 @@ export const FEATURE_COPY: Record<Feature, string> = {
   analytics_advanced: "วิเคราะห์ขั้นสูง",
   api_access: "เชื่อมต่อ API",
   ai_copilot: "ผู้ช่วย AI",
-  sso: "Single sign-on",
+  sso: "เข้าระบบด้วยบัญชีขององค์กร (SSO)",
 };
 
 export function planOf(code: string): Plan {

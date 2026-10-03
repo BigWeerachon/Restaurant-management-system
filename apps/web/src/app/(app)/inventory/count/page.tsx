@@ -79,7 +79,7 @@ export default function CountPage() {
           />
           <div className="px-6 pb-6">
             <Callout tone="info" title="ทำไมไม่เห็นยอดในระบบ?">
-              เพื่อให้ได้ตัวเลขจริง ผู้นับจะไม่เห็นยอดที่ระบบคาดไว้ (Blind count) ผู้จัดการจะเห็นส่วนต่างหลังส่งผล
+              เพื่อให้ได้ตัวเลขจริง ผู้นับจะไม่เห็นยอดที่ควรมีตามระบบ ผู้จัดการจะเห็นส่วนต่างหลังส่งผล
             </Callout>
           </div>
         </Card>
@@ -90,7 +90,7 @@ export default function CountPage() {
   if (count.status === "submitted") {
     return (
       <div className="mx-auto max-w-3xl">
-        <PageHeader title={`ผลการนับ ${count.countNo}`} description="ส่วนต่าง = ที่นับได้ − ที่ระบบคาด (ขาย รับของ ของเสีย ที่บันทึกไว้)" />
+        <PageHeader title={`ผลการนับ ${count.countNo}`} description="ส่วนต่าง = จำนวนที่นับได้ − จำนวนที่ควรมีตามที่บันทึกไว้ (ขาย รับของ ของเสีย)" />
         <LoadBanner state={load} className="mb-4" />
         {summary && (
           <div className="mb-4 grid gap-3 sm:grid-cols-3">
@@ -119,7 +119,7 @@ export default function CountPage() {
                     <span aria-hidden="true">{i.emoji}</span>
                     <span className="flex-1">{i.name}</span>
                     <span className="text-ink-3">
-                      คาด {formatQty(l.expected, i.baseUnit, i.displayUnit)} · นับได้ {formatQty(l.counted ?? 0, i.baseUnit, i.displayUnit)}
+                      ควรมี {formatQty(l.expected, i.baseUnit, i.displayUnit)} · นับได้ {formatQty(l.counted ?? 0, i.baseUnit, i.displayUnit)}
                     </span>
                     <span className="w-24 text-right font-semibold tabular text-danger">{formatBaht(Math.round(l.value * 100))}</span>
                   </li>
@@ -129,7 +129,7 @@ export default function CountPage() {
           </Card>
         )}
         {can("inventory.adjust") ? (
-          <Button size="lg" loading={pending} onClick={() => exec((ds) => ds.approveCount(count.id), { success: "ปรับยอดสต็อกตามที่นับแล้ว", successDetail: "ส่วนต่างถูกบันทึกเป็น “ของหายจากการนับ” ในรายงานเงินเหลือจริง" })}>
+          <Button size="lg" loading={pending} onClick={() => exec((ds) => ds.approveCount(count.id), { success: "ปรับยอดสต็อกตามที่นับแล้ว", successDetail: "ส่วนต่างไปอยู่ในรายงานเงินเหลือจริง หัวข้อ “ของหายจากการนับ”" })}>
             อนุมัติและปรับยอดสต็อก
           </Button>
         ) : (
@@ -167,7 +167,7 @@ export default function CountPage() {
                   </span>
                   <div>
                     <p className="text-2xl font-bold text-ink">{ing.name}</p>
-                    {ing.pack && <p className="text-sm text-ink-3">ปกติมาเป็น {ing.pack.name}</p>}
+                    {ing.pack && <p className="text-sm text-ink-3">ซื้อมาเป็น {ing.pack.name}</p>}
                   </div>
                 </div>
                 <div className="rounded-2xl bg-surface-2 p-4">
@@ -207,7 +207,7 @@ export default function CountPage() {
         </AnimatePresence>
       )}
       <div className="mt-6 flex flex-wrap items-center justify-between gap-3">
-        <p className="text-sm text-ink-3">ยังไม่ได้นับ {lines.length - counted} รายการ — รายการที่ไม่นับจะไม่ถูกปรับยอด (ไม่ถือว่าเป็นศูนย์)</p>
+        <p className="text-sm text-ink-3">ยังไม่ได้นับ {lines.length - counted} รายการ — รายการที่ไม่ได้นับจะคงยอดเดิม (ไม่ปรับเป็นศูนย์)</p>
         <Button variant={counted === lines.length ? "primary" : "secondary"} disabled={counted === 0} loading={pending} onClick={() => exec((ds) => ds.submitCount(count.id), { success: "ส่งผลการนับแล้ว" })}>
           ส่งผลการนับ
         </Button>

@@ -11,7 +11,7 @@ HTTP JSON API (Hono บน Node 22) — **88 endpoints + SSE** ครอบค�
 | **Auth** | `Authorization: Bearer <JWT>` (Supabase-compatible); พนักงานบนเครื่องร้านได้ token จาก `POST /v1/auth/pin` |
 | **Tenant** | endpoint ระดับร้านต้องส่ง `X-Tenant-Id` (ผู้ใช้หนึ่งคนอยู่ได้หลายร้าน) |
 | **RLS ทุก request** | transaction ใหม่ต่อ request → `set local role authenticated` + JWT claims → ข้อมูลที่เห็นถูกกรองโดย Postgres |
-| **Idempotency** | คำสั่งที่มีผลกับเงิน/สต็อกรับ `Idempotency-Key`; ส่งซ้ำได้ผลเดิม (เก็บใน `app.api_idempotency`) |
+| **Idempotency** | คำสั่งที่มีผลกับเงิน/สต็อกรับ `Idempotency-Key` (8–128 ตัวอักษร); ส่งซ้ำได้ผลเดิม (เก็บใน `app.api_idempotency` 24 ชม.) **คีย์ถูกจองก่อนรันคำสั่ง** จึงส่งพร้อมกันกี่ครั้งก็รันครั้งเดียว — คำขอที่มาทีหลังรอผลของคำขอแรกได้สูงสุด 10 วินาที แล้วได้ผลเดียวกัน (หรือ `REQUEST_IN_PROGRESS` 409 ถ้ายังไม่เสร็จ — เว็บส่งซ้ำเอง); คำสั่งที่ล้มเหลวไม่เก็บผล ส่งซ้ำด้วยคีย์เดิมได้; คำขอที่ค้างเกิน 2 นาทีถือว่าตายและถูกแทนที่ได้ |
 | **ภาษา** | `Accept-Language: th` (ค่าเริ่มต้น) หรือ `en` — ข้อความ error เปลี่ยนตาม |
 | **Request id** | ทุก response มี `X-Request-Id`; error มี `reference` สั้นให้ลูกค้าแจ้ง support |
 | **Rate limit** | PIN สลับผู้ใช้/อนุมัติ 10 ครั้ง/นาที/ที่อยู่และสาขา (ตั้งได้ด้วย `PIN_ATTEMPTS_PER_MINUTE` — อย่าเพิ่มบน production), PIN บนเครื่องร้านที่ลงทะเบียนแล้ว 10 ครั้ง/นาที/เครื่อง → `RATE_LIMITED` (429) พร้อม `retry_after_s` |
@@ -25,7 +25,7 @@ HTTP JSON API (Hono บน Node 22) — **88 endpoints + SSE** ครอบค�
   "error": {
     "code": "OPEN_SHIFTS_EXIST",
     "title": "ยังมีกะที่ยังไม่ปิด",
-    "message": "ปิดกะและนับเงินสด 1 กะก่อน แล้วค่อยปิดยอดวัน",
+    "message": "มีกะที่ยังเปิดอยู่ 1 กะ ปิดกะและนับเงินสดก่อน แล้วค่อยปิดยอด",
     "action": "fix_input",
     "actionLabel": "ไปปิดกะ",
     "severity": "warning",
@@ -183,7 +183,7 @@ HTTP JSON API (Hono บน Node 22) — **88 endpoints + SSE** ครอบค�
 | `PATCH` | `/v1/branches/{id}` | แก้ไขสาขา (ที่อยู่ เบอร์โทร เวลาตัดรอบวัน ค่าบริการ เปิด-ปิดใช้งาน) (สิทธิ์ `settings.manage`) |
 | `PATCH` | `/v1/channels/{id}` | แก้ไขช่องทางขาย (ชื่อ สี เปิด-ปิดใช้งาน ค่าบริการ) (สิทธิ์ `settings.manage`) |
 | `POST` | `/v1/channels/{id}/commission-rate` | ตั้งค่า GP ใหม่ พร้อมวันเริ่มมีผล (ของเดิมยังใช้กับยอดขายเก่า) (สิทธิ์ `settings.manage`) |
-| `PATCH` | `/v1/payment-methods/{id}` | แก้ไขช่องทางรับเงิน (ชื่อ เปิด-ปิดใช้งาน ค่าธรรมเนียม พร้อมเพย์) (สิทธิ์ `settings.manage`) |
+| `PATCH` | `/v1/payment-methods/{id}` | แก้ไขวิธีรับเงิน (ชื่อ เปิด-ปิดใช้งาน ค่าธรรมเนียม พร้อมเพย์) (สิทธิ์ `settings.manage`) |
 | `POST` | `/v1/settings/payments/confirm-cash-only` | ยืนยันว่าตั้งใจรับเงินสดอย่างเดียว (ข้ามขั้นตอนตั้งพร้อมเพย์) (สิทธิ์ `settings.manage`) |
 
 **Shop (ข้อมูลตั้งต้นทั้งร้านในคำขอเดียว)**

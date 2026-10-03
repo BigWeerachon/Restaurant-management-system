@@ -141,9 +141,9 @@ OpenTelemetry (trace + metric ผ่าน OTLP), log JSON ที่ตัดค
 
 | ส่วน | สถานะ | หลักฐาน |
 |---|---|---|
-| Database + commands + RLS | ✅ 75 ตาราง (+ `audit.log`) ทุกตารางมี RLS, 103 functions, 7 views ใน 23 migrations | SQL 275 assertions: 231 end-to-end + 44 ประวัติขาย (`pnpm db:test`) |
-| API | ✅ 88 endpoints + SSE + OpenAPI; billing, เครื่องร้าน, ใบกำกับภาษี, observability | integration test 101 เคส กับ Postgres จริง — รวมเทสต์ที่บังคับให้ [06-api](06-api.md) ตรงกับ route ที่ลงทะเบียนจริงทุกตัว |
-| Web UI ทุกหน้า | ✅ สองโหมดจากโค้ดเดียว: **demo** (engine ในเบราว์เซอร์ ไม่ต้องมีเซิร์ฟเวอร์ — สิ่งที่ deploy บน Vercel) และ **API** (`NEXT_PUBLIC_DATA_SOURCE=api`) | unit 393 · browser tests (Playwright + axe) 72 ในโหมดเดโม / 68 ในโหมด API รันใน CI ทุกครั้ง |
+| Database + commands + RLS | ✅ 75 ตาราง (+ `audit.log`) ทุกตารางมี RLS, 103 functions, 7 views ใน 26 migrations | SQL 341 assertions: 231 end-to-end + 44 ประวัติขาย + 58 โอนสต็อก/เปิดวันปิดยอด + 8 index (`pnpm db:test`) |
+| API | ✅ 88 endpoints + SSE + OpenAPI; billing, เครื่องร้าน, ใบกำกับภาษี, observability | integration test 119 เคส กับ Postgres จริง — รวมเทสต์ที่บังคับให้ [06-api](06-api.md) ตรงกับ route ที่ลงทะเบียนจริงทุกตัว |
+| Web UI ทุกหน้า | ✅ สองโหมดจากโค้ดเดียว: **demo** (engine ในเบราว์เซอร์ ไม่ต้องมีเซิร์ฟเวอร์ — สิ่งที่ deploy บน Vercel) และ **API** (`NEXT_PUBLIC_DATA_SOURCE=api`) | unit 395 · browser tests (Playwright + axe) 73 ในโหมดเดโม / 69 ในโหมด API รันใน CI ทุกครั้ง |
 | Web ↔ API | ✅ ทำแล้ว (V1.1, [ADR-0009](adr/0009-datasource.md)): ทุกหน้าเรียกผ่าน `DataSource` เดียว, สตรีมสด, คิวออฟไลน์, service worker, เข้าสู่ระบบ/สมัคร/เครื่องร้าน, พิมพ์ใบเสร็จ/ตั๋วครัว/ใบกำกับภาษี, ค่าบริการ | ดู [checklist](v1.1-checklist.md) |
 | ต่อบริการภายนอกจริง | ⏭ ยังไม่ได้ทำ (ต้องมีข้อมูลจากเจ้าของโปรเจกต์): Supabase Auth (URL/anon key — ตอนนี้ใช้ `AUTH_MODE=local`), ผู้ให้บริการรับบัตร/พร้อมเพย์ (ตอนนี้ `BILLING_PROVIDER=manual`), LINE Login | [checklist 6.4, 8.2](v1.1-checklist.md) |
 | Deploy ของ API | ⏭ ยังไม่ได้ deploy (เว็บโหมดเดโมอยู่บน Vercel) — ต้องเลือกที่รัน API + Postgres ที่มีมาตรฐานสำรองข้อมูล | [10-slo](10-slo.md) มีตัวเลขที่วัดบนเครื่องเดียว |

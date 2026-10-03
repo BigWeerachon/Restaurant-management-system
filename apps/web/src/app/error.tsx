@@ -25,7 +25,7 @@ export default function RouteError({ error, retry }: { error: Error & { digest?:
       <Card className="w-full p-6 text-center">
         <TriangleAlert className="mx-auto h-10 w-10 text-warning" aria-hidden="true" />
         <h1 className="mt-3 text-xl font-semibold text-ink">หน้านี้ขัดข้องชั่วคราว</h1>
-        <p className="mt-2 text-sm text-ink-2">ข้อมูลที่บันทึกไปแล้วไม่หาย ลองอีกครั้งได้เลย ถ้ายังไม่หาย แจ้งรหัสอ้างอิงนี้กับทีมงาน</p>
+        <p className="mt-2 text-sm text-ink-2">ข้อมูลที่บันทึกไปแล้วไม่หาย ลองอีกครั้งได้เลย ถ้ายังใช้ไม่ได้ แจ้งรหัสอ้างอิงนี้กับทีมงาน Sabai</p>
         <p className="mt-3 text-sm text-ink-3">
           รหัสอ้างอิง <span className="tabular font-semibold text-ink">{reference}</span>
         </p>

@@ -159,7 +159,7 @@ export default function ReportsPage() {
           <EmptyState
             emoji="📊"
             title="ยังไม่มียอดขายในช่วงนี้"
-            description="เมื่อเริ่มขาย รายงานจะคำนวณให้อัตโนมัติ ทั้งกำไรจริง ช่องทาง และเมนูขายดี — ไม่ต้องทำบัญชีเอง"
+            description="เมื่อเริ่มขาย รายงานจะคำนวณให้อัตโนมัติ ทั้งเงินเหลือจริง ช่องทาง และเมนูขายดี — ไม่ต้องทำบัญชีเอง"
             action={preset !== "today" ? <Button variant="secondary" onClick={() => setPreset("today")}>ดูยอดของวันนี้</Button> : undefined}
           />
         </Card>
@@ -170,7 +170,7 @@ export default function ReportsPage() {
               <div className="grid gap-4 lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)]">
                 <Card className="relative overflow-hidden p-6">
                   <div className="pointer-events-none absolute -right-16 -top-16 h-48 w-48 rounded-full bg-brand-soft opacity-70 blur-2xl" aria-hidden="true" />
-                  <p className="relative text-sm font-medium text-ink-3">เหลือเงินจริง</p>
+                  <p className="relative text-sm font-medium text-ink-3">เงินเหลือจริง</p>
                   <motion.p key={`${preset}-${branchId}`} initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} className={cn("relative mt-1 text-5xl font-bold tracking-tight tabular", profit.value < 0 ? "text-danger" : "text-ink")}>
                     <AnimatedNumber value={profit.value} format={(v) => formatBaht(Math.round(v), { compact: true })} />
                   </motion.p>

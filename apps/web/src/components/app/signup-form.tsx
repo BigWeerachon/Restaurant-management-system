@@ -20,9 +20,9 @@ const BUSINESS_TYPES: [value: string, label: string][] = [
   ["cafe", "คาเฟ่"],
   ["bakery", "เบเกอรี่"],
   ["bar", "บาร์"],
-  ["buffet", "บุฟเฟ่ต์"],
+  ["buffet", "บุฟเฟต์"],
   ["food_truck", "ฟู้ดทรัค"],
-  ["cloud_kitchen", "ครัวคลาวด์ (ขายเดลิเวอรีอย่างเดียว)"],
+  ["cloud_kitchen", "ขายเดลิเวอรีอย่างเดียว (ไม่มีหน้าร้าน)"],
   ["other", "อื่นๆ"],
 ];
 

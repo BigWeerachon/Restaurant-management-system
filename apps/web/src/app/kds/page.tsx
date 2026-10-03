@@ -67,7 +67,7 @@ function TicketCard({ t, now, index, onBump, onStart, onToggle, isNew, showStati
     >
       {u === "late" && <motion.span aria-hidden="true" className="pointer-events-none absolute inset-0 rounded-3xl ring-4 ring-danger-fill/40" animate={{ opacity: [0.2, 0.9, 0.2] }} transition={{ duration: 1.6, repeat: Infinity }} />}
       <header className={cn("flex items-center gap-3 px-4 py-3", u === "late" ? "bg-danger-soft" : u === "warn" ? "bg-warning-soft" : "bg-surface-2")}>
-        <span className="grid h-7 min-w-7 place-items-center rounded-lg bg-surface-3 px-1.5 text-sm font-bold text-ink-2" title="กดปุ่มตัวเลขนี้บนคีย์บอร์ด/บัมพ์บาร์เพื่อส่ง">
+        <span className="grid h-7 min-w-7 place-items-center rounded-lg bg-surface-3 px-1.5 text-sm font-bold text-ink-2" title="กดเลขนี้บนแป้นพิมพ์เพื่อส่งออเดอร์">
           {index + 1}
         </span>
         <div className="min-w-0 flex-1">

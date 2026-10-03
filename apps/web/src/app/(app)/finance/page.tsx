@@ -156,7 +156,7 @@ function Reconcile() {
                           <p className="text-sm font-medium text-ink">{exp.map((e) => e.label).join(" + ")}</p>
                           <p className="text-sm text-ink-3">
                             คาดไว้ {formatBaht(exp.reduce((a, e) => a + e.amount, 0))}
-                            {s.variance !== 0 && <span className="text-warning"> · ต่าง {formatBaht(s.variance, { sign: true })}</span>}
+                            {s.variance !== 0 && <span className="text-warning"> · ส่วนต่าง {formatBaht(s.variance, { sign: true })}</span>}
                           </p>
                           {s.varianceHint && <p className="mt-1 text-xs text-ink-3">{s.varianceHint}</p>}
                         </>
@@ -364,7 +364,7 @@ function FinanceInner() {
   ];
   return (
     <>
-      <PageHeader title="การเงิน" description="ยอดขาย เงินที่ต้องเข้าธนาคาร บิลที่ต้องจ่าย และค่าใช้จ่าย — ลงบัญชีคู่ให้อัตโนมัติเบื้องหลัง" actions={can("reports.profit") && <LinkButton href="/reports" variant="secondary" iconRight={<ArrowRight className="h-4 w-4" />}>ดูเงินเหลือจริง</LinkButton>} />
+      <PageHeader title="การเงิน" description="ยอดขาย เงินที่ต้องเข้าธนาคาร บิลที่ต้องจ่าย และค่าใช้จ่าย — ระบบลงบัญชีให้เองเบื้องหลัง" actions={can("reports.profit") && <LinkButton href="/reports" variant="secondary" iconRight={<ArrowRight className="h-4 w-4" />}>ดูเงินเหลือจริง</LinkButton>} />
       <LoadBanner state={load} className="mb-4" />
       <Tabs value={tab} onValueChange={setTab} tabs={tabs}>
         <TabPanel value="today" className="pt-4">

@@ -21,8 +21,8 @@ export async function printTicketSlip(t: Ticket) {
   } catch (e) {
     toast.error(`พิมพ์ใบครัว #${t.ticketNo} ไม่สำเร็จ`, {
       id: `kitchen-slip-${t.id}`,
-      description: usePrinter.getState().error ?? "ตรวจเครื่องพิมพ์แล้วลองใหม่",
-      action: { label: "ลองใหม่", onClick: () => void printTicketSlip(t) },
+      description: usePrinter.getState().error ?? "ตรวจเครื่องพิมพ์แล้วลองอีกครั้ง",
+      action: { label: "ลองอีกครั้ง", onClick: () => void printTicketSlip(t) },
     });
     return false;
   }

@@ -1,6 +1,6 @@
 "use client";
 
-import { costRecipe, foodCostPct, formatQty, marginHealth, suggestPrice, toBase, unitsFor, type MarginHealth, type Recipe } from "@sabai/domain";
+import { costRecipe, effectiveVatRate, foodCostPct, formatQty, marginHealth, suggestPrice, toBase, unitsFor, type MarginHealth, type Recipe } from "@sabai/domain";
 import { AlertTriangle, CheckCircle2, Flame, Plus, Sparkles, Trash2 } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
 import { useMemo, useState } from "react";
@@ -77,7 +77,7 @@ export function useCosting(db: DemoState, lines: EditableLine[], price: number) 
     const book = recipeBook(db);
     const recipe = toRecipe(lines);
     const breakdown = costRecipe(recipe, book);
-    const vat = db.tenant.vatRegistered ? db.tenant.vatRate : 0;
+    const vat = effectiveVatRate(db.tenant);
     const pct = foodCostPct(breakdown.cost, price, vat, db.tenant.pricesIncludeVat);
     return { breakdown, pct, health: marginHealth(pct), suggested: suggestPrice(breakdown.cost, 0.3, vat, db.tenant.pricesIncludeVat) };
   }, [db, lines, price]);

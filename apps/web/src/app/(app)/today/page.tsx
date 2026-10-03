@@ -118,7 +118,7 @@ export default function TodayPage() {
           ...(can("reports.profit")
             ? [
                 {
-                  label: "เหลือจริงจากการขายวันนี้",
+                  label: "เงินเหลือจริงจากการขายวันนี้",
                   value: ready ? <AnimatedNumber value={stats.keep} format={(v) => formatBaht(v, { compact: true })} /> : "—",
                   foot: <span className="text-xs text-ink-3">หลังหักต้นทุนวัตถุดิบ ค่า GP ค่าธรรมเนียม · {(stats.keepPct * 100).toFixed(0)}% ของยอดขาย</span>,
                 },

@@ -115,7 +115,7 @@ export function ConnectPanel() {
         // The session must not stay in the address bar or the browser history.
         window.history.replaceState(null, "", window.location.pathname + window.location.search);
         if ("error" in link) {
-          setNotice({ tone: "warning", text: "ลิงก์นี้หมดอายุหรือถูกใช้ไปแล้ว ขอลิงก์ใหม่ได้ที่นี่" });
+          setNotice({ tone: "warning", text: "ลิงก์นี้หมดอายุหรือใช้ไปแล้ว ขอลิงก์ใหม่ได้ที่นี่" });
           return;
         }
         startAccountSession(link.session);

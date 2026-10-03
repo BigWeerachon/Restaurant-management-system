@@ -187,7 +187,7 @@ export default function ReceivePage() {
               </div>
               {suggested.length > 0 && lines.length === 0 && (
                 <div className="mt-3">
-                  <p className="mb-2 text-sm text-ink-3">ซื้อจาก{supplier ? "ผู้ขายรายนี้" : "ที่นี่"}บ่อย</p>
+                  <p className="mb-2 text-sm text-ink-3">ซื้อบ่อย{supplier ? "จากผู้ขายรายนี้" : ""}</p>
                   <div className="flex flex-wrap gap-2">
                     {suggested.slice(0, 10).map((i) => (
                       <button key={i.id} onClick={() => addLine(i.id)} className="h-10 rounded-full border border-line px-3 text-sm text-ink hover:border-brand">

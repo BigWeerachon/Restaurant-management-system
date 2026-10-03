@@ -16,7 +16,7 @@ export default function GlobalError({ error, retry }: { error: Error & { digest?
         <main id="main" className="mx-auto flex min-h-dvh max-w-lg items-center px-4 py-10">
           <div className="w-full rounded-3xl border border-line bg-surface p-6 text-center text-ink">
             <h1 className="text-xl font-semibold">ระบบขัดข้องชั่วคราว</h1>
-            <p className="mt-2 text-sm text-ink-2">ข้อมูลที่บันทึกไปแล้วไม่หาย ลองอีกครั้งได้เลย ถ้ายังไม่หาย ปิดแล้วเปิดแอปใหม่</p>
+            <p className="mt-2 text-sm text-ink-2">ข้อมูลที่บันทึกไปแล้วไม่หาย ลองอีกครั้งได้เลย ถ้ายังใช้ไม่ได้ ปิดแล้วเปิดแอปใหม่</p>
             {error.digest && (
               <p className="mt-3 text-sm text-ink-3">
                 รหัสอ้างอิง <span className="font-semibold text-ink">{error.digest}</span>

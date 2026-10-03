@@ -50,7 +50,7 @@ export default function SetupPage() {
                 เสร็จแล้ว {p.completed} จาก {p.total} ขั้น
               </p>
               <p className="mt-0.5 text-xl font-semibold text-ink">เหลืออีกประมาณ {p.minutesLeft} นาที</p>
-              <p className="mt-1 text-sm text-ink-2">ตัวเลขนับจากข้อมูลจริง: เพิ่มวัตถุดิบจากหน้าไหน ขั้นนี้ก็เสร็จทันที</p>
+              <p className="mt-1 text-sm text-ink-2">ความคืบหน้านับจากข้อมูลจริง เช่น เพิ่มวัตถุดิบจากหน้าไหนก็ได้ ขั้นนั้นจะเสร็จเอง</p>
             </>
           )}
         </div>

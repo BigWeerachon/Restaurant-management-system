@@ -39,7 +39,7 @@ export function PaperSettings() {
         <Button variant="secondary" icon={<Printer className="h-4 w-4" />} onClick={() => printSampleReceipt()}>
           ทดลองพิมพ์ใบเสร็จ
         </Button>
-        <Callout tone="info" title="ตั้งเครื่องพิมพ์ให้ถูกครั้งเดียว">
+        <Callout tone="info" title="ตั้งเครื่องพิมพ์ให้ถูกต้องครั้งเดียว">
           ในหน้าต่างพิมพ์ของเครื่อง เลือกเครื่องพิมพ์ความร้อน ขนาดกระดาษให้ตรงกับที่เลือกไว้ข้างบน เอาหัวกระดาษ/ท้ายกระดาษของเบราว์เซอร์ออก และตั้งระยะขอบเป็นไม่มี
         </Callout>
       </Card>
@@ -115,7 +115,7 @@ function DirectPrinter() {
             )}
           </div>
           {error && <Callout tone={status === "error" ? "danger" : "info"}>{error}</Callout>}
-          {transport === "bluetooth" && <p className="text-sm text-ink-3">บลูทูธต้องกด เชื่อมต่อเครื่องพิมพ์ ใหม่ทุกครั้งที่เปิดหน้านี้ (เบราว์เซอร์กำหนดไว้เพื่อความปลอดภัย)</p>}
+          {transport === "bluetooth" && <p className="text-sm text-ink-3">ถ้าต่อด้วยบลูทูธ ต้องกด “เชื่อมต่อเครื่องพิมพ์” ใหม่ทุกครั้งที่เปิดหน้านี้ (เบราว์เซอร์บังคับไว้เพื่อความปลอดภัย)</p>}
 
           <div className="space-y-2">
             <Segmented<PrintMode>
@@ -143,7 +143,7 @@ function DirectPrinter() {
           <div className="space-y-4 border-t border-line pt-4">
             <Switch checked={settings.autoReceipt} onCheckedChange={(autoReceipt) => set({ autoReceipt })} label="พิมพ์ใบเสร็จเองเมื่อรับเงิน" description="ไม่ต้องกดพิมพ์ทุกบิล (ยังกดพิมพ์ซ้ำเป็นสำเนาได้)" />
             <Switch checked={settings.drawer} onCheckedChange={(drawer) => set({ drawer })} label="เปิดลิ้นชักเมื่อรับเงินสด" description="ต้องต่อสายลิ้นชักเข้าที่ช่อง DK/RJ-11 ของเครื่องพิมพ์" />
-            <Switch checked={settings.autoKitchen} onCheckedChange={(autoKitchen) => set({ autoKitchen })} label="พิมพ์ใบครัวเมื่อมีออเดอร์ใหม่" description="ใช้กับเครื่องพิมพ์ที่ตั้งไว้ในครัว ออเดอร์ที่ค้างอยู่ก่อนเปิดตัวเลือกนี้จะไม่ถูกพิมพ์ซ้ำ" />
+            <Switch checked={settings.autoKitchen} onCheckedChange={(autoKitchen) => set({ autoKitchen })} label="พิมพ์ใบครัวเมื่อมีออเดอร์ใหม่" description="ใช้กับเครื่องพิมพ์ที่ตั้งไว้ในครัว ระบบจะไม่พิมพ์ออเดอร์ที่ค้างอยู่ก่อนเปิดตัวเลือกนี้" />
             <Switch checked={settings.cut} onCheckedChange={(cut) => set({ cut })} label="ตัดกระดาษเองหลังพิมพ์" description="ปิดไว้ถ้าเครื่องพิมพ์ไม่มีใบมีด" />
           </div>
         </>

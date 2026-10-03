@@ -1,6 +1,6 @@
 "use client";
 
-import { calculateOrderTotals } from "@sabai/domain";
+import { calculateOrderTotals, effectiveVatRate } from "@sabai/domain";
 import { ArrowLeft, BadgePercent, Ban, ChefHat, ClipboardList, Lock, MessageSquareText, Minus, MoreVertical, Plus, ShoppingBag, Trash2, UserRoundCog, Utensils, Wallet, X } from "lucide-react";
 import { AnimatePresence, LayoutGroup, motion } from "motion/react";
 import Link from "next/link";
@@ -75,7 +75,7 @@ function PosScreen() {
     ],
     discount: existing?.discount ? { type: existing.discount.type, value: existing.discount.value } : null,
     serviceChargeRate: channel?.appliesServiceCharge ? branch.serviceChargeRate : 0,
-    vatRate: db.tenant.vatRegistered ? db.tenant.vatRate : 0,
+    vatRate: effectiveVatRate(db.tenant),
     pricesIncludeVat: db.tenant.pricesIncludeVat,
   });
   const count = pos.lines.reduce((s, l) => s + l.qty, 0) + (existing?.items.filter((i) => i.status !== "voided").reduce((s, i) => s + i.qty, 0) ?? 0);

@@ -138,3 +138,29 @@ export function channelPrice(base: Satang, markup: number): Satang {
   const scaled = base * (10_000 + Math.round(markup * 10_000));
   return Math.ceil(scaled / 5_000_000) * 500;
 }
+
+/** The VAT rate a shop really charges: its rate if it is registered for VAT, none if it is not. */
+export function effectiveVatRate(tenant: { vatRegistered: boolean; vatRate: number }): number {
+  return tenant.vatRegistered ? tenant.vatRate : 0;
+}
+
+/**
+ * What one portion leaves the shop on a sales channel (all in satang): its price, less the VAT that belongs to the state,
+ * less the platform's share (GP), less what the ingredients cost.
+ *
+ * A price that already includes VAT holds a share of it (price × 7 / 107). A price that leaves VAT out holds none: the VAT is
+ * added on top for the customer and the shop keeps the whole price — taking 7/107 off it anyway, as the dish screen did, shows
+ * a profit that is about 6.5 % of the price too low. Agrees with `calculateOrderTotals` for a one-line bill (a test holds them).
+ */
+export function keepPerPortion(input: {
+  price: Satang;
+  cost: Satang;
+  vatRate: number;
+  pricesIncludeVat: boolean;
+  commissionRate: number;
+}): { vat: Satang; commission: Satang; keep: Satang } {
+  const vatBp = rateToBasisPoints(input.vatRate);
+  const vat = vatBp > 0 && input.pricesIncludeVat ? divRound(input.price * vatBp, 10_000 + vatBp) : 0;
+  const commission = applyRate(input.price, input.commissionRate);
+  return { vat, commission, keep: input.price - vat - commission - input.cost };
+}

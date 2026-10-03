@@ -40,7 +40,7 @@ export default function SetupBranchPage() {
     if (!address.trim() && !phone.trim()) e.address = "ใส่ที่อยู่หรือเบอร์โทรอย่างน้อย 1 อย่าง เพื่อแสดงบนใบเสร็จ";
     setErrors(e);
     if (Object.keys(e).length) return;
-    const r = await exec((ds) => ds.updateBranch(branch.id, { name, address, phone, openingHours: hours, dayCutoff: "05:00" }), { success: "ตั้งค่าสาขาเรียบร้อย", successDetail: "ขั้นต่อไป: เลือกช่องทางรับเงิน" });
+    const r = await exec((ds) => ds.updateBranch(branch.id, { name, address, phone, openingHours: hours, dayCutoff: "05:00" }), { success: "ตั้งค่าสาขาเรียบร้อย", successDetail: "ขั้นต่อไป: เลือกวิธีรับเงิน" });
     if (r.ok) router.push("/setup");
   };
 

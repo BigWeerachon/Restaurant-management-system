@@ -146,7 +146,7 @@ export interface QueueDeps {
   maxAttempts?: number;
 }
 
-const TRANSIENT = new Set(["NETWORK_OFFLINE", "TIMEOUT", "RATE_LIMITED"]);
+const TRANSIENT = new Set(["NETWORK_OFFLINE", "TIMEOUT", "RATE_LIMITED", "REQUEST_IN_PROGRESS"]);
 
 export function createOfflineQueue(deps: QueueDeps) {
   const maxAttempts = deps.maxAttempts ?? 5;
