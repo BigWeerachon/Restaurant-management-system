@@ -19,13 +19,13 @@ const ROLE_SEES: Record<string, string> = {
 // language for "what am I clicking" across the whole app (cf. today/page.tsx's
 // task grid).
 const ROLE_STYLE: Record<string, { icon: typeof Store; badge: string }> = {
-  owner: { icon: Crown, badge: "bg-[#ede9fe] text-[#5b21b6]" },
-  manager: { icon: UserRoundCog, badge: "bg-[#e0e7ff] text-[#3730a3]" },
-  cashier: { icon: Wallet, badge: "bg-[#d1fae5] text-[#065f46]" },
-  waiter: { icon: ClipboardList, badge: "bg-[#e0f2fe] text-[#075985]" },
-  kitchen: { icon: ChefHat, badge: "bg-[#ffedd5] text-[#9a3412]" },
-  stock: { icon: PackageCheck, badge: "bg-[#fef3c7] text-[#92400e]" },
-  accountant: { icon: Calculator, badge: "bg-[#ffe4e6] text-[#9f1239]" },
+  owner: { icon: Crown, badge: "bg-tone-violet text-tone-violet-ink" },
+  manager: { icon: UserRoundCog, badge: "bg-tone-indigo text-tone-indigo-ink" },
+  cashier: { icon: Wallet, badge: "bg-tone-emerald text-tone-emerald-ink" },
+  waiter: { icon: ClipboardList, badge: "bg-tone-sky text-tone-sky-ink" },
+  kitchen: { icon: ChefHat, badge: "bg-tone-orange text-tone-orange-ink" },
+  stock: { icon: PackageCheck, badge: "bg-tone-amber text-tone-amber-ink" },
+  accountant: { icon: Calculator, badge: "bg-tone-rose text-tone-rose-ink" },
 };
 
 /** "Who are you today?" — one card per team member, showing what their role gets to see. */

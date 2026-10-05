@@ -18,7 +18,7 @@ const variants: Record<ButtonVariant, string> = {
   ghost: "bg-transparent text-ink-2 hover:bg-surface-2 hover:text-ink",
   soft: "bg-brand-soft text-brand-soft-ink hover:brightness-95",
   danger: `bg-danger-fill text-white hover:brightness-95 ${glossy}`,
-  accent: `bg-accent text-[#2b1b00] hover:brightness-95 ${glossy}`,
+  accent: `bg-accent text-on-accent hover:brightness-95 ${glossy}`,
 };
 
 // Every size is at least 44px tall (WCAG 2.5.8 AA is 24px; we aim for AAA 44px).

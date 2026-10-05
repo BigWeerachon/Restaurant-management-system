@@ -6,6 +6,7 @@ import { useEffect, useState } from "react";
 import { Avatar } from "@/components/ui/primitives";
 import { Keypad, PinDots } from "@/components/ui/feedback";
 import { Dialog } from "@/components/ui/overlay";
+import { usePinEntry } from "@/hooks/use-pin-entry";
 import { useUi } from "@/hooks/use-sabai";
 import { dataSourceMode, getDataSource } from "@/lib/data-source";
 import { memberCan } from "@/lib/demo/engine";
@@ -20,14 +21,12 @@ export function ApprovalDialog() {
   const close = useUi((s) => s.closeApproval);
   const db = useSabai((s) => s.db);
   const branchId = useSabai((s) => s.session.branchId) ?? db.branches[0]?.id ?? "";
-  const [pin, setPin] = useState("");
-  const [error, setError] = useState<string | null>(null);
+  const { pin, setPin, error, setError, reset, keypad } = usePinEntry((v) => submit(v));
   const [checking, setChecking] = useState(false);
 
   useEffect(() => {
-    setPin("");
-    setError(null);
-  }, [approval]);
+    reset();
+  }, [approval, reset]);
 
   const approvers = approval ? db.members.filter((m) => m.active && memberCan(db, m.id, approval.permission, branchId)) : [];
 
@@ -45,14 +44,6 @@ export function ApprovalDialog() {
     } finally {
       setChecking(false);
     }
-  };
-
-  const onKey = (k: string) => {
-    if (pin.length >= 6) return;
-    const next = pin + k;
-    setError(null);
-    setPin(next);
-    if (next.length === 4) setTimeout(() => submit(next), 120);
   };
 
   return (
@@ -75,7 +66,7 @@ export function ApprovalDialog() {
             {error ?? "ผู้จัดการใส่ PIN 4 หลักบนเครื่องนี้"}
           </p>
         </div>
-        <Keypad onKey={onKey} onBackspace={() => setPin((p) => p.slice(0, -1))} onClear={() => setPin("")} />
+        <Keypad {...keypad} />
         {dataSourceMode() === "demo" && <p className="text-center text-xs text-ink-3">ตัวอย่าง: พี่นิด (ผู้จัดการ) PIN 2222 · คุณปิยะ (เจ้าของ) PIN 1234</p>}
       </div>
     </Dialog>

@@ -6,6 +6,7 @@ import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { Keypad, PinDots } from "@/components/ui/feedback";
 import { Dialog } from "@/components/ui/overlay";
+import { usePinEntry } from "@/hooks/use-pin-entry";
 import { useUi } from "@/hooks/use-sabai";
 import { accessFromRole, homeFor, type Home, type Permission } from "@sabai/domain";
 import { getDataSource } from "@/lib/data-source";
@@ -18,15 +19,11 @@ export function SwitchUserDialog() {
   const db = useSabai((s) => s.db);
   const branchId = useSabai((s) => s.session.branchId) ?? db.branches[0]?.id ?? "";
   const router = useRouter();
-  const [pin, setPin] = useState("");
-  const [error, setError] = useState<string | null>(null);
+  const { pin, setPin, error, setError, reset, keypad } = usePinEntry((v) => submit(v));
 
   useEffect(() => {
-    if (open) {
-      setPin("");
-      setError(null);
-    }
-  }, [open]);
+    if (open) reset();
+  }, [open, reset]);
 
   const submit = async (value: string) => {
     try {
@@ -41,14 +38,6 @@ export function SwitchUserDialog() {
     }
   };
 
-  const onKey = (k: string) => {
-    if (pin.length >= 4) return;
-    const next = pin + k;
-    setError(null);
-    setPin(next);
-    if (next.length === 4) setTimeout(() => submit(next), 120);
-  };
-
   return (
     <Dialog open={open} onOpenChange={setOpen} title="สลับผู้ใช้" description="ใส่ PIN 4 หลักของคุณ" size="sm">
       <div className="space-y-5 pb-2">
@@ -56,7 +45,7 @@ export function SwitchUserDialog() {
         <p className={error ? "text-center text-sm text-danger" : "sr-only"} role={error ? "alert" : undefined}>
           {error}
         </p>
-        <Keypad onKey={onKey} onBackspace={() => setPin((p) => p.slice(0, -1))} onClear={() => setPin("")} size="lg" />
+        <Keypad {...keypad} size="lg" />
       </div>
     </Dialog>
   );

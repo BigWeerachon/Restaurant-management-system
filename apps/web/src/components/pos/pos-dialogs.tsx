@@ -202,11 +202,11 @@ export function CloseShiftDialog({ open, onClose }: { open: boolean; onClose: ()
             <div key={n} className="flex items-center justify-between rounded-2xl border border-line p-2 pl-3">
               <span className="font-semibold tabular text-ink">฿{n}</span>
               <div className="flex items-center gap-1">
-                <button type="button" aria-label={`ลด ฿${n}`} onClick={() => setCounts((c) => ({ ...c, [n]: Math.max(0, (c[n] ?? 0) - 1) }))} className="h-10 w-10 rounded-xl bg-surface-2 text-lg hover:bg-surface-3">
+                <button type="button" aria-label={`ลด ฿${n}`} onClick={() => setCounts((c) => ({ ...c, [n]: Math.max(0, (c[n] ?? 0) - 1) }))} className="h-11 w-11 rounded-xl bg-surface-2 text-lg hover:bg-surface-3">
                   −
                 </button>
-                <input aria-label={`จำนวน ฿${n}`} inputMode="numeric" value={counts[n] ?? 0} onChange={(e) => setCounts((c) => ({ ...c, [n]: Math.max(0, Number(e.target.value.replace(/\D/g, "")) || 0) }))} className="h-10 w-12 rounded-xl border border-line bg-surface text-center tabular" />
-                <button type="button" aria-label={`เพิ่ม ฿${n}`} onClick={() => setCounts((c) => ({ ...c, [n]: (c[n] ?? 0) + 1 }))} className="h-10 w-10 rounded-xl bg-surface-2 text-lg hover:bg-surface-3">
+                <input aria-label={`จำนวน ฿${n}`} inputMode="numeric" value={counts[n] ?? 0} onChange={(e) => setCounts((c) => ({ ...c, [n]: Math.max(0, Number(e.target.value.replace(/\D/g, "")) || 0) }))} className="h-11 w-12 rounded-xl border border-line bg-surface text-center tabular" />
+                <button type="button" aria-label={`เพิ่ม ฿${n}`} onClick={() => setCounts((c) => ({ ...c, [n]: (c[n] ?? 0) + 1 }))} className="h-11 w-11 rounded-xl bg-surface-2 text-lg hover:bg-surface-3">
                   +
                 </button>
               </div>

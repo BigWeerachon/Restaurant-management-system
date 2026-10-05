@@ -51,6 +51,24 @@
   --accent: #f2a516;
   --accent-soft: #fdf0d3;
   --accent-ink: #7a4d00;
+  /* Text on a saffron fill: the fill stays bright in dark mode, so this stays dark. */
+  --on-accent: #2b1b00;
+
+  /* Person / role badge tones (Avatar, role cards) */
+  --tone-violet: #ede9fe;
+  --tone-violet-ink: #5b21b6;
+  --tone-indigo: #e0e7ff;
+  --tone-indigo-ink: #3730a3;
+  --tone-emerald: #d1fae5;
+  --tone-emerald-ink: #065f46;
+  --tone-sky: #e0f2fe;
+  --tone-sky-ink: #075985;
+  --tone-orange: #ffedd5;
+  --tone-orange-ink: #9a3412;
+  --tone-amber: #fef3c7;
+  --tone-amber-ink: #92400e;
+  --tone-rose: #ffe4e6;
+  --tone-rose-ink: #9f1239;
 
   /* Status (always paired with an icon + words) */
   --success: #12703a;
@@ -117,6 +135,21 @@
     --accent: #f6b73c;
     --accent-soft: #3a2c10;
     --accent-ink: #fcd98a;
+    --on-accent: #2b1b00;
+    --tone-violet: #2e2257;
+    --tone-violet-ink: #c9bdfa;
+    --tone-indigo: #232a58;
+    --tone-indigo-ink: #bcc8fb;
+    --tone-emerald: #12372a;
+    --tone-emerald-ink: #9be3c1;
+    --tone-sky: #12324a;
+    --tone-sky-ink: #a5d6f5;
+    --tone-orange: #432312;
+    --tone-orange-ink: #f8c79c;
+    --tone-amber: #3a2c10;
+    --tone-amber-ink: #fcd98a;
+    --tone-rose: #401a22;
+    --tone-rose-ink: #f8b4bf;
     --success: #4ade80;
     --success-soft: #133222;
     --warning: #fbbf24;
@@ -172,6 +205,21 @@
   --accent: #f6b73c;
   --accent-soft: #3a2c10;
   --accent-ink: #fcd98a;
+  --on-accent: #2b1b00;
+  --tone-violet: #2e2257;
+  --tone-violet-ink: #c9bdfa;
+  --tone-indigo: #232a58;
+  --tone-indigo-ink: #bcc8fb;
+  --tone-emerald: #12372a;
+  --tone-emerald-ink: #9be3c1;
+  --tone-sky: #12324a;
+  --tone-sky-ink: #a5d6f5;
+  --tone-orange: #432312;
+  --tone-orange-ink: #f8c79c;
+  --tone-amber: #3a2c10;
+  --tone-amber-ink: #fcd98a;
+  --tone-rose: #401a22;
+  --tone-rose-ink: #f8b4bf;
   --success: #4ade80;
   --success-soft: #133222;
   --warning: #fbbf24;
@@ -223,6 +271,21 @@
   --color-accent: var(--accent);
   --color-accent-soft: var(--accent-soft);
   --color-accent-ink: var(--accent-ink);
+  --color-on-accent: var(--on-accent);
+  --color-tone-violet: var(--tone-violet);
+  --color-tone-violet-ink: var(--tone-violet-ink);
+  --color-tone-indigo: var(--tone-indigo);
+  --color-tone-indigo-ink: var(--tone-indigo-ink);
+  --color-tone-emerald: var(--tone-emerald);
+  --color-tone-emerald-ink: var(--tone-emerald-ink);
+  --color-tone-sky: var(--tone-sky);
+  --color-tone-sky-ink: var(--tone-sky-ink);
+  --color-tone-orange: var(--tone-orange);
+  --color-tone-orange-ink: var(--tone-orange-ink);
+  --color-tone-amber: var(--tone-amber);
+  --color-tone-amber-ink: var(--tone-amber-ink);
+  --color-tone-rose: var(--tone-rose);
+  --color-tone-rose-ink: var(--tone-rose-ink);
   --color-success: var(--success);
   --color-success-soft: var(--success-soft);
   --color-warning: var(--warning);

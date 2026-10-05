@@ -154,7 +154,7 @@ export function ModifierSheet({
           </label>
           <div className="mb-2 flex flex-wrap gap-1.5">
             {NOTE_CHIPS.map((n) => (
-              <button key={n} type="button" onClick={() => setNote((v) => (v ? `${v}, ${n}` : n))} className="h-9 rounded-full border border-line px-3 text-sm text-ink-2 hover:border-line-strong hover:text-ink">
+              <button key={n} type="button" onClick={() => setNote((v) => (v ? `${v}, ${n}` : n))} className="h-11 rounded-full border border-line px-3 text-sm text-ink-2 hover:border-line-strong hover:text-ink">
                 + {n}
               </button>
             ))}

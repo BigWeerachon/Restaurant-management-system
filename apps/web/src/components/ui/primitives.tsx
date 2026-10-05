@@ -228,19 +228,21 @@ export function Divider({ className }: { className?: string }) {
   return <hr className={cn("border-line", className)} />;
 }
 
+/** Soft background + readable text per person/role colour; the colours are theme tokens, so dark mode follows. */
+export const TONE_CLASS: Record<string, string> = {
+  violet: "bg-tone-violet text-tone-violet-ink",
+  indigo: "bg-tone-indigo text-tone-indigo-ink",
+  emerald: "bg-tone-emerald text-tone-emerald-ink",
+  sky: "bg-tone-sky text-tone-sky-ink",
+  orange: "bg-tone-orange text-tone-orange-ink",
+  amber: "bg-tone-amber text-tone-amber-ink",
+  rose: "bg-tone-rose text-tone-rose-ink",
+};
+
 export function Avatar({ name, color = "emerald", size = 36, className }: { name: string; color?: string; size?: number; className?: string }) {
-  const palette: Record<string, string> = {
-    violet: "bg-[#ede9fe] text-[#5b21b6]",
-    indigo: "bg-[#e0e7ff] text-[#3730a3]",
-    emerald: "bg-[#d1fae5] text-[#065f46]",
-    sky: "bg-[#e0f2fe] text-[#075985]",
-    orange: "bg-[#ffedd5] text-[#9a3412]",
-    amber: "bg-[#fef3c7] text-[#92400e]",
-    rose: "bg-[#ffe4e6] text-[#9f1239]",
-  };
   const initial = name.replace(/^(คุณ|พี่|น้อง|ป้า|ลุง)/, "").trim().slice(0, 1) || name.slice(0, 1);
   return (
-    <span aria-hidden="true" className={cn("inline-grid shrink-0 place-items-center rounded-full font-semibold", palette[color] ?? palette.emerald, className)} style={{ width: size, height: size, fontSize: size * 0.42 }}>
+    <span aria-hidden="true" className={cn("inline-grid shrink-0 place-items-center rounded-full font-semibold", TONE_CLASS[color] ?? TONE_CLASS.emerald, className)} style={{ width: size, height: size, fontSize: size * 0.42 }}>
       {initial}
     </span>
   );

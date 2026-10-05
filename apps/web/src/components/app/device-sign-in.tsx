@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Keypad, PinDots } from "@/components/ui/feedback";
+import { usePinEntry } from "@/hooks/use-pin-entry";
 import { Dialog } from "@/components/ui/overlay";
 import { Callout } from "@/components/ui/primitives";
 import { devicePinSignIn, fetchRoster, type DeviceRoster } from "@/lib/data-source/devices";
@@ -23,8 +24,7 @@ export function DeviceSignIn({ onEmail }: { onEmail: () => void }) {
   const [roster, setRoster] = useState<DeviceRoster | null>(null);
   const [error, setError] = useState<{ code: string; text: string } | null>(null);
   const [picked, setPicked] = useState<Member | null>(null);
-  const [pin, setPin] = useState("");
-  const [pinError, setPinError] = useState<string | null>(null);
+  const { pin, setPin, error: pinError, setError: setPinError, reset: resetPin, keypad } = usePinEntry((v) => void submit(v));
 
   const load = useCallback(async () => {
     setError(null);
@@ -63,14 +63,6 @@ export function DeviceSignIn({ onEmail }: { onEmail: () => void }) {
       setPinError(`${h.title} — ${h.message}`);
       setPin("");
     }
-  };
-
-  const onKey = (k: string) => {
-    if (pin.length >= 4) return;
-    const next = pin + k;
-    setPinError(null);
-    setPin(next);
-    if (next.length === 4) setTimeout(() => void submit(next), 120);
   };
 
   const device = getDevice();
@@ -128,8 +120,7 @@ export function DeviceSignIn({ onEmail }: { onEmail: () => void }) {
               roles={roles}
               onPick={(id) => {
                 setPicked(members.find((m) => m.id === id) ?? null);
-                setPin("");
-                setPinError(null);
+                resetPin();
               }}
             />
           )}
@@ -148,7 +139,7 @@ export function DeviceSignIn({ onEmail }: { onEmail: () => void }) {
           <p className={pinError ? "text-center text-sm text-danger" : "sr-only"} role={pinError ? "alert" : undefined}>
             {pinError}
           </p>
-          <Keypad onKey={onKey} onBackspace={() => setPin((p) => p.slice(0, -1))} onClear={() => setPin("")} size="lg" />
+          <Keypad {...keypad} size="lg" />
         </div>
       </Dialog>
     </>
