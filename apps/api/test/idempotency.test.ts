@@ -1,5 +1,7 @@
 import { createHash } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { createLogger } from "../src/logger";
+import { purgeIdempotency } from "../src/maintenance";
 import { createTestContext } from "./helpers";
 
 type Ctx = Awaited<ReturnType<typeof createTestContext>>;
@@ -134,5 +136,17 @@ describe("Idempotency-Key", () => {
     expect(b.status).toBe(201);
     expect(b.json.id).not.toBe("yesterday");
     expect(await count(old.description)).toBe(1);
+  });
+});
+
+describe("purge of old Idempotency-Key rows", () => {
+  it("deletes rows older than 24 h and keeps the rest", async () => {
+    const day = 24 * 3600;
+    await plant("purge-old-0001", "/v1/expenses", {}, 201, { id: "x" }, day + 60);
+    await plant("purge-new-0001", "/v1/expenses", {}, 201, { id: "y" }, day - 60);
+    const deleted = await purgeIdempotency(ctx.sql, createLogger({ silent: true }));
+    expect(deleted).toBeGreaterThanOrEqual(1);
+    const keys = (await ctx.sql<{ key: string }[]>`select key from app.api_idempotency where key like 'purge-%'`).map((r) => r.key);
+    expect(keys).toEqual(["purge-new-0001"]);
   });
 });

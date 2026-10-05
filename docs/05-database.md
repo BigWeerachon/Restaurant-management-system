@@ -33,6 +33,7 @@ Postgres 16, เข้ากันได้กับ Supabase — **75 ตาร
 | `20261001000100_transfer_receive_guard` | — (แก้ `receive_transfer`) | รับของโอนเกินที่ส่งมาไม่ได้ (`TRANSFER_OVER_RECEIVED`) — เดิมพิมพ์จำนวนเกินแล้วสต็อกปลายทางเพิ่มโดยต้นทางไม่ลด; รับน้อยกว่ายังได้ ส่วนต่างเป็นของเสียที่สาขาปลายทาง |
 | `20261001000200_close_day_after_reopen` | — (แก้ `close_business_day`) | วันที่เปิดใหม่แล้ว (`reopen_business_day`) ปิดซ้ำได้ — เดิมล้มเสมอเพราะ `summary = summary` กำกวมระหว่างตัวแปรกับคอลัมน์ (ตัวแปรเปลี่ยนชื่อเป็น `v_summary`) |
 | `20261001000300_hot_path_indexes` | index 7 ตัว | `kitchen_tickets (branch_id, status, fired_at)`, `kitchen_ticket_items (order_item_id)`, `payments (shift_id)`, `cash_movements (shift_id)`, `stock_balances (ingredient_id)`, `purchase_order_lines (ingredient_id)`, `expected_receipts (branch_id, business_date)` — เฉพาะ lookup ที่หน้าจอทำทั้งวันบนตารางที่โตตามยอดขาย (FK 68 จาก 132 ไม่มี index แต่ส่วนใหญ่ไม่จำเป็น เหตุผลที่เว้นไว้อยู่ในไฟล์ migration) |
+| `20261001000400_fk_indexes_and_idempotency_purge` | index ของ foreign key ที่ยังไม่มี (ยกเว้น `stock_movements`, `journal_lines`), `purge_idempotency` | ทุก foreign key มี index นำหน้าด้วยคอลัมน์ของมัน (ไม่นับ `tenant_id`) — เทส `005_foreign_key_indexes.sql` ล้มถ้าตารางใหม่ลืม; `purge_idempotency` ลบแถว `api_idempotency` ที่เก่ากว่า 24 ชม. ทีละชุด (API รันทุก 60 นาที ตั้งด้วย `IDEMPOTENCY_PURGE_INTERVAL_MINUTES`, 0 = ปิด) |
 
 ## 2. Invariants (กฎที่ฐานข้อมูลบังคับเอง)
 
