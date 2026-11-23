@@ -134,6 +134,16 @@ export const demoDataSource: DataSource = {
     await run((d, c) => engine.updateTenant(d, c, patch));
   },
   addBranch: (input) => run((d, c) => engine.addBranch(d, c, input)),
+  async createWebsiteKey(branchId) {
+    let made = { key: "", hint: "" };
+    await run((d, c) => {
+      made = engine.createWebsiteKey(d, c, branchId);
+    });
+    return made;
+  },
+  async revokeWebsiteKey(branchId) {
+    await run((d, c) => engine.revokeWebsiteKey(d, c, branchId));
+  },
   async updateBranch(id, patch) {
     await run((d, c) => engine.updateBranch(d, c, id, patch));
   },

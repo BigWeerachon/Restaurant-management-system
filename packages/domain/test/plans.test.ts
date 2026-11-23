@@ -3,7 +3,8 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { cheapestPlanFor, PLANS, planAllows, planLimit } from "../src";
 
-const sql = readFileSync(fileURLToPath(new URL("../../../supabase/migrations/20260927000800_saas_billing.sql", import.meta.url)), "utf8");
+const migration = (f: string) => readFileSync(fileURLToPath(new URL(`../../../supabase/migrations/${f}`, import.meta.url)), "utf8");
+const sql = migration("20260927000800_saas_billing.sql") + migration("20261123000100_usage_billing.sql");
 
 describe("plans", () => {
   it("match app.plans in the database (limits, features, price)", () => {

@@ -172,6 +172,10 @@ export interface DataSource {
   // ------------------------------------------------------------- settings
   updateTenant(patch: Partial<Pick<Tenant, "name" | "businessType" | "vatRegistered" | "pricesIncludeVat" | "cashRounding" | "legalName" | "taxId" | "receiptFooter">>): Promise<void>;
   addBranch(input: { name: string; address?: string; phone?: string }): Promise<Branch>;
+  /** The branch's key for the shop's own website (menu + orders). Shown once; a new one switches the old one off. */
+  createWebsiteKey(branchId: string): Promise<{ key: string; hint: string }>;
+  /** Switches the branch's website connection off. */
+  revokeWebsiteKey(branchId: string): Promise<void>;
   updateBranch(id: string, patch: Partial<Pick<Branch, "name" | "address" | "phone" | "openingHours" | "dayCutoff" | "serviceChargeRate" | "taxBranchNo">>): Promise<void>;
   /** `commissionRate` (GP) takes effect from today; use `setChannelCommission` to choose the date. */
   updateChannel(id: string, patch: Partial<Pick<Channel, "active" | "appliesServiceCharge" | "commissionRate" | "priceMarkup">> & { name?: string; color?: string }): Promise<void>;

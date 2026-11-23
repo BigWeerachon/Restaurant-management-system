@@ -2,7 +2,7 @@
  * SaaS plans as the UI shows them. The database (app.plans) is the authority
  * for enforcement; test/plans.test.ts fails if the two drift apart.
  */
-export type PlanCode = "free" | "starter" | "pro" | "business" | "enterprise";
+export type PlanCode = "free" | "starter" | "pro" | "business" | "enterprise" | "per_order";
 
 export type Feature =
   | "pos" | "kds" | "inventory_basic" | "inventory" | "recipes" | "purchasing" | "finance" | "reconciliation"
@@ -31,7 +31,12 @@ export const PLANS: readonly Plan[] = [
   { code: "pro", name: "โปร", nameEn: "Pro", priceMonthly: 1490, priceYearly: 14900, limits: { branches: 3, staff: 30, devices: 10 }, features: PRO, pitch: "รู้เงินเหลือจริง สั่งซื้อ กระทบยอด หลายสาขา" },
   { code: "business", name: "บิสิเนส", nameEn: "Business", priceMonthly: 3490, priceYearly: 34900, limits: { branches: 10, staff: 150, devices: 40 }, features: BUSINESS, pitch: "ครัวกลาง วิเคราะห์ขั้นสูง และ API" },
   { code: "enterprise", name: "เอนเตอร์ไพรส์", nameEn: "Enterprise", priceMonthly: null, priceYearly: null, limits: { branches: null, staff: null, devices: null }, features: [...BUSINESS, "ai_copilot", "sso"], pitch: "เครือร้านขนาดใหญ่ SSO และผู้ช่วย AI" },
+  // Last on purpose: no monthly price, so cheapestPlanFor must never pick it as an "upgrade" hint. See usage.ts.
+  { code: "per_order", name: "จ่ายตามออเดอร์", nameEn: "Pay per order", priceMonthly: 0, priceYearly: 0, limits: { branches: 10, staff: 100, devices: 30 }, features: PRO, pitch: "ออเดอร์ละ 50 สตางค์ ไม่เกิน 990 บาท/สาขา/เดือน" },
 ];
+
+/** Plans billed by use instead of a monthly price. */
+export const isUsagePlan = (code: string) => code === "per_order";
 
 export const FEATURE_COPY: Record<Feature, string> = {
   pos: "ขายหน้าร้าน (POS)",

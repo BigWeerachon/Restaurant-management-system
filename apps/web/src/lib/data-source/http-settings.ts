@@ -110,6 +110,16 @@ export const settingsCommands = {
     return { applied: r.applied, invoice: r.invoice ? mapInvoice(r.invoice) : null };
   },
 
+  async createWebsiteKey(branchId) {
+    const r = await apiFetch<{ key: string; hint: string }>(`/v1/branches/${branchId}/website-key`, { method: "POST", body: {} });
+    await refresh(["settings"]);
+    return { key: r.key, hint: r.hint };
+  },
+
+  async revokeWebsiteKey(branchId) {
+    await apiFetch(`/v1/branches/${branchId}/website-key`, { method: "DELETE" });
+  },
+
   async voidInvoice(id) {
     await apiFetch(`/v1/billing/invoices/${id}/void`, { method: "POST", body: {} });
     await refresh(["billing"]);

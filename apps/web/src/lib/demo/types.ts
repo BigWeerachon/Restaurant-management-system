@@ -4,7 +4,7 @@
  * one API endpoint — swapping the demo adapter for the HTTP client is a
  * data-source change, not a UI rewrite.
  */
-import type { OnboardingProgress, OrderTotals, Recipe, RoleKey, Satang, StockReason } from "@sabai/domain";
+import type { OnboardingProgress, PlanCode, OrderTotals, Recipe, RoleKey, Satang, StockReason } from "@sabai/domain";
 
 export type ID = string;
 
@@ -21,7 +21,7 @@ export interface Tenant {
   taxId?: string;
   /** A line at the bottom of every receipt ("ขอบคุณที่มาอุดหนุน"). */
   receiptFooter?: string;
-  plan: "free" | "starter" | "pro" | "business" | "enterprise";
+  plan: PlanCode;
   trialEndsAt: string;
   onboarding: { skipped: string[]; paymentsConfirmed: boolean };
 }
@@ -42,7 +42,7 @@ export interface BillingInvoice {
   invoiceNo: string;
   status: "draft" | "open" | "paid" | "void" | "uncollectible";
   /** A renewal is what the schedule asks for; a plan change is what the shop asked for. */
-  kind: "renewal" | "plan_change";
+  kind: "renewal" | "plan_change" | "usage";
   planCode: Tenant["plan"] | null;
   billingCycle: "monthly" | "yearly" | null;
   subtotal: number;
@@ -74,6 +74,18 @@ export interface BillingState {
   graceDays: number;
   openInvoice: BillingInvoice | null;
   invoices: BillingInvoice[];
+  /** Pay-per-order meter for this month so far (money in satang). Shown on every plan, billed only on `per_order`. */
+  usage: UsageMeter | null;
+}
+
+export interface UsageMeter {
+  periodStart: string;
+  periodEnd: string;
+  orders: number;
+  fee: Satang;
+  carriedIn: Satang;
+  total: Satang;
+  branches: { branchId: ID; name: string; orders: number; fee: Satang; capped: boolean }[];
 }
 
 export interface Branch {

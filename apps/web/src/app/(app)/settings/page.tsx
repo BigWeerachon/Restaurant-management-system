@@ -1,7 +1,7 @@
 "use client";
 
-import { cheapestPlanFor, FEATURE_COPY, isValidThaiTaxId, PLANS, planLimit, planOf, type PlanCode } from "@sabai/domain";
-import { Check, MapPin, Plus, Sparkles } from "lucide-react";
+import { cheapestPlanFor, FEATURE_COPY, isUsagePlan, isValidThaiTaxId, PLANS, planLimit, planOf, type PlanCode } from "@sabai/domain";
+import { Check, Copy, Globe, MapPin, Plus, Sparkles } from "lucide-react";
 import { motion } from "motion/react";
 import dynamic from "next/dynamic";
 import { useSearchParams } from "next/navigation";
@@ -224,7 +224,60 @@ function Branches({ onUpgrade }: { onUpgrade: () => void }) {
         </Button>
       )}
       <BranchDialog branch={editing} open={!!editing || adding} onClose={() => (setEditing(null), setAdding(false))} />
+      <WebsiteKeys branches={db.branches} />
     </div>
+  );
+}
+
+/** The shop's own website: a key per branch so the website shows this menu and sends orders to the kitchen screen. */
+function WebsiteKeys({ branches }: { branches: Branch[] }) {
+  const { exec, pending } = useDsAction();
+  const [shown, setShown] = useState<{ branchId: string; key: string } | null>(null);
+  return (
+    <Card className="p-5">
+      <h2 className="flex items-center gap-2 font-semibold text-ink">
+        <Globe className="h-5 w-5 text-brand" aria-hidden="true" /> เชื่อมเว็บไซต์ร้าน
+      </h2>
+      <p className="mt-1 text-sm text-ink-3">
+        ใส่คีย์ในเว็บไซต์ร้าน แล้วเว็บจะแสดงเมนูและราคาจากระบบนี้ (ของหมดขึ้นให้เอง) และลูกค้าสั่งผ่านเว็บได้ ออเดอร์เข้าจอครัวทันทีในช่องทาง “เว็บไซต์” ไม่มีค่า GP ชำระที่ร้าน
+      </p>
+      <ul className="mt-3 divide-y divide-line">
+        {branches.map((b) => (
+          <li key={b.id} className="flex flex-wrap items-center gap-2 py-2.5 text-sm">
+            <span className="min-w-0 flex-1 font-medium text-ink">{b.name}</span>
+            <Button
+              size="sm"
+              variant="secondary"
+              loading={pending}
+              onClick={async () => {
+                const r = await exec((ds) => ds.createWebsiteKey(b.id), { success: "สร้างคีย์ใหม่แล้ว", successDetail: "คีย์เดิมของสาขานี้ (ถ้ามี) ใช้ไม่ได้แล้ว" });
+                if (r.ok) setShown({ branchId: b.id, key: r.value.key });
+              }}
+            >
+              สร้างคีย์ใหม่
+            </Button>
+            <Button size="sm" variant="ghost" loading={pending} onClick={() => exec((ds) => ds.revokeWebsiteKey(b.id), { success: `ปิดการเชื่อมเว็บไซต์ของ${b.name}แล้ว` })}>
+              ปิดการเชื่อม
+            </Button>
+            {shown?.branchId === b.id && (
+              <div className="w-full rounded-2xl bg-warning-soft p-3 text-warning">
+                <p className="text-xs">คัดลอกเก็บไว้ตอนนี้ คีย์นี้แสดงครั้งเดียว</p>
+                <p className="mt-1 break-all font-mono text-sm text-ink">{shown.key}</p>
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  className="mt-2"
+                  icon={<Copy className="h-4 w-4" aria-hidden="true" />}
+                  onClick={() => navigator.clipboard?.writeText(shown.key).then(() => toast.success("คัดลอกคีย์แล้ว"), () => toast.message("คัดลอกไม่ได้ เลือกข้อความแล้วคัดลอกเอง"))}
+                >
+                  คัดลอกคีย์
+                </Button>
+              </div>
+            )}
+          </li>
+        ))}
+      </ul>
+    </Card>
   );
 }
 
@@ -342,7 +395,7 @@ function Plan() {
         <h2 className="text-[17px] font-semibold text-ink">เลือกแพ็กเกจ</h2>
         <Segmented label="รอบบิล" value={yearly ? "y" : "m"} onChange={(v) => setYearly(v === "y")} options={[{ value: "m", label: "รายเดือน" }, { value: "y", label: "รายปี (ฟรี 2 เดือน)" }]} />
       </div>
-      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
         {PLANS.filter((p) => p.code !== "enterprise").map((p, i) => {
           const isCurrent = p.code === current.code;
           const price = yearly ? p.priceYearly : p.priceMonthly;
@@ -354,12 +407,19 @@ function Plan() {
                   {isCurrent ? <Badge tone="brand">ใช้อยู่</Badge> : p.code === "pro" ? <Badge tone="warning" icon={<Sparkles className="h-3 w-3" aria-hidden="true" />}>ยอดนิยม</Badge> : null}
                 </div>
                 <p className="mt-1 text-sm text-ink-3">{p.pitch}</p>
-                <p className="mt-4 text-3xl font-bold tabular text-ink">
-                  ฿{(price ?? 0).toLocaleString("th-TH")}
-                  <span className="text-sm font-normal text-ink-3">/{yearly ? "ปี" : "เดือน"}</span>
-                </p>
+                {isUsagePlan(p.code) ? (
+                  <p className="mt-4 text-3xl font-bold tabular text-ink">
+                    ฿0.50
+                    <span className="text-sm font-normal text-ink-3">/ออเดอร์ · สูงสุด ฿990/สาขา/เดือน</span>
+                  </p>
+                ) : (
+                  <p className="mt-4 text-3xl font-bold tabular text-ink">
+                    ฿{(price ?? 0).toLocaleString("th-TH")}
+                    <span className="text-sm font-normal text-ink-3">/{yearly ? "ปี" : "เดือน"}</span>
+                  </p>
+                )}
                 <p className="text-xs text-ink-3">
-                  {p.limits.branches} สาขา · {p.limits.staff} พนักงาน · {p.limits.devices} เครื่อง{p.priceMonthly ? " · ราคารวม VAT" : ""}
+                  {p.limits.branches} สาขา · {p.limits.staff} พนักงาน · {p.limits.devices} เครื่อง{p.priceMonthly || isUsagePlan(p.code) ? " · ราคารวม VAT" : ""}
                 </p>
                 <ul className="mt-4 flex-1 space-y-1.5 text-sm text-ink-2">
                   {p.features.map((f) => (

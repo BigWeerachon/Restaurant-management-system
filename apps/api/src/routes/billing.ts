@@ -78,6 +78,29 @@ async function invoicesOf(tx: Tx, tenantId: string, provider: BillingProvider | 
   return rows.map((r) => invoiceView(r, provider));
 }
 
+interface UsageRow {
+  period_start: string;
+  period_end: string;
+  orders: number;
+  fee: number | string;
+  carried_in: number | string;
+  total: number | string;
+  branches: { branch_id: string; name: string; orders: number; fee: number | string; capped: boolean }[];
+}
+
+/** Pay per order, this month so far (decimal strings, like all money on the API). */
+function usageView(m: UsageRow) {
+  return {
+    periodStart: m.period_start,
+    periodEnd: m.period_end,
+    orders: Number(m.orders),
+    fee: money(String(m.fee)),
+    carriedIn: money(String(m.carried_in)),
+    total: money(String(m.total)),
+    branches: m.branches.map((b) => ({ branchId: b.branch_id, name: b.name, orders: Number(b.orders), fee: money(String(b.fee)), capped: b.capped })),
+  };
+}
+
 const same = (a: string, b: string) => a.length === b.length && timingSafeEqual(Buffer.from(a), Buffer.from(b));
 
 /**
@@ -97,6 +120,7 @@ export function registerBilling(app: Hono<Env>, deps: Deps) {
       if (!s) throw new ApiFailure("NOT_FOUND", 404, { entity: "subscription" });
       const stage: BillingStage = billingStage({ status: s.status, trialEndsAt: s.trial_ends_at?.toISOString() ?? null, pastDueSince: s.past_due_since?.toISOString() ?? null, graceDays: s.grace_days });
       const invoices = await invoicesOf(t, tenantId, provider);
+      const [u] = await t<{ m: UsageRow }[]>`select app.usage_meter(${tenantId}) as m`;
       return {
         mode: provider ? "invoice" : "off",
         planCode: s.plan_code,
@@ -110,6 +134,7 @@ export function registerBilling(app: Hono<Env>, deps: Deps) {
         graceDays: s.grace_days,
         openInvoice: invoices.find((i) => i.status === "open") ?? null,
         invoices,
+        usage: u ? usageView(u.m) : null,
       };
     }),
   );
