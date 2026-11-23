@@ -1,6 +1,6 @@
 /** The API's bill for using Sabai, turned into what the screens use (money in satang, dates as the server sent them). */
 import { toSatang } from "@sabai/domain";
-import type { BillingInvoice, BillingState, PaymentInstructions } from "../demo/types";
+import type { BillingInvoice, BillingState, PaymentInstructions, UsageMeter } from "../demo/types";
 
 export interface PaymentInstructionsApi {
   method: "transfer";
@@ -43,7 +43,28 @@ export interface BillingApi {
   graceDays: number;
   openInvoice: InvoiceApi | null;
   invoices: InvoiceApi[];
+  usage?: UsageApi | null;
 }
+
+export interface UsageApi {
+  periodStart: string;
+  periodEnd: string;
+  orders: number;
+  fee: string;
+  carriedIn: string;
+  total: string;
+  branches: { branchId: string; name: string; orders: number; fee: string; capped: boolean }[];
+}
+
+export const mapUsage = (u: UsageApi): UsageMeter => ({
+  periodStart: u.periodStart,
+  periodEnd: u.periodEnd,
+  orders: u.orders,
+  fee: toSatang(u.fee),
+  carriedIn: toSatang(u.carriedIn),
+  total: toSatang(u.total),
+  branches: u.branches.map((b) => ({ branchId: b.branchId, name: b.name, orders: b.orders, fee: toSatang(b.fee), capped: b.capped })),
+});
 
 const mapPayment = (p: PaymentInstructionsApi): PaymentInstructions => ({
   reference: p.reference,
@@ -85,4 +106,5 @@ export const mapBilling = (b: BillingApi): BillingState => ({
   graceDays: b.graceDays,
   openInvoice: b.openInvoice ? mapInvoice(b.openInvoice) : null,
   invoices: b.invoices.map(mapInvoice),
+  usage: b.usage ? mapUsage(b.usage) : null,
 });

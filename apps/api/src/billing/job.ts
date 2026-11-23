@@ -4,7 +4,9 @@ import type { Logger } from "../logger";
 /** The nightly job (`app.billing_run`): renewals, overdue, grace over, trials over. Safe to run as often as you like. */
 export async function runBillingJob(sql: Sql, log: Logger): Promise<Record<string, unknown>> {
   const [row] = await sql<{ r: Record<string, unknown> }[]>`select app.billing_run() as r`;
-  const result = row?.r ?? {};
+  // Pay per order: last month's statement and bill (written once, from the 3rd).
+  const [usage] = await sql<{ r: Record<string, unknown> }[]>`select app.usage_billing_run() as r`;
+  const result = { ...(row?.r ?? {}), usage: usage?.r ?? {} };
   log.info("billing_run", result);
   return result;
 }

@@ -150,7 +150,7 @@ export const UpdatePaymentMethodBody = z
   .refine((b) => Object.keys(b).length > 0, { message: "ไม่มีอะไรให้แก้ไข" });
 
 export const ChangePlanBody = z.object({
-  planCode: z.enum(["free", "starter", "pro", "business", "enterprise"]),
+  planCode: z.enum(["free", "starter", "pro", "business", "enterprise", "per_order"]),
   /** How they pay for it. Ignored while online billing is off. */
   billingCycle: z.enum(["monthly", "yearly"]).default("monthly"),
 });
@@ -516,3 +516,18 @@ export const OrderResult = z.object({
   receiptNo: z.string().nullable().optional(),
   change: z.string().optional(),
 });
+
+/** An order from the shop's own website (`POST /v1/public/orders`, with the branch's `X-Website-Key`). */
+export const WebsiteOrderBody = z.object({
+  customerName: z.string().trim().min(1).max(60),
+  phone: z.string().trim().min(9).max(20),
+  note: z.string().max(200).optional(),
+  pickupAt: z.string().max(40).optional(),
+  /** The website's own id for this order: sending it again returns the same order. */
+  externalRef: z.string().min(8).max(80).optional(),
+  items: z
+    .array(z.object({ menuItemId: z.string().uuid(), qty: z.number().int().min(1).max(20), note: z.string().max(120).optional() }))
+    .min(1)
+    .max(30),
+});
+export type WebsiteOrderBody = z.infer<typeof WebsiteOrderBody>;

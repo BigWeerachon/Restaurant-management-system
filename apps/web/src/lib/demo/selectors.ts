@@ -3,6 +3,8 @@ import {
   shopClock,
   allocateToRange,
   billingStage,
+  branchUsageFee,
+  USAGE_BRANCH_CAP_SATANG,
   channelProfitability,
   DEFAULT_GRACE_DAYS,
   menuEngineering,
@@ -16,7 +18,7 @@ import {
 } from "@sabai/domain";
 import { balanceKey, currentBusinessDate, unitCostOf } from "./engine";
 import type { History } from "./history";
-import type { BillingState, DemoState, Ingredient } from "./types";
+import type { BillingState, DemoState, Ingredient, UsageMeter } from "./types";
 
 // ---------------------------------------------------------------------------
 // Stock
@@ -109,7 +111,23 @@ export function billing(state: DemoState, now: Date = new Date()): BillingState 
     graceDays: DEFAULT_GRACE_DAYS,
     openInvoice: null,
     invoices: [],
+    usage: usageMeter(state, now),
   };
+}
+
+/** This month's pay-per-order meter, from the demo's own orders (same rule as app.usage_meter). */
+export function usageMeter(state: DemoState, now: Date = new Date()): UsageMeter {
+  const today = new Date(now.getTime() + 7 * 3_600_000).toISOString().slice(0, 10); // Bangkok date
+  const periodStart = `${today.slice(0, 8)}01`;
+  const [y, m] = today.split("-").map(Number) as [number, number];
+  const periodEnd = new Date(Date.UTC(y, m, 0)).toISOString().slice(0, 10);
+  const branches = state.branches.map((b) => {
+    const orders = state.orders.filter((o) => o.branchId === b.id && o.status === "paid" && o.businessDate >= periodStart && o.businessDate <= periodEnd).length;
+    const fee = branchUsageFee(orders);
+    return { branchId: b.id, name: b.name, orders, fee, capped: fee >= USAGE_BRANCH_CAP_SATANG };
+  });
+  const fee = branches.reduce((a, b) => a + b.fee, 0);
+  return { periodStart, periodEnd, orders: branches.reduce((a, b) => a + b.orders, 0), fee, carriedIn: 0, total: fee, branches };
 }
 
 // ---------------------------------------------------------------------------

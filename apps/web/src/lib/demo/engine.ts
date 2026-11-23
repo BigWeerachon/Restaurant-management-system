@@ -1130,6 +1130,22 @@ export function updateTenant(state: DemoState, ctx: Ctx, patch: Partial<Pick<Ten
   log(state, ctx, "settings.updated", `${actorName(state, ctx.actorId)} แก้ไขข้อมูลร้าน`);
 }
 
+/** Same rule as app.create_website_key: settings.manage, one key per branch, shown once. The demo has no public API to call. */
+export function createWebsiteKey(state: DemoState, ctx: Ctx, branchId: string): { key: string; hint: string } {
+  requirePerm(state, ctx, "settings.manage");
+  if (!state.branches.some((b) => b.id === branchId)) throw new DomainError("NOT_FOUND");
+  const bytes = new Uint8Array(24);
+  crypto.getRandomValues(bytes);
+  const key = `sbw_${Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("")}`;
+  log(state, ctx, "website.key_created", `${actorName(state, ctx.actorId)} สร้างคีย์เว็บไซต์ร้าน (…${key.slice(-4)})`, "good");
+  return { key, hint: key.slice(-4) };
+}
+
+export function revokeWebsiteKey(state: DemoState, ctx: Ctx, branchId: string) {
+  requirePerm(state, ctx, "settings.manage");
+  if (!state.branches.some((b) => b.id === branchId)) throw new DomainError("NOT_FOUND");
+}
+
 export function updateBranch(state: DemoState, ctx: Ctx, id: string, patch: Partial<Pick<Branch, "name" | "address" | "phone" | "openingHours" | "dayCutoff" | "serviceChargeRate" | "taxBranchNo">>) {
   requirePerm(state, ctx, "settings.manage");
   const b = state.branches.find((x) => x.id === id);

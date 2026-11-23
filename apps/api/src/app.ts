@@ -15,6 +15,7 @@ import { registerIdentity } from "./routes/identity";
 import { registerInventory } from "./routes/inventory";
 import { registerKitchen } from "./routes/kitchen";
 import { registerPos } from "./routes/pos";
+import { registerPublic } from "./routes/public";
 import { registerReports } from "./routes/reports";
 import { registerSettings } from "./routes/settings";
 import { registerShop } from "./routes/shop";
@@ -57,8 +58,9 @@ export function createApp(deps: Deps): Hono<Env> {
   app.use(
     "*",
     cors({
-      origin: deps.config.corsOrigins,
-      allowHeaders: ["Authorization", "Content-Type", "X-Tenant-Id", "Idempotency-Key", "X-Request-Id", "Accept-Language", "X-Device-Token"],
+      // The website routes are called from each shop's own domain; everything else only from the app's.
+      origin: (origin, c) => (c.req.path.startsWith("/v1/public/") ? origin : deps.config.corsOrigins.includes(origin) ? origin : null),
+      allowHeaders: ["Authorization", "Content-Type", "X-Tenant-Id", "Idempotency-Key", "X-Request-Id", "Accept-Language", "X-Device-Token", "X-Website-Key"],
       exposeHeaders: ["X-Request-Id", "Idempotent-Replayed"],
       maxAge: 600,
     }),
@@ -118,6 +120,7 @@ export function createApp(deps: Deps): Hono<Env> {
   registerReports(app, deps);
   registerSettings(app, deps);
   registerBilling(app, deps);
+  registerPublic(app, deps);
 
   app.get("/v1/openapi.json", (c) => c.json(openApiDocument()));
 

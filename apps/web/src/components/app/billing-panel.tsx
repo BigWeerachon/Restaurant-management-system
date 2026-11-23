@@ -1,7 +1,7 @@
 "use client";
 
-import { formatMoney, formatThaiDate, planOf } from "@sabai/domain";
-import { CheckCircle2, Clock3, Copy, Crown, Landmark, OctagonAlert, ShieldCheck, TriangleAlert, XCircle } from "lucide-react";
+import { formatMoney, formatThaiDate, isUsagePlan, planOf, USAGE_BRANCH_CAP_SATANG, USAGE_MIN_INVOICE_SATANG, USAGE_ORDERS_TO_CAP } from "@sabai/domain";
+import { CheckCircle2, Clock3, Gauge, Copy, Crown, Landmark, OctagonAlert, ShieldCheck, TriangleAlert, XCircle } from "lucide-react";
 import type { ReactNode } from "react";
 import { toast } from "sonner";
 import { LoadBanner } from "@/components/app/load-banner";
@@ -11,7 +11,7 @@ import { Dialog } from "@/components/ui/overlay";
 import { Badge, Card, type Tone } from "@/components/ui/primitives";
 import { useBilling, useDsAction } from "@/hooks/use-data-source";
 import { useAccess } from "@/hooks/use-sabai";
-import type { BillingInvoice, BillingState } from "@/lib/demo/types";
+import type { BillingInvoice, BillingState, UsageMeter } from "@/lib/demo/types";
 
 /** A date-and-time from the server, shown as the shop's own calendar day. */
 const dayOf = (iso: string) => formatThaiDate(new Date(iso).toLocaleDateString("sv-SE", { timeZone: "Asia/Bangkok" }), false);
@@ -21,6 +21,7 @@ const cycleText = (c: BillingInvoice["billingCycle"]) => (c === "yearly" ? "ร�
 /** What an invoice is for, in the words the shop would use. */
 export function invoiceTitle(i: BillingInvoice): string {
   const plan = i.planCode ? `แพ็กเกจ${planOf(i.planCode).name} ${cycleText(i.billingCycle)}` : "ค่าบริการ";
+  if (i.kind === "usage") return `ค่าบริการตามออเดอร์ ${formatThaiDate(i.periodStart, false)} – ${formatThaiDate(i.periodEnd, false)}`;
   return i.kind === "renewal" ? `ต่ออายุ${plan}` : `เริ่ม${plan}`;
 }
 
@@ -148,6 +149,8 @@ export function BillingPanel({ onPay }: { onPay: (invoice: BillingInvoice) => vo
         </div>
       </Card>
 
+      {billing.usage && isUsagePlan(billing.planCode) && <UsageMeterCard usage={billing.usage} />}
+
       {open && (
         <Card className="mt-4 flex flex-col gap-3 p-5 sm:flex-row sm:items-center">
           <div className="min-w-0 flex-1">
@@ -197,5 +200,52 @@ export function BillingPanel({ onPay }: { onPay: (invoice: BillingInvoice) => vo
         </Card>
       )}
     </>
+  );
+}
+
+/** Pay per order: this month so far, branch by branch, against the 990-baht cap. */
+export function UsageMeterCard({ usage }: { usage: UsageMeter }) {
+  const small = usage.total < USAGE_MIN_INVOICE_SATANG;
+  return (
+    <Card className="mt-4 p-5">
+      <h2 className="flex items-center gap-2 font-semibold text-ink">
+        <Gauge className="h-5 w-5 text-accent" aria-hidden="true" /> ค่าบริการเดือนนี้ (ถึงวันนี้)
+      </h2>
+      <p className="mt-1 text-sm text-ink-3">
+        ออเดอร์ที่ชำระแล้วละ 50 สตางค์ ไม่เกิน {formatMoney(USAGE_BRANCH_CAP_SATANG)} ต่อสาขาต่อเดือน · บิลที่ยกเลิกหรือคืนเงินไม่นับ
+      </p>
+      <p className="mt-3 text-3xl font-bold tabular text-ink">{formatMoney(usage.total)}</p>
+      <p className="text-sm text-ink-2">
+        <span className="tabular">{usage.orders.toLocaleString("th-TH")}</span> ออเดอร์ · {formatThaiDate(usage.periodStart, false)} – {formatThaiDate(usage.periodEnd, false)}
+        {usage.carriedIn > 0 && <> · รวมยอดยกมา <span className="tabular">{formatMoney(usage.carriedIn)}</span></>}
+      </p>
+      <ul className="mt-3 space-y-3">
+        {usage.branches.map((b) => {
+          const pct = Math.min(100, Math.round((b.orders / USAGE_ORDERS_TO_CAP) * 100));
+          return (
+            <li key={b.branchId} className="text-sm">
+              <div className="flex flex-wrap items-baseline justify-between gap-2">
+                <span className="font-medium text-ink">{b.name}</span>
+                <span className="tabular text-ink-2">
+                  {b.orders.toLocaleString("th-TH")} ออเดอร์ · {formatMoney(b.fee)}
+                  {b.capped && <Badge tone="success" className="ml-2">ครบเพดานแล้ว ออเดอร์ต่อจากนี้ไม่คิดเพิ่ม</Badge>}
+                </span>
+              </div>
+              <div
+                className="mt-1 h-2 overflow-hidden rounded-full bg-surface-2"
+                role="meter"
+                aria-label={`${b.name}: ใช้ไป ${pct}% ของเพดาน`}
+                aria-valuemin={0}
+                aria-valuemax={100}
+                aria-valuenow={pct}
+              >
+                <div className="h-full rounded-full bg-accent" style={{ width: `${pct}%` }} />
+              </div>
+            </li>
+          );
+        })}
+      </ul>
+      {small && usage.total > 0 && <p className="mt-3 text-xs text-ink-3">ถ้าสิ้นเดือนยอดไม่ถึง {formatMoney(USAGE_MIN_INVOICE_SATANG)} จะยกไปรวมกับเดือนหน้า ไม่ต้องจ่ายเดือนนี้</p>}
+    </Card>
   );
 }

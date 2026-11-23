@@ -52,6 +52,20 @@ export function registerSettings(app: Hono<Env>, deps: Deps) {
     ),
   );
 
+  // The shop's own website: one key per branch. Shown once; making a new one switches the old one off.
+  route(app, deps, { method: "POST", path: "/v1/branches/{id}/website-key", tag: "Settings", summary: "สร้างคีย์เว็บไซต์ร้านของสาขา (คีย์เดิมใช้ไม่ได้ทันที แสดงครั้งเดียว)", tenant: true, permission: "settings.manage", status: 201 }, async ({ params, tx }) =>
+    tx(async (t) => {
+      const [row] = await t<{ r: { key: string; hint: string; branch_id: string } }[]>`select app.create_website_key(${params.id}) as r`;
+      return { key: row!.r.key, hint: row!.r.hint, branchId: row!.r.branch_id };
+    }),
+  );
+  route(app, deps, { method: "DELETE", path: "/v1/branches/{id}/website-key", tag: "Settings", summary: "ปิดการเชื่อมเว็บไซต์ร้านของสาขา", tenant: true, permission: "settings.manage" }, async ({ params, tx }) =>
+    tx(async (t) => {
+      await t`select app.revoke_website_key(${params.id})`;
+      return { ok: true };
+    }),
+  );
+
   route(app, deps, { method: "PATCH", path: "/v1/branches/{id}", tag: "Settings", summary: "แก้ไขสาขา (ที่อยู่ เบอร์โทร เวลาตัดรอบวัน ค่าบริการ เปิด-ปิดใช้งาน)", tenant: true, body: UpdateBranchBody, permission: "settings.manage" }, async ({ tenantId, params, body, tx }) =>
     tx(async (t) => {
       const rows = await t`
